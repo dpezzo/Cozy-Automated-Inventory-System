@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, ApiRequestError, type FileRecord, type RunRecord, type BatchRecord } from "../api";
+import { api, ApiRequestError, VENDOR_FILE_DEFS, type FileRecord, type RunRecord, type BatchRecord } from "../api";
 
 /** Upload state + submit logic, shared between a field-level dropzone and a whole-card dropzone around it. */
 function useUploadControl(kind: string, onUploaded: (file: FileRecord) => void) {
@@ -18,6 +18,37 @@ function useUploadControl(kind: string, onUploaded: (file: FileRecord) => void) 
         setPendingDuplicateFile(file);
       } else {
         setMessage(`Uploaded: ${result.file.originalFilename} (${result.file.rowCount ?? "?"} rows)`);
+        setPendingDuplicateFile(null);
+      }
+      onUploaded(result.file);
+    } catch (err) {
+      setMessage(err instanceof ApiRequestError ? `${err.body.error}: ${err.body.message}` : "Upload failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return { busy, message, pendingDuplicateFile, handleFile };
+}
+
+/** Same shape as useUploadControl, but for the single vendor-file upload area -- the vendor is detected server-side from the file's content, never picked via a tab. */
+function useVendorAutoUploadControl(onUploaded: (file: FileRecord) => void) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [pendingDuplicateFile, setPendingDuplicateFile] = useState<File | null>(null);
+
+  async function handleFile(file: File, confirmDuplicate = false) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await api.uploadVendorFile(file, confirmDuplicate);
+      if (result.duplicateWarning && !confirmDuplicate) {
+        setMessage(result.duplicateWarning + " Click Upload again to store it as a new copy, or reuse the existing file below.");
+        setPendingDuplicateFile(file);
+      } else {
+        setMessage(
+          `Detected: ${result.detectedVendorLabel}. Uploaded: ${result.file.originalFilename} (${result.file.rowCount ?? "?"} rows)`,
+        );
         setPendingDuplicateFile(null);
       }
       onUploaded(result.file);
@@ -295,25 +326,28 @@ function VendorDataSection({
   complete: boolean;
   onChanged: (file: FileRecord) => void;
 }) {
-  // One entry today (Olliix). Adding K&H/Gobi later is adding entries here --
-  // TabbedCard automatically grows a real tab strip once there's more than one.
-  const olliix = useUploadControl("olliix_workbook", onChanged);
-  const vendors: TabDef[] = [
+  // No per-vendor tabs: one upload area, with the vendor auto-detected
+  // server-side from the file's own content (sheet name / required columns),
+  // never from a tab the operator has to pick correctly. Adding a new vendor
+  // later needs no change here -- detection picks it up automatically once
+  // it has a parser + registry entry (see vendorFileRegistry.ts).
+  const state = useVendorAutoUploadControl(onChanged);
+  const tabs: TabDef[] = [
     {
-      key: "olliix",
-      label: "Olliix",
-      onFileDrop: (file) => olliix.handleFile(file, false),
+      key: "vendor-auto",
+      label: "Vendor file",
+      onFileDrop: (file) => state.handleFile(file, false),
       content: (
         <UploadControlView
-          kind="olliix_workbook"
-          label="Upload Olliix workbook (.xlsx)"
-          hint="The current Olliix 'Item Inventory' export. Required for every reconciliation run."
-          state={olliix}
+          kind="vendor_auto"
+          label="Upload vendor inventory file (.xlsx or .csv)"
+          hint="Drop any vendor's file -- Olliix, K&H, Gobi, or FieldSheer/MobileWarming. The vendor is detected automatically from the file's contents."
+          state={state}
         />
       ),
     },
   ];
-  return <TabbedCard step={step} complete={complete} title="Vendor Inventory Data" tabs={vendors} />;
+  return <TabbedCard step={step} complete={complete} title="Vendor Inventory Data" tabs={tabs} />;
 }
 
 function MivaCatalogDataSection({
@@ -398,9 +432,9 @@ function AdvancedUploadsSection({ onChanged }: { onChanged: (file: FileRecord) =
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [olliixFiles, setOlliixFiles] = useState<FileRecord[]>([]);
+  const [vendorFiles, setVendorFiles] = useState<FileRecord[]>([]);
   const [mivaFiles, setMivaFiles] = useState<FileRecord[]>([]);
-  const [selectedOlliix, setSelectedOlliix] = useState<string>("");
+  const [selectedVendorFile, setSelectedVendorFile] = useState<string>("");
   const [selectedMiva, setSelectedMiva] = useState<string>("");
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [batches, setBatches] = useState<BatchRecord[]>([]);
@@ -409,13 +443,13 @@ export default function HomePage() {
   const [mivaApiConfigured, setMivaApiConfigured] = useState(false);
 
   async function refresh() {
-    const [ol, mv, r, b] = await Promise.all([
-      api.listFiles("olliix_workbook"),
+    const [vf, mv, r, b] = await Promise.all([
+      api.listVendorFiles(),
       api.listFiles("miva_snapshot"),
       api.listRuns(),
       api.listBatches(),
     ]);
-    setOlliixFiles(ol);
+    setVendorFiles(vf);
     setMivaFiles(mv);
     setRuns(r);
     setBatches(b);
@@ -426,9 +460,11 @@ export default function HomePage() {
     // handleFileChanged, immediately after *this session* uploads/pulls one.
   }
 
+  const vendorFileKinds = new Set<string>(VENDOR_FILE_DEFS.map((v) => v.kind));
+
   function handleFileChanged(file: FileRecord) {
     refresh();
-    if (file.kind === "olliix_workbook") setSelectedOlliix(file.id);
+    if (vendorFileKinds.has(file.kind)) setSelectedVendorFile(file.id);
     if (file.kind === "miva_snapshot") setSelectedMiva(file.id);
   }
 
@@ -439,11 +475,11 @@ export default function HomePage() {
   }, []);
 
   async function startReconciliation() {
-    if (!selectedOlliix || !selectedMiva) return;
+    if (!selectedVendorFile || !selectedMiva) return;
     setStarting(true);
     setError(null);
     try {
-      const run = await api.createRun(selectedOlliix, selectedMiva);
+      const run = await api.createRun(selectedVendorFile, selectedMiva);
       navigate(`/runs/${run.id}`);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to start reconciliation.");
@@ -479,7 +515,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <VendorDataSection step={1} complete={Boolean(selectedOlliix)} onChanged={handleFileChanged} />
+      <VendorDataSection step={1} complete={Boolean(selectedVendorFile)} onChanged={handleFileChanged} />
       <MivaCatalogDataSection
         step={2}
         complete={Boolean(selectedMiva)}
@@ -494,13 +530,18 @@ export default function HomePage() {
         </div>
         <div className="grid cols-2">
           <label>
-            Olliix workbook
+            Vendor inventory file
             <br />
-            <select value={selectedOlliix} onChange={(e) => setSelectedOlliix(e.target.value)} style={{ width: "100%" }}>
+            <select
+              value={selectedVendorFile}
+              onChange={(e) => setSelectedVendorFile(e.target.value)}
+              style={{ width: "100%" }}
+            >
               <option value="">Select a file...</option>
-              {olliixFiles.map((f) => (
+              {vendorFiles.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.originalFilename} ({f.rowCount} rows, {new Date(f.uploadedAt).toLocaleString()})
+                  {VENDOR_FILE_DEFS.find((v) => v.kind === f.kind)?.label ?? f.kind} — {f.originalFilename} (
+                  {f.rowCount} rows, {new Date(f.uploadedAt).toLocaleString()})
                 </option>
               ))}
             </select>
@@ -518,7 +559,7 @@ export default function HomePage() {
             </select>
           </label>
         </div>
-        {(!selectedOlliix || !selectedMiva) && (
+        {(!selectedVendorFile || !selectedMiva) && (
           <p
             style={{
               fontSize: 13,
@@ -532,7 +573,7 @@ export default function HomePage() {
             }}
           >
             Still needed:{" "}
-            {[!selectedOlliix && "Vendor inventory data (Step 1)", !selectedMiva && "Miva catalog data (Step 2)"]
+            {[!selectedVendorFile && "Vendor inventory data (Step 1)", !selectedMiva && "Miva catalog data (Step 2)"]
               .filter(Boolean)
               .join(" and ")}
             .
@@ -541,7 +582,7 @@ export default function HomePage() {
         <button
           className="primary"
           style={{ marginTop: 16 }}
-          disabled={!selectedOlliix || !selectedMiva || starting}
+          disabled={!selectedVendorFile || !selectedMiva || starting}
           onClick={startReconciliation}
         >
           {starting ? "Starting..." : "Start reconciliation"}

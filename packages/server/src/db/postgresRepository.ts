@@ -106,10 +106,10 @@ export class PostgresRepository implements Repository {
 
   async insertRun(input: InsertRunInput): Promise<RunRecord> {
     const { rows } = await this.getPool().query(
-      `INSERT INTO runs (olliix_file_id, miva_file_id, rule_id, rule_config_hash, run_date, status, created_by)
+      `INSERT INTO runs (vendor_file_id, miva_file_id, rule_id, rule_config_hash, run_date, status, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [input.olliixFileId, input.mivaFileId, input.ruleId, input.ruleConfigHash, input.runDate, input.status, input.createdBy],
+      [input.vendorFileId, input.mivaFileId, input.ruleId, input.ruleConfigHash, input.runDate, input.status, input.createdBy],
     );
     return mapRunRow(rows[0]);
   }
@@ -425,7 +425,7 @@ function mapFileRow(row: Record<string, unknown>): FileRecord {
 function mapRunRow(row: Record<string, unknown>): RunRecord {
   return {
     id: row.id as string,
-    olliixFileId: row.olliix_file_id as string,
+    vendorFileId: row.vendor_file_id as string,
     mivaFileId: row.miva_file_id as string,
     ruleId: row.rule_id as string,
     ruleConfigHash: row.rule_config_hash as string,

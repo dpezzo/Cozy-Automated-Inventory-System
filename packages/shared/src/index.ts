@@ -1,5 +1,5 @@
 export * from "./types";
-export * from "./ruleConfig";
+export * from "./vendorRegistry";
 export * from "./normalize";
 export * from "./quantity";
 export * from "./dateRules";

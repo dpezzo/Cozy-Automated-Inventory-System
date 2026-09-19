@@ -3,17 +3,17 @@ import type {
   ManagedValues,
   MatchOutcome,
   MivaRawRow,
-  OlliixRawRow,
-  OlliixRuleConfig,
+  NormalizedIdentifier,
+  VendorRawRow,
+  VendorRuleConfig,
   ReconciliationRow,
   ReviewClass,
   WarningCode,
 } from "./types";
-import { normalizeUpc, normalizeGtin, isBrandAllowed } from "./normalize";
+import { normalizeUpc, normalizeGtin, normalizeSku, isBrandAllowed } from "./normalize";
 import { parseTotalQty, parseWarehouseQty } from "./quantity";
 import { selectExpectedDate, type ParsedCalendarDate } from "./dateRules";
 import { computeProposedManagedValues, managedValuesEqual } from "./managedValues";
-import { WAREHOUSE_CODES } from "./types";
 
 function formatTotalQtyDisplay(raw: string | null): string | null {
   return raw;
@@ -44,40 +44,50 @@ type MivaLookup =
   | { status: "excluded"; matches: MivaRawRow[] };
 
 interface MivaIndex {
-  applicableByGtin: Map<string, MivaRawRow[]>;
-  excludedByGtin: Map<string, MivaRawRow[]>;
+  applicableByKey: Map<string, MivaRawRow[]>;
+  excludedByKey: Map<string, MivaRawRow[]>;
 }
 
-function buildMivaIndex(mivaRows: MivaRawRow[], allowlist: string[]): MivaIndex {
-  const applicableByGtin = new Map<string, MivaRawRow[]>();
-  const excludedByGtin = new Map<string, MivaRawRow[]>();
+/**
+ * Indexes Miva rows by whichever identifier this vendor matches on (GTIN for
+ * upc-to-gtin vendors, MPN for sku-to-mpn vendors), split into brand-eligible
+ * ("applicable") vs not, per the vendor's brandAllowlist.
+ */
+function buildMivaIndex(
+  mivaRows: MivaRawRow[],
+  allowlist: string[],
+  getIdentifierRaw: (row: MivaRawRow) => string | null,
+  normalizeFn: (raw: string | null | undefined) => NormalizedIdentifier,
+): MivaIndex {
+  const applicableByKey = new Map<string, MivaRawRow[]>();
+  const excludedByKey = new Map<string, MivaRawRow[]>();
 
   for (const row of mivaRows) {
-    const normalized = normalizeGtin(row.gtinRaw);
+    const normalized = normalizeFn(getIdentifierRaw(row));
     if (!normalized.valid || normalized.normalized === null) continue;
     const applicable = isBrandAllowed(row.brandRaw, allowlist);
-    const target = applicable ? applicableByGtin : excludedByGtin;
+    const target = applicable ? applicableByKey : excludedByKey;
     const bucket = target.get(normalized.normalized);
     if (bucket) bucket.push(row);
     else target.set(normalized.normalized, [row]);
   }
 
-  return { applicableByGtin, excludedByGtin };
+  return { applicableByKey, excludedByKey };
 }
 
-function resolveMiva(index: MivaIndex, normalizedUpc: string): MivaLookup {
-  const applicable = index.applicableByGtin.get(normalizedUpc);
+function resolveMiva(index: MivaIndex, normalizedKey: string): MivaLookup {
+  const applicable = index.applicableByKey.get(normalizedKey);
   if (applicable && applicable.length === 1) return { status: "unique", match: applicable[0]! };
   if (applicable && applicable.length > 1) return { status: "ambiguous", matches: applicable };
 
-  const excluded = index.excludedByGtin.get(normalizedUpc);
+  const excluded = index.excludedByKey.get(normalizedKey);
   if (excluded && excluded.length > 0) return { status: "excluded", matches: excluded };
 
   return { status: "none" };
 }
 
 export interface ReconcileOptions {
-  config: OlliixRuleConfig;
+  config: VendorRuleConfig;
   runDate: ParsedCalendarDate;
 }
 
@@ -86,47 +96,57 @@ export interface ReconcileResult {
 }
 
 /**
- * Runs the full Olliix reconciliation engine over raw parsed rows and produces
- * one ReconciliationRow per Olliix vendor row plus one per Miva product that is
- * absent from the Olliix file. Pure function: no I/O, no persistence.
+ * Runs the full reconciliation engine over one vendor's raw parsed rows and
+ * produces one ReconciliationRow per vendor row plus one per Miva product
+ * that is absent from the vendor file. Pure function: no I/O, no
+ * persistence. Matching is strategy-driven (config.matchStrategy): barcode
+ * vendors (Olliix, K&H) match UPC-to-GTIN; SKU vendors (Gobi,
+ * FieldSheer/MobileWarming) match SKU-to-MPN. Everything else (quantity
+ * threshold, managed-value diffing, review-class assignment) is identical
+ * regardless of vendor.
  */
-export function reconcile(
-  olliixRows: OlliixRawRow[],
-  mivaRows: MivaRawRow[],
-  options: ReconcileOptions,
-): ReconcileResult {
+export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], options: ReconcileOptions): ReconcileResult {
   const { config, runDate } = options;
-  const index = buildMivaIndex(mivaRows, config.brandAllowlist);
-  const usedGtins = new Set<string>();
+  const isSkuVendor = config.matchStrategy === "sku-to-mpn";
 
-  // Pass 1: normalize UPCs and find vendor-side duplicates.
-  const normalized = olliixRows.map((row) => ({ row, upc: normalizeUpc(row.upcRaw) }));
+  const vendorNormalize = isSkuVendor ? normalizeSku : normalizeUpc;
+  const mivaNormalize = isSkuVendor ? normalizeSku : normalizeGtin;
+  const getVendorIdentifierRaw = (row: VendorRawRow): string | null => (isSkuVendor ? (row.skuRaw ?? null) : row.upcRaw);
+  const getMivaIdentifierRaw = (row: MivaRawRow): string | null => (isSkuVendor ? row.mpnRaw : row.gtinRaw);
+  const duplicateVendorCode: BlockerCode = isSkuVendor ? "DUPLICATE_VENDOR_SKU" : "DUPLICATE_VENDOR_UPC";
+  const duplicateMivaCode: BlockerCode = isSkuVendor ? "DUPLICATE_MIVA_MPN" : "DUPLICATE_MIVA_GTIN";
+
+  const index = buildMivaIndex(mivaRows, config.brandAllowlist, getMivaIdentifierRaw, mivaNormalize);
+  const usedMivaKeys = new Set<string>();
+
+  // Pass 1: normalize vendor identifiers and find vendor-side duplicates.
+  const normalized = vendorRows.map((row) => ({ row, key: vendorNormalize(getVendorIdentifierRaw(row)) }));
   const groups = new Map<string, typeof normalized>();
   for (const entry of normalized) {
-    if (!entry.upc.valid || entry.upc.normalized === null) continue;
-    const bucket = groups.get(entry.upc.normalized);
+    if (!entry.key.valid || entry.key.normalized === null) continue;
+    const bucket = groups.get(entry.key.normalized);
     if (bucket) bucket.push(entry);
-    else groups.set(entry.upc.normalized, [entry]);
+    else groups.set(entry.key.normalized, [entry]);
   }
 
   const results: ReconciliationRow[] = [];
 
   for (const entry of normalized) {
-    const { row, upc } = entry;
+    const { row, key } = entry;
     const totalQtyRaw = formatTotalQtyDisplay(row.totalQtyRaw);
 
-    if (!upc.valid || upc.normalized === null) {
+    if (!key.valid || key.normalized === null) {
       results.push({
         sourceRowNumber: row.sourceRowNumber,
         itemNo: row.itemNoRaw,
-        rawUpc: row.upcRaw,
+        rawUpc: getVendorIdentifierRaw(row),
         normalizedUpc: null,
         description: row.descriptionRaw,
         productCode: null,
         matchOutcome: "BLOCKED IDENTIFIER",
         reviewClass: "BLOCKED",
         warningCodes: [],
-        blockerCodes: [upc.invalidReason as BlockerCode],
+        blockerCodes: [key.invalidReason as BlockerCode],
         totalQtyRaw,
         expectedDate: null,
         expectedDateSources: [],
@@ -138,18 +158,18 @@ export function reconcile(
       continue;
     }
 
-    const isDuplicateVendorKey = (groups.get(upc.normalized)?.length ?? 0) > 1;
-    const lookup = resolveMiva(index, upc.normalized);
+    const isDuplicateVendorKey = (groups.get(key.normalized)?.length ?? 0) > 1;
+    const lookup = resolveMiva(index, key.normalized);
 
     let productCode: string | null = null;
     let current: Partial<ManagedValues> = {};
     if (lookup.status === "unique") {
       productCode = lookup.match.productCode;
       current = currentValuesFromMiva(lookup.match);
-      usedGtins.add(upc.normalized);
+      usedMivaKeys.add(key.normalized);
     } else if (lookup.status === "ambiguous") {
       productCode = joinCodes(lookup.matches);
-      usedGtins.add(upc.normalized);
+      usedMivaKeys.add(key.normalized);
     } else if (lookup.status === "excluded") {
       productCode = joinCodes(lookup.matches);
       if (lookup.matches.length === 1) current = currentValuesFromMiva(lookup.matches[0]!);
@@ -159,14 +179,14 @@ export function reconcile(
       results.push({
         sourceRowNumber: row.sourceRowNumber,
         itemNo: row.itemNoRaw,
-        rawUpc: row.upcRaw,
-        normalizedUpc: upc.normalized,
+        rawUpc: getVendorIdentifierRaw(row),
+        normalizedUpc: key.normalized,
         description: row.descriptionRaw,
         productCode,
         matchOutcome: "BLOCKED DUPLICATE VENDOR KEY",
         reviewClass: "BLOCKED",
         warningCodes: [],
-        blockerCodes: ["DUPLICATE_VENDOR_UPC"],
+        blockerCodes: [duplicateVendorCode],
         totalQtyRaw,
         expectedDate: null,
         expectedDateSources: [],
@@ -184,8 +204,8 @@ export function reconcile(
       results.push({
         sourceRowNumber: row.sourceRowNumber,
         itemNo: row.itemNoRaw,
-        rawUpc: row.upcRaw,
-        normalizedUpc: upc.normalized,
+        rawUpc: getVendorIdentifierRaw(row),
+        normalizedUpc: key.normalized,
         description: row.descriptionRaw,
         productCode,
         matchOutcome: outcome,
@@ -207,14 +227,14 @@ export function reconcile(
       results.push({
         sourceRowNumber: row.sourceRowNumber,
         itemNo: row.itemNoRaw,
-        rawUpc: row.upcRaw,
-        normalizedUpc: upc.normalized,
+        rawUpc: getVendorIdentifierRaw(row),
+        normalizedUpc: key.normalized,
         description: row.descriptionRaw,
         productCode,
         matchOutcome: "BLOCKED AMBIGUOUS MIVA KEY",
         reviewClass: "BLOCKED",
         warningCodes: [],
-        blockerCodes: ["DUPLICATE_MIVA_GTIN"],
+        blockerCodes: [duplicateMivaCode],
         totalQtyRaw,
         expectedDate: null,
         expectedDateSources: [],
@@ -238,8 +258,8 @@ export function reconcile(
       results.push({
         sourceRowNumber: row.sourceRowNumber,
         itemNo: row.itemNoRaw,
-        rawUpc: row.upcRaw,
-        normalizedUpc: upc.normalized,
+        rawUpc: getVendorIdentifierRaw(row),
+        normalizedUpc: key.normalized,
         description: row.descriptionRaw,
         productCode,
         matchOutcome: "MATCHED",
@@ -260,14 +280,22 @@ export function reconcile(
     const status: "IN STOCK" | "SOLD OUT" = totalQty.value >= config.inStockThreshold ? "IN STOCK" : "SOLD OUT";
 
     const warnings: WarningCode[] = [];
-    const componentQtys = WAREHOUSE_CODES.map((code) => parseWarehouseQty(row.warehouses[code].invQtyRaw));
-    if (componentQtys.every((q) => q !== null)) {
-      const sum = componentQtys.reduce((acc, q) => acc + (q as number), 0);
-      if (sum !== totalQty.value) warnings.push("WAREHOUSE_TOTAL_MISMATCH");
-    }
+    let dateResult: { date: string | null; sources: string[]; conflict: boolean } = { date: null, sources: [], conflict: false };
 
-    const dateResult = selectExpectedDate(row.warehouses, runDate);
-    warnings.push(...dateResult.warnings);
+    // Only vendors with a per-location incoming-date breakdown (Olliix today)
+    // carry `warehouses` at all; every other vendor omits it and simply gets
+    // no expected date / no warehouse-mismatch check, rather than an error.
+    if (row.warehouses) {
+      const componentQtys = Object.values(row.warehouses).map((w) => parseWarehouseQty(w.invQtyRaw));
+      if (componentQtys.every((q) => q !== null)) {
+        const sum = componentQtys.reduce((acc, q) => acc + (q as number), 0);
+        if (sum !== totalQty.value) warnings.push("WAREHOUSE_TOTAL_MISMATCH");
+      }
+
+      const evaluated = selectExpectedDate(row.warehouses, runDate);
+      dateResult = evaluated;
+      warnings.push(...evaluated.warnings);
+    }
 
     const proposed = computeProposedManagedValues(status, status === "SOLD OUT" ? dateResult.date : null);
     const changed = !managedValuesEqual(current, proposed);
@@ -280,8 +308,8 @@ export function reconcile(
     results.push({
       sourceRowNumber: row.sourceRowNumber,
       itemNo: row.itemNoRaw,
-      rawUpc: row.upcRaw,
-      normalizedUpc: upc.normalized,
+      rawUpc: getVendorIdentifierRaw(row),
+      normalizedUpc: key.normalized,
       description: row.descriptionRaw,
       productCode,
       matchOutcome: "MATCHED",
@@ -299,21 +327,21 @@ export function reconcile(
   }
 
   // Pass 2: Miva products in the applicable population never referenced by a
-  // successful or ambiguous Olliix match are MISSING - REVIEW REQUIRED.
-  const seenMissingGtins = new Set<string>();
+  // successful or ambiguous vendor match are MISSING - REVIEW REQUIRED.
+  const seenMissingKeys = new Set<string>();
   for (const row of mivaRows) {
-    const normalized = normalizeGtin(row.gtinRaw);
+    const normalized = mivaNormalize(getMivaIdentifierRaw(row));
     if (!normalized.valid || normalized.normalized === null) continue;
     if (!isBrandAllowed(row.brandRaw, config.brandAllowlist)) continue;
-    if (usedGtins.has(normalized.normalized)) continue;
-    seenMissingGtins.add(`${normalized.normalized}:${row.productCode}`);
+    if (usedMivaKeys.has(normalized.normalized)) continue;
+    seenMissingKeys.add(`${normalized.normalized}:${row.productCode}`);
   }
 
   for (const row of mivaRows) {
-    const normalized = normalizeGtin(row.gtinRaw);
+    const normalized = mivaNormalize(getMivaIdentifierRaw(row));
     if (!normalized.valid || normalized.normalized === null) continue;
     const key = `${normalized.normalized}:${row.productCode}`;
-    if (!seenMissingGtins.has(key)) continue;
+    if (!seenMissingKeys.has(key)) continue;
 
     const current = currentValuesFromMiva(row);
     // If Miva already shows this product as discontinued, there is nothing
@@ -328,14 +356,14 @@ export function reconcile(
     results.push({
       sourceRowNumber: null,
       itemNo: null,
-      rawUpc: row.gtinRaw,
+      rawUpc: getMivaIdentifierRaw(row),
       normalizedUpc: normalized.normalized,
       description: null,
       productCode: row.productCode,
       matchOutcome: "MISSING - REVIEW REQUIRED",
       reviewClass: alreadyDiscontinued ? "UNCHANGED" : "BLOCKED",
       warningCodes: [],
-      blockerCodes: alreadyDiscontinued ? [] : ["MISSING_FROM_OLLIIX"],
+      blockerCodes: alreadyDiscontinued ? [] : [config.missingBlockerCode ?? "MISSING_FROM_VENDOR"],
       totalQtyRaw: null,
       expectedDate: null,
       expectedDateSources: [],

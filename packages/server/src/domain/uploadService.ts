@@ -1,9 +1,10 @@
 import { saveUploadedFile, computeChecksum } from "../storage/fileStorage";
 import { getRepository, type FileKind, type FileRecord } from "../db";
-import { parseOlliixWorkbook } from "../vendor/olliixParser";
+import { getVendorFileAdapter, detectVendorFile } from "../vendor/vendorFileRegistry";
 import { parseMivaSnapshotCsv } from "../vendor/mivaCsv";
 import { parseLegacyAuditCsv } from "../vendor/legacyAuditCsv";
 import { ValidationError } from "../errors";
+import { VENDOR_REGISTRY } from "@cozywinters/shared";
 
 export interface UploadResult {
   file: FileRecord;
@@ -11,8 +12,9 @@ export interface UploadResult {
 }
 
 async function validateAndCountRows(buffer: Buffer, kind: FileKind): Promise<number> {
-  if (kind === "olliix_workbook") {
-    const { rows } = await parseOlliixWorkbook(buffer);
+  const vendorAdapter = getVendorFileAdapter(kind);
+  if (vendorAdapter) {
+    const { rows } = await vendorAdapter.parse(buffer);
     return rows.length;
   }
   if (kind === "miva_snapshot" || kind === "post_import_snapshot") {
@@ -38,16 +40,15 @@ function extensionFor(originalFilename: string): string {
   return dot >= 0 ? originalFilename.slice(dot) : ".csv";
 }
 
-export async function uploadFile(
+/** Shared checksum/dedupe/store/insert/audit-log logic once a FileKind and row count are already known. */
+async function finishUpload(
   buffer: Buffer,
   originalFilename: string,
   kind: FileKind,
+  rowCount: number,
   userId: string,
   confirmDuplicate: boolean,
 ): Promise<UploadResult> {
-  // Validate before persisting: block processing per
-  // CozyWinters_Vendor_Inventory_Automation_Plan.md section 4.
-  const rowCount = await validateAndCountRows(buffer, kind);
   const repo = getRepository();
 
   const checksum = computeChecksum(buffer);
@@ -76,4 +77,34 @@ export async function uploadFile(
   });
 
   return { file, duplicateOf: existing ?? null };
+}
+
+export async function uploadFile(
+  buffer: Buffer,
+  originalFilename: string,
+  kind: FileKind,
+  userId: string,
+  confirmDuplicate: boolean,
+): Promise<UploadResult> {
+  // Validate before persisting: block processing per
+  // CozyWinters_Vendor_Inventory_Automation_Plan.md section 4.
+  const rowCount = await validateAndCountRows(buffer, kind);
+  return finishUpload(buffer, originalFilename, kind, rowCount, userId, confirmDuplicate);
+}
+
+/**
+ * Uploads a vendor inventory file without the caller specifying which
+ * vendor it is -- the vendor is detected purely from the file's own content
+ * (sheet name / required columns), never the filename. Used by the single
+ * "Vendor Inventory Data" upload area, which no longer has per-vendor tabs.
+ */
+export async function uploadVendorFileAutoDetect(
+  buffer: Buffer,
+  originalFilename: string,
+  userId: string,
+  confirmDuplicate: boolean,
+): Promise<UploadResult & { detectedVendorLabel: string }> {
+  const { vendorKey, fileKind, rows } = await detectVendorFile(buffer);
+  const result = await finishUpload(buffer, originalFilename, fileKind, rows.length, userId, confirmDuplicate);
+  return { ...result, detectedVendorLabel: VENDOR_REGISTRY[vendorKey].vendorLabel };
 }

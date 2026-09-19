@@ -1,4 +1,4 @@
-// Domain types for the Olliix reconciliation rule engine.
+// Domain types for the multi-vendor reconciliation rule engine.
 // Kept free of any I/O, HTTP, or persistence concerns so the engine is
 // independently testable and portable to a future worker process.
 
@@ -11,18 +11,25 @@ export interface WarehouseEvidence {
   incomingQtyRaw: string | null;
 }
 
-export const WAREHOUSE_CODES = ["WDC", "SD3", "SD2"] as const;
-export type WarehouseCode = (typeof WAREHOUSE_CODES)[number];
+/** A per-location key in a vendor's `warehouses` breakdown -- not a closed set: only Olliix's adapter uses its own three codes (see OLLIIX_WAREHOUSE_CODES below). */
+export type WarehouseCode = string;
 
-/** One raw Olliix vendor row, as read from the two-header-row worksheet. */
-export interface OlliixRawRow {
-  /** 1-based row number in the worksheet, matching Excel's own row numbering. */
+/** Olliix's specific three warehouse codes -- used only by olliixParser.ts and Olliix-specific tests, not by the generic rule engine. */
+export const OLLIIX_WAREHOUSE_CODES = ["WDC", "SD3", "SD2"] as const;
+
+/** One raw vendor row, as read from that vendor's file by its own adapter (packages/server/src/vendor/). */
+export interface VendorRawRow {
+  /** 1-based row number in the source file, for traceability. */
   sourceRowNumber: number;
   itemNoRaw: string | null;
+  /** Barcode-style identifier (UPC), for vendors matched via matchStrategy "upc-to-gtin" (Olliix, K&H). */
   upcRaw: string | null;
+  /** SKU-style identifier, for vendors matched via matchStrategy "sku-to-mpn" (Gobi, FieldSheer/MobileWarming). */
+  skuRaw?: string | null;
   descriptionRaw: string | null;
   totalQtyRaw: string | null;
-  warehouses: Record<WarehouseCode, WarehouseEvidence>;
+  /** Per-location incoming-date/quantity evidence. Optional: only Olliix's file has this concept -- every other vendor simply omits it, and the rule engine treats that as "no expected date" rather than an error. */
+  warehouses?: Record<WarehouseCode, WarehouseEvidence>;
 }
 
 /** One raw Miva catalog row, as read from the snapshot CSV. */
@@ -52,7 +59,7 @@ export interface NormalizedIdentifier {
   raw: string | null;
   normalized: string | null;
   valid: boolean;
-  invalidReason?: "BLANK_UPC" | "NONNUMERIC_UPC" | "BLANK_GTIN" | "NONNUMERIC_GTIN";
+  invalidReason?: "BLANK_UPC" | "NONNUMERIC_UPC" | "BLANK_GTIN" | "NONNUMERIC_GTIN" | "BLANK_VENDOR_SKU";
 }
 
 export type MatchOutcome =
@@ -77,11 +84,16 @@ export type BlockerCode =
   | "NONNUMERIC_UPC"
   | "DUPLICATE_VENDOR_UPC"
   | "DUPLICATE_MIVA_GTIN"
+  | "BLANK_VENDOR_SKU"
+  | "DUPLICATE_VENDOR_SKU"
+  | "DUPLICATE_MIVA_MPN"
   | "BLANK_TOTAL_QTY"
   | "NEGATIVE_TOTAL_QTY"
   | "INVALID_TOTAL_QTY"
   | "NO_MIVA_MATCH"
   | "UNKNOWN_MIVA_BRAND"
+  | "MISSING_FROM_VENDOR"
+  /** Olliix's historical name for this same code, kept only because it's baked into the immutable, read-only bake-off fixture bundle -- new vendors use MISSING_FROM_VENDOR. */
   | "MISSING_FROM_OLLIIX";
 
 export interface ManagedValues {
@@ -99,11 +111,12 @@ export interface ExpectedDateResult {
   conflict: boolean;
 }
 
-/** The full computed result for a single Olliix source row or Miva-only "missing" row. */
+/** The full computed result for a single vendor source row or Miva-only "missing" row. */
 export interface ReconciliationRow {
   /** Present for vendor-sourced rows; absent for Miva-only MISSING rows. */
   sourceRowNumber: number | null;
   itemNo: string | null;
+  /** The raw matching identifier as read from the vendor file -- a UPC for barcode-matched vendors, a SKU for sku-matched vendors. Field name kept as "rawUpc" for compatibility with existing DB columns/reports/UI; holds whichever identifier that vendor actually matches on. */
   rawUpc: string | null;
   normalizedUpc: string | null;
   description: string | null;
@@ -123,9 +136,16 @@ export interface ReconciliationRow {
   isEligibleForApproval: boolean;
 }
 
-export interface OlliixRuleConfig {
+/** One vendor's full rule configuration. See packages/shared/src/vendorRegistry.ts for the actual per-vendor instances. */
+export interface VendorRuleConfig {
   ruleId: string;
+  vendorLabel: string;
   inStockThreshold: number;
   timezone: string;
+  /** Miva-side filter: only Miva products in one of these brands are eligible matches. */
   brandAllowlist: string[];
+  /** Which identifier pair this vendor matches on. "upc-to-gtin" reads row.upcRaw against Miva gtinRaw; "sku-to-mpn" reads row.skuRaw against Miva mpnRaw. */
+  matchStrategy: "upc-to-gtin" | "sku-to-mpn";
+  /** Blocker code for "Miva product missing from this vendor's file". Defaults to MISSING_FROM_VENDOR; Olliix pins its historical MISSING_FROM_OLLIIX to stay byte-identical with the immutable bake-off fixture bundle. */
+  missingBlockerCode?: BlockerCode;
 }

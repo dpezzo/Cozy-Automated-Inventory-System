@@ -23,10 +23,10 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS files (
   id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL CHECK (kind IN (
-    'olliix_workbook', 'miva_snapshot', 'legacy_audit', 'post_import_snapshot',
-    'batch_update', 'batch_rollback', 'batch_exception', 'batch_reconciliation'
-  )),
+  -- Valid values are enforced by the FileKind TypeScript union and the vendor
+  -- registry (packages/shared/src/vendorRegistry.ts), not a DB-level CHECK,
+  -- so adding a new vendor never requires a schema migration.
+  kind TEXT NOT NULL,
   original_filename TEXT NOT NULL,
   storage_path TEXT NOT NULL,
   checksum_sha256 TEXT NOT NULL,
@@ -40,7 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_files_checksum ON files (kind, checksum_sha256);
 
 CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY,
-  olliix_file_id TEXT NOT NULL REFERENCES files(id),
+  vendor_file_id TEXT NOT NULL REFERENCES files(id),
   miva_file_id TEXT NOT NULL REFERENCES files(id),
   rule_id TEXT NOT NULL,
   rule_config_hash TEXT NOT NULL,

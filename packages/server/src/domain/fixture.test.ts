@@ -43,7 +43,7 @@ describe("synthetic fixture suite (28 cases)", () => {
     const { rows: olliixRows } = await parseOlliixWorkbook(olliixBuffer);
     const mivaText = readFileSync(fx("Miva_synthetic_pre_import.csv"), "utf8");
     const { rows: mivaRows } = parseMivaSnapshotCsv(mivaText);
-    const result = runReconciliation({ olliixRows, mivaRows, runDate: RUN_DATE });
+    const result = runReconciliation({ vendorKey: "olliix", vendorRows: olliixRows, mivaRows, runDate: RUN_DATE });
     rows = result.rows;
   });
 

@@ -1,5 +1,4 @@
 import type { WarehouseCode, WarehouseEvidence, WarningCode, ExpectedDateResult } from "./types";
-import { WAREHOUSE_CODES } from "./types";
 import { parseWarehouseQty } from "./quantity";
 
 export interface ParsedCalendarDate {
@@ -118,8 +117,13 @@ export interface DateEvaluationResult extends ExpectedDateResult {
 }
 
 /**
- * Selects the earliest eligible future restock date across all warehouses,
- * retaining tied sources and flagging a conflict when eligible dates differ.
+ * Selects the earliest eligible future restock date across all of a vendor's
+ * configured warehouses/locations, retaining tied sources and flagging a
+ * conflict when eligible dates differ. Iterates whatever keys are actually
+ * present in `warehouses` -- not a fixed list -- so it works unchanged for
+ * any vendor's own set of locations (today, only Olliix populates this at
+ * all; every other vendor has no incoming-date concept and simply omits
+ * `warehouses` entirely, which callers must handle before calling this).
  */
 export function selectExpectedDate(
   warehouses: Record<WarehouseCode, WarehouseEvidence>,
@@ -128,8 +132,8 @@ export function selectExpectedDate(
   const warnings: WarningCode[] = [];
   const eligible: { warehouse: WarehouseCode; date: ParsedCalendarDate }[] = [];
 
-  for (const code of WAREHOUSE_CODES) {
-    const evaluation = evaluateWarehouseDate(code, warehouses[code], runDate);
+  for (const code of Object.keys(warehouses)) {
+    const evaluation = evaluateWarehouseDate(code, warehouses[code]!, runDate);
     warnings.push(...evaluation.warnings);
     if (evaluation.eligibleDate) {
       eligible.push({ warehouse: code, date: evaluation.eligibleDate });

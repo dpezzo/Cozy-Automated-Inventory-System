@@ -44,6 +44,21 @@ export function normalizeGtin(raw: string | null | undefined): NormalizedIdentif
   return normalizeIdentifier(raw, "BLANK_GTIN", "NONNUMERIC_GTIN");
 }
 
+/**
+ * Normalizes a vendor SKU / Miva MPN for sku-to-mpn-matched vendors (Gobi,
+ * FieldSheer/MobileWarming). Unlike UPC/GTIN, a SKU is legitimately
+ * alphanumeric (e.g. "AR-BR-L"), so this only trims and blank-checks --
+ * there is no "must be digits-only" requirement.
+ */
+export function normalizeSku(raw: string | null | undefined): NormalizedIdentifier {
+  const rawValue = raw ?? null;
+  const trimmed = rawValue?.trim() ?? "";
+  if (trimmed === "") {
+    return { raw: rawValue, normalized: null, valid: false, invalidReason: "BLANK_VENDOR_SKU" };
+  }
+  return { raw: rawValue, normalized: trimmed.toUpperCase(), valid: true };
+}
+
 export function normalizeBrand(raw: string | null | undefined): string {
   return (raw ?? "").trim();
 }

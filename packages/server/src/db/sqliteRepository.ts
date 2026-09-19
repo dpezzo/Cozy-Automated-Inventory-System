@@ -156,12 +156,12 @@ export class SqliteRepository implements Repository {
     const createdAt = nowIso();
     this.conn()
       .prepare(
-        `INSERT INTO runs (id, olliix_file_id, miva_file_id, rule_id, rule_config_hash, run_date, status, created_by, created_at)
+        `INSERT INTO runs (id, vendor_file_id, miva_file_id, rule_id, rule_config_hash, run_date, status, created_by, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
-        input.olliixFileId,
+        input.vendorFileId,
         input.mivaFileId,
         input.ruleId,
         input.ruleConfigHash,
@@ -172,7 +172,7 @@ export class SqliteRepository implements Repository {
       );
     return {
       id,
-      olliixFileId: input.olliixFileId,
+      vendorFileId: input.vendorFileId,
       mivaFileId: input.mivaFileId,
       ruleId: input.ruleId,
       ruleConfigHash: input.ruleConfigHash,
@@ -529,7 +529,7 @@ function mapFileRow(row: Record<string, unknown>): FileRecord {
 function mapRunRow(row: Record<string, unknown>): RunRecord {
   return {
     id: row.id as string,
-    olliixFileId: row.olliix_file_id as string,
+    vendorFileId: row.vendor_file_id as string,
     mivaFileId: row.miva_file_id as string,
     ruleId: row.rule_id as string,
     ruleConfigHash: row.rule_config_hash as string,

@@ -4,7 +4,7 @@ import path from "node:path";
 import { verifyCredentials, requireAuth } from "./auth";
 import { getRepository, type RowFilter, type FileKind } from "./db";
 import { readStoredFile, readStoredFileText } from "./storage/fileStorage";
-import { uploadFile } from "./domain/uploadService";
+import { uploadFile, uploadVendorFileAutoDetect } from "./domain/uploadService";
 import { pullMivaSnapshotFromApi } from "./miva/mivaProducts";
 import { isMivaApiConfigured } from "./miva/mivaApiClient";
 import { parseMivaSnapshotCsv } from "./vendor/mivaCsv";
@@ -90,6 +90,31 @@ router.post(
   }),
 );
 
+router.post(
+  "/files/vendor-auto-detect",
+  upload.single("file"),
+  asyncHandler(async (req, res) => {
+    const confirmDuplicate = req.body.confirmDuplicate === "true";
+    if (!req.file) {
+      res.status(400).json({ error: "FILE_REQUIRED", message: "No file was uploaded." });
+      return;
+    }
+    const result = await uploadVendorFileAutoDetect(
+      req.file.buffer,
+      req.file.originalname,
+      req.session.userId!,
+      confirmDuplicate,
+    );
+    res.status(result.duplicateOf && !confirmDuplicate ? 200 : 201).json({
+      file: result.file,
+      detectedVendorLabel: result.detectedVendorLabel,
+      duplicateWarning: result.duplicateOf
+        ? `An identical file was already uploaded on ${result.duplicateOf.uploadedAt}. Resubmit with confirmDuplicate to store it again.`
+        : null,
+    });
+  }),
+);
+
 router.get(
   "/miva/api-status",
   asyncHandler(async (_req, res) => {
@@ -147,13 +172,13 @@ router.get(
 router.post(
   "/runs",
   asyncHandler(async (req, res) => {
-    const { olliixFileId, mivaFileId, runDate } = req.body as {
-      olliixFileId?: string;
+    const { vendorFileId, mivaFileId, runDate } = req.body as {
+      vendorFileId?: string;
       mivaFileId?: string;
       runDate?: string; // YYYY-MM-DD, defaults to today in America/New_York
     };
-    if (!olliixFileId || !mivaFileId) {
-      res.status(400).json({ error: "INVALID_REQUEST", message: "olliixFileId and mivaFileId are required." });
+    if (!vendorFileId || !mivaFileId) {
+      res.status(400).json({ error: "INVALID_REQUEST", message: "vendorFileId and mivaFileId are required." });
       return;
     }
     const date = runDate ? new Date(`${runDate}T00:00:00Z`) : new Date();
@@ -166,7 +191,7 @@ router.post(
     const get = (t: string) => Number(nyParts.find((p) => p.type === t)!.value);
     const parsedRunDate = { year: get("year"), month: get("month"), day: get("day") };
 
-    const run = await createRun({ olliixFileId, mivaFileId, runDate: parsedRunDate, createdBy: req.session.userId! });
+    const run = await createRun({ vendorFileId, mivaFileId, runDate: parsedRunDate, createdBy: req.session.userId! });
     res.status(201).json(run);
   }),
 );

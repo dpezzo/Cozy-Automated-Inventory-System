@@ -13,6 +13,9 @@ export interface UserRecord {
 
 export type FileKind =
   | "olliix_workbook"
+  | "kh_workbook"
+  | "gobi_workbook"
+  | "fieldsheer_workbook"
   | "miva_snapshot"
   | "legacy_audit"
   | "post_import_snapshot"
@@ -46,7 +49,7 @@ export type RunStatus = "validating" | "normalizing" | "matching" | "calculating
 
 export interface RunRecord {
   id: string;
-  olliixFileId: string;
+  vendorFileId: string;
   mivaFileId: string;
   ruleId: string;
   ruleConfigHash: string;
@@ -58,7 +61,7 @@ export interface RunRecord {
 }
 
 export interface InsertRunInput {
-  olliixFileId: string;
+  vendorFileId: string;
   mivaFileId: string;
   ruleId: string;
   ruleConfigHash: string;

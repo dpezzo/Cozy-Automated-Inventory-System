@@ -32,6 +32,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+/**
+ * Every vendor's inventory-file FileKind + display label. This is the one
+ * place the web app's vendor tabs and "vendor file" dropdown are driven from
+ * -- adding a vendor here is the only web-side change needed for a new one
+ * to show up, once its FileKind/parser exist server-side (see
+ * packages/shared/src/vendorRegistry.ts and
+ * packages/server/src/vendor/vendorFileRegistry.ts for the matching
+ * server-side registry).
+ */
+export const VENDOR_FILE_DEFS = [
+  {
+    kind: "olliix_workbook",
+    label: "Olliix",
+    uploadLabel: "Upload Olliix workbook (.xlsx)",
+    hint: "The current Olliix 'Item Inventory' export.",
+  },
+  {
+    kind: "kh_workbook",
+    label: "K&H Pet Products",
+    uploadLabel: "Upload K&H inventory (.csv)",
+    hint: "The K&H distributor CSV export -- automatically filtered to K&H Pet Products rows only.",
+  },
+  {
+    kind: "gobi_workbook",
+    label: "Gobi Heat",
+    uploadLabel: "Upload Gobi inventory (.xlsx)",
+    hint: "The Gobi Heat 'Custom Main Inventory Report' export.",
+  },
+  {
+    kind: "fieldsheer_workbook",
+    label: "FieldSheer/MobileWarming",
+    uploadLabel: "Upload FieldSheer/MobileWarming inventory (.csv)",
+    hint: "The FieldSheer/MobileWarming inventory export.",
+  },
+] as const;
+
 export const api = {
   login: (email: string, password: string) =>
     request<{ id: string; email: string }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
@@ -39,6 +75,11 @@ export const api = {
   me: () => request<{ id: string; email: string }>("/auth/me"),
 
   listFiles: (kind?: string) => request<FileRecord[]>(`/files${kind ? `?kind=${kind}` : ""}`),
+  /** Every uploaded/pulled file across all vendor FileKinds, newest first -- what Step 3's vendor-file dropdown lists. */
+  listVendorFiles: async (): Promise<FileRecord[]> => {
+    const perVendor = await Promise.all(VENDOR_FILE_DEFS.map((v) => request<FileRecord[]>(`/files?kind=${v.kind}`)));
+    return perVendor.flat().sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+  },
   uploadFile: async (file: File, kind: string, confirmDuplicate = false) => {
     const form = new FormData();
     form.append("file", file);
@@ -50,6 +91,16 @@ export const api = {
     return body as { file: FileRecord; duplicateWarning: string | null };
   },
   downloadFileUrl: (id: string) => `/api/files/${id}/download`,
+  /** Uploads a vendor inventory file without specifying which vendor -- detected server-side from the file's own content. */
+  uploadVendorFile: async (file: File, confirmDuplicate = false) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("confirmDuplicate", String(confirmDuplicate));
+    const res = await fetch("/api/files/vendor-auto-detect", { method: "POST", body: form, credentials: "include" });
+    const body = await res.json();
+    if (!res.ok) throw new ApiRequestError(res.status, body);
+    return body as { file: FileRecord; detectedVendorLabel: string; duplicateWarning: string | null };
+  },
   getCatalogRows: (fileId: string) => request<MivaCatalogRow[]>(`/files/${fileId}/catalog-rows`),
 
   getMivaApiStatus: () => request<{ configured: boolean }>("/miva/api-status"),
@@ -57,8 +108,8 @@ export const api = {
     request<{ file: FileRecord; duplicateWarning: string | null }>("/miva/pull-snapshot", { method: "POST" }),
 
   listRuns: () => request<RunRecord[]>("/runs"),
-  createRun: (olliixFileId: string, mivaFileId: string) =>
-    request<RunRecord>("/runs", { method: "POST", body: JSON.stringify({ olliixFileId, mivaFileId }) }),
+  createRun: (vendorFileId: string, mivaFileId: string) =>
+    request<RunRecord>("/runs", { method: "POST", body: JSON.stringify({ vendorFileId, mivaFileId }) }),
   getRun: (id: string) => request<{ run: RunRecord; summary: RunSummary | null }>(`/runs/${id}`),
   getRunRows: (id: string, params: Record<string, string>) =>
     request<ReviewRowView[]>(`/runs/${id}/rows?${new URLSearchParams(params).toString()}`),
@@ -120,7 +171,7 @@ export interface FileRecord {
 
 export interface RunRecord {
   id: string;
-  olliixFileId: string;
+  vendorFileId: string;
   mivaFileId: string;
   ruleId: string;
   ruleConfigHash: string;

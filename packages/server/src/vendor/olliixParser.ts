@@ -1,5 +1,5 @@
-import type { OlliixRawRow, WarehouseCode } from "@cozywinters/shared";
-import { WAREHOUSE_CODES } from "@cozywinters/shared";
+import type { VendorRawRow, WarehouseCode } from "@cozywinters/shared";
+import { OLLIIX_WAREHOUSE_CODES } from "@cozywinters/shared";
 import { ValidationError } from "../errors";
 import { XlsxDocument } from "./xlsxReader";
 
@@ -19,7 +19,7 @@ const ALL_LOGICAL_COLUMNS: LogicalColumn[] = [
   "UPC",
   "DESCRIPTION",
   "TOTAL_QTY",
-  ...WAREHOUSE_CODES.flatMap((w) => [
+  ...OLLIIX_WAREHOUSE_CODES.flatMap((w) => [
     `${w}_INV_QTY` as LogicalColumn,
     `${w}_INCOMING_DATE` as LogicalColumn,
     `${w}_INCOMING_QTY` as LogicalColumn,
@@ -63,7 +63,7 @@ function buildColumnMap(headerRow1: (string | null)[], headerRow2: (string | nul
 }
 
 export interface ParsedOlliixWorkbook {
-  rows: OlliixRawRow[];
+  rows: VendorRawRow[];
 }
 
 export async function parseOlliixWorkbook(buffer: Buffer): Promise<ParsedOlliixWorkbook> {
@@ -104,13 +104,13 @@ export async function parseOlliixWorkbook(buffer: Buffer): Promise<ParsedOlliixW
     DESCRIPTION: indexOf("DESCRIPTION"),
     TOTAL_QTY: indexOf("TOTAL_QTY"),
   };
-  const warehouseIdx: Record<WarehouseCode, { inv: number; date: number; qty: number }> = {
+  const warehouseIdx: Record<(typeof OLLIIX_WAREHOUSE_CODES)[number], { inv: number; date: number; qty: number }> = {
     WDC: { inv: indexOf("WDC_INV_QTY"), date: indexOf("WDC_INCOMING_DATE"), qty: indexOf("WDC_INCOMING_QTY") },
     SD3: { inv: indexOf("SD3_INV_QTY"), date: indexOf("SD3_INCOMING_DATE"), qty: indexOf("SD3_INCOMING_QTY") },
     SD2: { inv: indexOf("SD2_INV_QTY"), date: indexOf("SD2_INCOMING_DATE"), qty: indexOf("SD2_INCOMING_QTY") },
   };
 
-  const rows: OlliixRawRow[] = [];
+  const rows: VendorRawRow[] = [];
 
   // Data starts at row 3 (rows 1-2 are the two-row header). allRows is 0-indexed.
   for (let rowNumber = 3; rowNumber <= allRows.length; rowNumber++) {
@@ -129,8 +129,8 @@ export async function parseOlliixWorkbook(buffer: Buffer): Promise<ParsedOlliixW
       (totalQtyRaw === null || totalQtyRaw.trim() === "");
     if (isBlankRow) continue;
 
-    const warehouses = {} as OlliixRawRow["warehouses"];
-    for (const code of WAREHOUSE_CODES) {
+    const warehouses = {} as NonNullable<VendorRawRow["warehouses"]>;
+    for (const code of OLLIIX_WAREHOUSE_CODES) {
       warehouses[code] = {
         invQtyRaw: cellText(warehouseIdx[code].inv),
         incomingDateRaw: cellText(warehouseIdx[code].date),

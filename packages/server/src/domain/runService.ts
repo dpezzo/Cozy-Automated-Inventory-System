@@ -1,4 +1,4 @@
-import { parseOlliixWorkbook } from "../vendor/olliixParser";
+import { getVendorFileAdapter } from "../vendor/vendorFileRegistry";
 import { parseMivaSnapshotCsv } from "../vendor/mivaCsv";
 import { readStoredFile, readStoredFileText } from "../storage/fileStorage";
 import { ValidationError, ForbiddenError, NotFoundError } from "../errors";
@@ -7,7 +7,7 @@ import { runReconciliation } from "./runPipeline";
 import type { ParsedCalendarDate } from "@cozywinters/shared";
 
 export interface CreateRunInput {
-  olliixFileId: string;
+  vendorFileId: string;
   mivaFileId: string;
   runDate: ParsedCalendarDate;
   createdBy: string;
@@ -15,10 +15,11 @@ export interface CreateRunInput {
 
 export async function createRun(input: CreateRunInput): Promise<RunRecord> {
   const repo = getRepository();
-  const olliixFile = await repo.findFileById(input.olliixFileId);
+  const vendorFile = await repo.findFileById(input.vendorFileId);
   const mivaFile = await repo.findFileById(input.mivaFileId);
-  if (!olliixFile || olliixFile.kind !== "olliix_workbook") {
-    throw new ValidationError("FILE_NOT_FOUND", "The selected Olliix workbook was not found.");
+  const vendorAdapter = vendorFile ? getVendorFileAdapter(vendorFile.kind) : undefined;
+  if (!vendorFile || !vendorAdapter) {
+    throw new ValidationError("FILE_NOT_FOUND", "The selected vendor file was not found.");
   }
   if (!mivaFile || mivaFile.kind !== "miva_snapshot") {
     throw new ValidationError("FILE_NOT_FOUND", "The selected Miva snapshot was not found.");
@@ -26,7 +27,7 @@ export async function createRun(input: CreateRunInput): Promise<RunRecord> {
 
   const runDateStr = `${input.runDate.year}-${String(input.runDate.month).padStart(2, "0")}-${String(input.runDate.day).padStart(2, "0")}`;
   const run = await repo.insertRun({
-    olliixFileId: olliixFile.id,
+    vendorFileId: vendorFile.id,
     mivaFileId: mivaFile.id,
     ruleId: "pending",
     ruleConfigHash: "pending",
@@ -37,14 +38,19 @@ export async function createRun(input: CreateRunInput): Promise<RunRecord> {
 
   try {
     await repo.updateRunStatus(run.id, "normalizing");
-    const olliixBuffer = readStoredFile(olliixFile.storagePath);
-    const { rows: olliixRows } = await parseOlliixWorkbook(olliixBuffer);
+    const vendorBuffer = readStoredFile(vendorFile.storagePath);
+    const { rows: vendorRows } = await vendorAdapter.parse(vendorBuffer);
 
     const mivaText = readStoredFileText(mivaFile.storagePath);
     const { rows: mivaRows } = parseMivaSnapshotCsv(mivaText);
 
     await repo.updateRunStatus(run.id, "matching");
-    const { rows, ruleId, ruleConfigHash } = runReconciliation({ olliixRows, mivaRows, runDate: input.runDate });
+    const { rows, ruleId, ruleConfigHash } = runReconciliation({
+      vendorKey: vendorAdapter.vendorKey,
+      vendorRows,
+      mivaRows,
+      runDate: input.runDate,
+    });
 
     await repo.updateRunStatus(run.id, "calculating");
     await repo.insertReconciliationRows(run.id, rows);

@@ -27,7 +27,12 @@ async function main() {
   console.log(`Miva rows parsed: ${mivaRows.length}`);
 
   const runDate = { year: 2026, month: 9, day: 18 };
-  const { rows, ruleId, ruleConfigHash } = runReconciliation({ olliixRows, mivaRows, runDate });
+  const { rows, ruleId, ruleConfigHash } = runReconciliation({
+    vendorKey: "olliix",
+    vendorRows: olliixRows,
+    mivaRows,
+    runDate,
+  });
   const parseMs = Date.now() - start;
 
   console.log(`\nRule: ${ruleId}  hash: ${ruleConfigHash}`);

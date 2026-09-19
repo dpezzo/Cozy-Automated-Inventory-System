@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { reconcile } from "./reconcile";
-import { OLLIIX_RULE_CONFIG } from "./ruleConfig";
-import type { MivaRawRow, OlliixRawRow } from "./types";
+import { VENDOR_REGISTRY } from "./vendorRegistry";
+import type { MivaRawRow, VendorRawRow } from "./types";
 
+const OLLIIX_RULE_CONFIG = VENDOR_REGISTRY.olliix;
 const RUN_DATE = { year: 2026, month: 9, day: 18 };
 
-function emptyOlliixRow(overrides: Partial<OlliixRawRow>): OlliixRawRow {
+function emptyOlliixRow(overrides: Partial<VendorRawRow>): VendorRawRow {
   return {
     sourceRowNumber: 3,
     itemNoRaw: "ITEM-1",
