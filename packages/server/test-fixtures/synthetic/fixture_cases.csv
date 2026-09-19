@@ -1,0 +1,29 @@
+CASE_ID,SCENARIO,EXPECTED_OUTCOME
+SYN-001,Quantity equals threshold,Matched; IN STOCK; clean
+SYN-002,Quantity below threshold,Matched; SOLD OUT; clean
+SYN-003,Zero quantity,Matched; SOLD OUT; clean
+SYN-004,Leading-zero identifier,Exact match with leading zero retained
+SYN-005,Blank UPC,Blocked
+SYN-006,Nonnumeric UPC,Blocked
+SYN-007,Duplicate Olliix UPC,Every affected vendor row blocked
+SYN-008,Duplicate Miva GTIN,Ambiguous match blocked
+SYN-009,Blank total quantity,Blocked
+SYN-010,Negative total quantity,Blocked
+SYN-011,Invalid quantity text,Blocked
+SYN-012,Warehouse sum mismatch,Warning; total drives status
+SYN-013,One eligible future date,Restock message set
+SYN-014,Different future dates,Earliest selected; warning
+SYN-015,Tied earliest date,Both warehouse sources retained
+SYN-016,Date with zero incoming quantity,Date ignored; warning
+SYN-017,Positive incoming quantity without date,Warning
+SYN-018,Past and run-date dates,No eligible restock date
+SYN-019,In-stock item with future date,Evidence retained; restock blank
+SYN-020,Stale restock message,Changed row deliberately clears value
+SYN-021,Olliix product without Miva,Unmatched; never approvable
+SYN-022,Miva product absent from Olliix,Missing-review approved deviation
+SYN-023,Unknown Miva brand,Excluded and flagged
+SYN-024,No managed-value change,Unchanged; never approvable
+SYN-025,Clean and warning selection,Approve-all selects clean only
+SYN-026,Mixed decisions,Batch includes approved rows only
+SYN-027,Unapproved post-import change,Verification fails
+SYN-028,Failed blank clearing,Verification fails

@@ -1,0 +1,22 @@
+{
+  "name": "cozywinters-olliix-mvp",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/web",
+    "test": "npm run test -w packages/shared && npm run test -w packages/server",
+    "test:shared": "npm run test -w packages/shared",
+    "test:server": "npm run test -w packages/server",
+    "dev:server": "npm run dev -w packages/server",
+    "dev:web": "npm run dev -w packages/web",
+    "migrate": "npm run migrate -w packages/server",
+    "seed": "npm run seed -w packages/server",
+    "fullsize:run": "npm run fullsize:run -w packages/server"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
