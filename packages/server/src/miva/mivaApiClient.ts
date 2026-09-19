@@ -79,7 +79,7 @@ export interface MivaApiCallOptions {
 export async function callMivaApi(
   body: Record<string, unknown>,
   options: MivaApiCallOptions = {},
-): Promise<Record<string, unknown>> {
+): Promise<Record<string, unknown> | unknown[]> {
   const config = loadConfig();
   const fullBody = {
     Store_Code: config.storeCode,
@@ -113,7 +113,7 @@ export async function callMivaApi(
         continue;
       }
       const text = await response.text();
-      let parsed: Record<string, unknown>;
+      let parsed: Record<string, unknown> | unknown[];
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -123,7 +123,10 @@ export async function callMivaApi(
           response.status,
         );
       }
-      if (parsed.success === 0) {
+      // Multicall (Iterations/Operations) responses are a bare JSON array, one
+      // entry per iteration, each with its own success/error_code -- only a
+      // single-Function response is a plain object with a top-level `success`.
+      if (!Array.isArray(parsed) && parsed.success === 0) {
         throw new MivaApiError(
           typeof parsed.error_message === "string" ? parsed.error_message : "Miva API call failed.",
           typeof parsed.error_code === "string" ? parsed.error_code : undefined,

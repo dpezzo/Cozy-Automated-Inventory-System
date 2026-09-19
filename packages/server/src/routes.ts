@@ -12,6 +12,7 @@ import { createRun, getRunSummary, approveAllClean, setRowDecision, bulkDecision
 import { generateBatch } from "./domain/batchService";
 import { runLegacyComparison } from "./domain/legacyService";
 import { runPostImportVerification } from "./domain/verificationService";
+import { pushBatchToMiva } from "./miva/mivaApiPush";
 import { ValidationError, ForbiddenError, NotFoundError } from "./errors";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -118,7 +119,10 @@ router.post(
 router.get(
   "/miva/api-status",
   asyncHandler(async (_req, res) => {
-    res.json({ configured: isMivaApiConfigured() });
+    res.json({
+      configured: isMivaApiConfigured(),
+      environment: (process.env.MIVA_ENVIRONMENT ?? "development").toLowerCase(),
+    });
   }),
 );
 
@@ -301,6 +305,15 @@ router.get(
     const batch = await getRepository().findBatchById(req.params.id!);
     if (!batch) throw new NotFoundError("Batch not found.");
     res.json(batch);
+  }),
+);
+
+router.post(
+  "/batches/:id/push-to-miva",
+  asyncHandler(async (req, res) => {
+    const { confirmProduction } = req.body as { confirmProduction?: boolean };
+    const result = await pushBatchToMiva(req.params.id!, req.session.userId!, confirmProduction === true);
+    res.status(201).json(result);
   }),
 );
 

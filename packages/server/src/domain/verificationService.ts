@@ -1,22 +1,9 @@
-import { verifyPostImport, UPDATE_ROLLBACK_HEADERS, type BatchCsvRow } from "@cozywinters/shared";
-import { parse } from "csv-parse/sync";
+import { verifyPostImport } from "@cozywinters/shared";
 import { getRepository } from "../db";
 import { readStoredFileText } from "../storage/fileStorage";
 import { parseMivaSnapshotCsv, mivaRowsByProductCode } from "../vendor/mivaCsv";
+import { readBatchCsv } from "./batchCsvIO";
 import { ValidationError } from "../errors";
-
-function readUpdateBatchCsv(text: string): BatchCsvRow[] {
-  const records: Record<string, string>[] = parse(text, { columns: true, skip_empty_lines: true });
-  return records.map((r) => ({
-    PRODUCT_CODE: r[UPDATE_ROLLBACK_HEADERS[0]] ?? "",
-    "*CUSTOM_SIMPLE_INVENTORY": r[UPDATE_ROLLBACK_HEADERS[1]] ?? "",
-    "*DF-AVAILABILITY": r[UPDATE_ROLLBACK_HEADERS[2]] ?? "",
-    "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:": r[UPDATE_ROLLBACK_HEADERS[3]] ?? "",
-    "*DF-DATAFEED": r[UPDATE_ROLLBACK_HEADERS[4]] ?? "",
-    "*DF-SHOPPING_FEED": r[UPDATE_ROLLBACK_HEADERS[5]] ?? "",
-    "SHOW_IN_DARREN_INVENTORY_REPORT_(1)": r[UPDATE_ROLLBACK_HEADERS[6]] ?? "",
-  }));
-}
 
 export async function runPostImportVerification(
   batchId: string,
@@ -41,7 +28,7 @@ export async function runPostImportVerification(
   const updateFile = await repo.findFileById(batch.updateFileId);
   if (!updateFile) throw new ValidationError("FILE_NOT_FOUND", "Batch update file not found.");
 
-  const updateBatchRows = readUpdateBatchCsv(readStoredFileText(updateFile.storagePath));
+  const updateBatchRows = readBatchCsv(readStoredFileText(updateFile.storagePath));
   const { rows: preRows } = parseMivaSnapshotCsv(readStoredFileText(preImportFile.storagePath));
   const { rows: postRows } = parseMivaSnapshotCsv(readStoredFileText(postImportFile.storagePath));
 

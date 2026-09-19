@@ -74,6 +74,7 @@ export function readCustomFieldValue(
 
 /** Shape of a single Product_Update Iteration's CustomField_Values payload for the six managed fields. */
 export function buildCustomFieldValuesPayload(values: {
+  simpleInventory?: string;
   availability?: string;
   restockMessage?: string;
   dataFeed?: string;

@@ -103,7 +103,7 @@ export const api = {
   },
   getCatalogRows: (fileId: string) => request<MivaCatalogRow[]>(`/files/${fileId}/catalog-rows`),
 
-  getMivaApiStatus: () => request<{ configured: boolean }>("/miva/api-status"),
+  getMivaApiStatus: () => request<{ configured: boolean; environment: "development" | "production" }>("/miva/api-status"),
   pullMivaSnapshot: () =>
     request<{ file: FileRecord; duplicateWarning: string | null }>("/miva/pull-snapshot", { method: "POST" }),
 
@@ -130,6 +130,11 @@ export const api = {
 
   listBatches: () => request<BatchRecord[]>("/batches"),
   getBatch: (id: string) => request<BatchRecord>(`/batches/${id}`),
+  pushBatchToMiva: (batchId: string, confirmProduction: boolean) =>
+    request<PushBatchResult>(`/batches/${batchId}/push-to-miva`, {
+      method: "POST",
+      body: JSON.stringify({ confirmProduction }),
+    }),
   setImportOutcome: (id: string, status: string) =>
     request(`/batches/${id}/import-outcome`, { method: "POST", body: JSON.stringify({ status }) }),
   runPostImportVerification: (batchId: string, postImportFileId: string) =>
@@ -260,4 +265,18 @@ export interface VerificationRow {
   product_code: string;
   result: "PASS" | "FAIL";
   reason: string;
+}
+
+export interface PushRowResult {
+  productCode: string;
+  success: boolean;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+export interface PushBatchResult {
+  pushed: number;
+  failed: number;
+  verificationMismatches: number;
+  results: PushRowResult[];
 }

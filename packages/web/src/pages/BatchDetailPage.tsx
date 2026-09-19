@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api, ApiRequestError, type BatchRecord, type FileRecord, type VerificationRow } from "../api";
+import { api, ApiRequestError, type BatchRecord, type FileRecord, type VerificationRow, type PushBatchResult } from "../api";
 
 const IMPORT_STATUSES = ["GENERATED", "DOWNLOADED", "IMPORT_REPORTED", "IMPORT_FAILED"];
 
@@ -12,6 +12,12 @@ export default function BatchDetailPage() {
   const [verificationRows, setVerificationRows] = useState<VerificationRow[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mivaApi, setMivaApi] = useState<{ configured: boolean; environment: "development" | "production" }>({
+    configured: false,
+    environment: "development",
+  });
+  const [confirmProduction, setConfirmProduction] = useState(false);
+  const [pushResult, setPushResult] = useState<PushBatchResult | null>(null);
 
   async function load() {
     if (!batchId) return;
@@ -21,8 +27,23 @@ export default function BatchDetailPage() {
   useEffect(() => {
     load();
     api.listFiles("post_import_snapshot").then(setPostImportFiles);
+    api.getMivaApiStatus().then(setMivaApi);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchId]);
+
+  async function pushToMiva() {
+    if (!batchId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.pushBatchToMiva(batchId, confirmProduction);
+      setPushResult(result);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.body.message : "Push to Miva failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function setOutcome(status: string) {
     if (!batchId) return;
@@ -101,6 +122,57 @@ export default function BatchDetailPage() {
           )}
         </ul>
       </div>
+
+      {mivaApi.configured && (
+        <div className="card">
+          <h3>Push to Miva via API</h3>
+          <p style={{ fontSize: 13, color: "#64748b" }}>
+            Applies this batch's Update CSV rows directly to Miva via the JSON API, instead of manually importing the
+            CSV. Uses the exact same frozen, approved data as the downloadable CSV above.
+          </p>
+          {mivaApi.environment === "production" && (
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 8 }}>
+              <input type="checkbox" checked={confirmProduction} onChange={(e) => setConfirmProduction(e.target.checked)} />
+              I confirm this is a production write to the live Miva store.
+            </label>
+          )}
+          <button
+            className="charcoal"
+            onClick={pushToMiva}
+            disabled={busy || (mivaApi.environment === "production" && !confirmProduction)}
+          >
+            {busy ? "Pushing..." : "Push to Miva via API"}
+          </button>
+          {pushResult && (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ fontSize: 13 }}>
+                Pushed: {pushResult.pushed} · Failed: {pushResult.failed} · Verification mismatches:{" "}
+                {pushResult.verificationMismatches}
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product code</th>
+                    <th>Result</th>
+                    <th>Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pushResult.results.map((r) => (
+                    <tr key={r.productCode}>
+                      <td>{r.productCode}</td>
+                      <td>
+                        <span className={`pill ${r.success ? "clean" : "blocked"}`}>{r.success ? "SUCCESS" : "FAILED"}</span>
+                      </td>
+                      <td>{r.errorMessage ?? "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <h3>Import outcome</h3>

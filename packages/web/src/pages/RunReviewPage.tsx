@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api, ApiRequestError, type RunRecord, type RunSummary, type ReviewRowView, type FileRecord } from "../api";
+import { api, ApiRequestError, type RunRecord, type RunSummary, type ReviewRowView, type FileRecord, type ManagedValuesView } from "../api";
 
 const REVIEW_CLASS_FILTERS = ["CLEAN", "WARNING", "BLOCKED", "UNCHANGED"];
 const DECISION_FILTERS = ["PENDING", "APPROVED", "APPROVED_WARNING_ACK", "REJECTED"];
@@ -15,10 +15,10 @@ interface ColumnDef {
   get: (v: ReviewRowView) => string;
 }
 
-const COLUMNS: ColumnDef[] = [
+const BASE_COLUMNS: ColumnDef[] = [
   { key: "productCode", label: "Product code", get: (v) => v.row.productCode ?? "" },
   { key: "itemNo", label: "Item No", get: (v) => v.row.itemNo ?? "" },
-  { key: "upc", label: "UPC", get: (v) => v.row.rawUpc ?? "" },
+  { key: "upc", label: "UPC / SKU", get: (v) => v.row.rawUpc ?? "" },
   { key: "outcome", label: "Outcome", get: (v) => v.row.matchOutcome },
   { key: "class", label: "Class", get: (v) => v.row.reviewClass },
   { key: "warnings", label: "Warnings/Blockers", get: (v) => [...v.row.warningCodes, ...v.row.blockerCodes].join(", ") },
@@ -29,6 +29,31 @@ const COLUMNS: ColumnDef[] = [
   { key: "decision", label: "Decision", get: (v) => v.decision.status },
 ];
 
+/** All six fields the rule engine actually manages -- the review table only ever shows simpleInventory ("status") and restockMessage by default; the other four (availability/dataFeed/shoppingFeed/reportFlag) can differ and drive "changed" without appearing in those two columns at all. */
+const MANAGED_FIELD_LABELS: Record<string, string> = {
+  simpleInventory: "Status",
+  availability: "Availability",
+  restockMessage: "Restock",
+  dataFeed: "Datafeed",
+  shoppingFeed: "Shopping feed",
+  reportFlag: "Report flag",
+};
+
+function diffFields(current: ManagedValuesView, proposed: ManagedValuesView): string[] {
+  return Object.keys(MANAGED_FIELD_LABELS).filter((field) => {
+    const key = field as keyof ManagedValuesView;
+    return (current[key] ?? "").trim() !== (proposed[key] ?? "").trim();
+  });
+}
+
+const CHANGED_FIELDS_COLUMN: ColumnDef = {
+  key: "changedFields",
+  label: "Changed fields",
+  get: (v) => diffFields(v.row.current, v.row.proposed)
+    .map((f) => MANAGED_FIELD_LABELS[f])
+    .join(", "),
+};
+
 export default function RunReviewPage() {
   const { runId } = useParams<{ runId: string }>();
   const [run, setRun] = useState<RunRecord | null>(null);
@@ -37,6 +62,7 @@ export default function RunReviewPage() {
   const [reviewClassFilter, setReviewClassFilter] = useState<string[]>([]);
   const [decisionFilter, setDecisionFilter] = useState<string[]>([]);
   const [changedOnly, setChangedOnly] = useState(true);
+  const [highlightDiff, setHighlightDiff] = useState(false);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [columnFilterValues, setColumnFilterValues] = useState<Record<string, Set<string>>>({});
@@ -51,6 +77,13 @@ export default function RunReviewPage() {
   const [legacyResult, setLegacyResult] = useState<{ exact: number; approved: number; unexplained: number; notComparable: number } | null>(
     null,
   );
+
+  const columns = useMemo(() => {
+    if (!highlightDiff) return BASE_COLUMNS;
+    const withChangedFields = [...BASE_COLUMNS];
+    withChangedFields.splice(withChangedFields.findIndex((c) => c.key === "decision"), 0, CHANGED_FIELDS_COLUMN);
+    return withChangedFields;
+  }, [highlightDiff]);
 
   const loadRun = useCallback(async () => {
     if (!runId) return;
@@ -124,13 +157,13 @@ export default function RunReviewPage() {
   // AutoFilter dropdown listing every value that occurs in the column.
   const distinctValuesByColumn = useMemo(() => {
     const map: Record<string, string[]> = {};
-    for (const col of COLUMNS) {
+    for (const col of columns) {
       const set = new Set<string>();
       for (const r of rows) set.add(displayValue(col.get(r)));
       map[col.key] = Array.from(set).sort((a, b) => a.localeCompare(b));
     }
     return map;
-  }, [rows]);
+  }, [rows, columns]);
 
   function effectiveSelectedFor(colKey: string): Set<string> {
     return columnFilterValues[colKey] ?? new Set(distinctValuesByColumn[colKey] ?? []);
@@ -173,12 +206,12 @@ export default function RunReviewPage() {
 
   const displayedRows = useMemo(() => {
     let result = rows;
-    for (const col of COLUMNS) {
+    for (const col of columns) {
       const allowed = columnFilterValues[col.key];
       if (allowed) result = result.filter((v) => allowed.has(displayValue(col.get(v))));
     }
     if (sortKey) {
-      const col = COLUMNS.find((c) => c.key === sortKey);
+      const col = columns.find((c) => c.key === sortKey);
       if (col) {
         result = [...result].sort((a, b) => {
           const av = col.get(a);
@@ -192,7 +225,25 @@ export default function RunReviewPage() {
       }
     }
     return result;
-  }, [rows, columnFilterValues, sortKey, sortDir]);
+  }, [rows, columnFilterValues, sortKey, sortDir, columns]);
+
+  const selectableRowIds = useMemo(
+    () => displayedRows.filter(({ row, decision }) => row.reviewClass === "CLEAN" && !decision.locked).map(({ row }) => row.id),
+    [displayedRows],
+  );
+  const allSelectableSelected = selectableRowIds.length > 0 && selectableRowIds.every((id) => selected.has(id));
+
+  function toggleSelectAllRows() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelectableSelected) {
+        selectableRowIds.forEach((id) => next.delete(id));
+      } else {
+        selectableRowIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
 
   async function withBusy(fn: () => Promise<void>) {
     setBusy(true);
@@ -357,6 +408,9 @@ export default function RunReviewPage() {
           <label style={{ marginLeft: 16 }}>
             <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} /> Changed only
           </label>
+          <label style={{ marginLeft: 16 }} title="Adds a 'Changed fields' column listing which of the six managed fields actually differ -- Current/Proposed status only shows one of them.">
+            <input type="checkbox" checked={highlightDiff} onChange={(e) => setHighlightDiff(e.target.checked)} /> Highlight differences
+          </label>
           <input
             type="text"
             placeholder="Search item / UPC / product code"
@@ -383,8 +437,16 @@ export default function RunReviewPage() {
           <table>
             <thead>
               <tr>
-                <th></th>
-                {COLUMNS.map((col) => {
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={allSelectableSelected}
+                    onChange={toggleSelectAllRows}
+                    disabled={selectableRowIds.length === 0}
+                    title="Select all clean, unlocked rows currently shown"
+                  />
+                </th>
+                {columns.map((col) => {
                   const active = Boolean(columnFilterValues[col.key]);
                   const allValues = distinctValuesByColumn[col.key] ?? [];
                   const selectedSet = effectiveSelectedFor(col.key);
@@ -473,7 +535,10 @@ export default function RunReviewPage() {
               </tr>
             </thead>
             <tbody>
-              {displayedRows.map(({ row, decision }) => (
+              {displayedRows.map(({ row, decision }) => {
+                const changedFieldsForRow = highlightDiff ? diffFields(row.current, row.proposed) : [];
+                const highlightStyle = { background: "#fef3c7" };
+                return (
                 <tr key={row.id}>
                   <td>
                     {row.reviewClass === "CLEAN" && !decision.locked && (
@@ -490,8 +555,15 @@ export default function RunReviewPage() {
                   <td>{[...row.warningCodes, ...row.blockerCodes].join(", ") || "-"}</td>
                   <td>{row.totalQtyRaw ?? "-"}</td>
                   <td>{row.current.simpleInventory ?? "-"}</td>
-                  <td>{row.proposed.simpleInventory ?? "-"}</td>
-                  <td>{row.proposed.restockMessage ?? "-"}</td>
+                  <td style={changedFieldsForRow.includes("simpleInventory") ? highlightStyle : undefined}>
+                    {row.proposed.simpleInventory ?? "-"}
+                  </td>
+                  <td style={changedFieldsForRow.includes("restockMessage") ? highlightStyle : undefined}>
+                    {row.proposed.restockMessage ?? "-"}
+                  </td>
+                  {highlightDiff && (
+                    <td>{changedFieldsForRow.map((f) => MANAGED_FIELD_LABELS[f]).join(", ") || "-"}</td>
+                  )}
                   <td>
                     <span className={`pill ${pillClass(decision.status)}`}>{decision.status}</span>
                     {decision.locked && " (frozen)"}
@@ -527,7 +599,8 @@ export default function RunReviewPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
