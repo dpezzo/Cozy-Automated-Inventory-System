@@ -26,8 +26,14 @@ async function validateAndCountRows(buffer: Buffer, kind: FileKind): Promise<num
   throw new ValidationError("UNSUPPORTED_KIND", `File kind ${kind} cannot be uploaded directly.`);
 }
 
-function extensionFor(kind: FileKind, originalFilename: string): string {
-  if (kind === "olliix_workbook") return ".xlsx";
+/**
+ * Always derived from the actual uploaded filename, never assumed from
+ * `kind` -- vendor file format is a property of each vendor's export, not of
+ * this app's internal FileKind label. Olliix happens to be .xlsx-only today,
+ * but a future vendor onboarded as CSV (see vendor/ adapter isolation
+ * pattern) must not have its extension silently coerced to something else.
+ */
+function extensionFor(originalFilename: string): string {
   const dot = originalFilename.lastIndexOf(".");
   return dot >= 0 ? originalFilename.slice(dot) : ".csv";
 }
@@ -50,7 +56,7 @@ export async function uploadFile(
     return { file: existing, duplicateOf: existing };
   }
 
-  const saved = saveUploadedFile(buffer, kind, extensionFor(kind, originalFilename));
+  const saved = saveUploadedFile(buffer, kind, extensionFor(originalFilename));
   const file = await repo.insertFile({
     kind,
     originalFilename,

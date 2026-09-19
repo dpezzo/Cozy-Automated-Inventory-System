@@ -40,6 +40,12 @@ export interface MivaRawRow {
   currentDataFeed: string;
   currentShoppingFeed: string;
   currentReportFlag: string;
+  /** "Parent" (has variants), "Variant" (a parent's attribute combination), or blank/"Standard" for a normal product. Informational only -- not used by matching or the rule engine. */
+  productType?: string;
+  /** Storefront product page URL. For a Variant, this already resolves to its parent's page (optionally with a variant_select query string for deep-linking). Informational only. */
+  productUrl?: string;
+  /** Small preview image URL. Informational only. */
+  thumbnailUrl?: string;
 }
 
 export interface NormalizedIdentifier {

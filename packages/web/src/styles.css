@@ -117,6 +117,8 @@ button {
 button.primary { background: var(--blue); color: white; border-color: var(--blue); }
 button.success { background: var(--green); color: white; border-color: var(--green); }
 button.danger { background: var(--red); color: white; border-color: var(--red); }
+button.charcoal { background: #475569; color: white; border-color: #475569; }
+button.charcoal:hover:not(:disabled) { background: #334155; border-color: #334155; }
 /* Muted/tinted variants, used only for the per-row Approve/Reject buttons in
    the review table -- a whole toolbar row of solid colors was too loud, but
    it reads fine at row-level scale next to plain pill-colored status text. */
@@ -171,6 +173,136 @@ input[type="text"], input[type="password"], input[type="email"], select {
   border-radius: 8px;
   margin-bottom: 16px;
 }
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.step-header h3 { margin: 0; }
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.step-badge.complete { background: var(--green); }
+
+.tab-strip {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.tab-strip button {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 2px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.tab-strip button:hover { color: var(--text); }
+.tab-strip button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.tab-strip button.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+.or-divider-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+}
+.or-divider-row > .card { flex: 1; margin-bottom: 0; }
+.or-divider-label {
+  position: relative;
+  flex: none;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.or-divider-label::before, .or-divider-label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 1px;
+  background: var(--border);
+}
+.or-divider-label::before { top: 0; height: calc(50% - 14px); }
+.or-divider-label::after { bottom: 0; height: calc(50% - 14px); }
+
+.layout-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 6px 10px;
+  border: 1px dashed var(--amber);
+  border-radius: 8px;
+  background: #fffbeb;
+  font-size: 12px;
+  color: #92400e;
+}
+.layout-switcher button { padding: 3px 10px; font-size: 12px; }
+.layout-switcher button.active { background: var(--amber); color: #fff; border-color: var(--amber); }
+
+.dropzone {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+}
+.dropzone:hover { border-color: var(--blue); color: var(--text); }
+.dropzone.dragging { border-color: var(--blue); background: #eef2ff; color: var(--blue); }
+.dropzone.busy { cursor: not-allowed; opacity: 0.6; }
+
+.card-dropzone-active {
+  outline: 2px dashed var(--blue);
+  outline-offset: -2px;
+  background: #eef2ff;
+}
+.dropzone input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.advanced-details { margin-bottom: 20px; }
+.advanced-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 8px 0;
+  list-style: none;
+}
+.advanced-details summary::-webkit-details-marker { display: none; }
+.advanced-details summary::before { content: "▸ "; }
+.advanced-details[open] summary::before { content: "▾ "; }
+.advanced-details summary:hover { color: var(--text); }
+.advanced-details summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 .login-page {
   display: flex;

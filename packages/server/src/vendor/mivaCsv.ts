@@ -15,6 +15,10 @@ export const MIVA_HEADER_MAP: Record<string, keyof MivaLogicalRow> = {
   "*DF-DATAFEED": "dataFeed",
   "*DF-SHOPPING_FEED": "shoppingFeed",
   "SHOW_IN_DARREN_INVENTORY_REPORT_(1)": "reportFlag",
+  // Optional: not in REQUIRED_LOGICAL_FIELDS, so snapshots without this column still parse.
+  PRODUCT_TYPE: "productType",
+  PRODUCT_URL: "productUrl",
+  PRODUCT_THUMBNAIL: "thumbnailUrl",
 };
 
 interface MivaLogicalRow {
@@ -29,6 +33,9 @@ interface MivaLogicalRow {
   dataFeed: string;
   shoppingFeed: string;
   reportFlag: string;
+  productType: string;
+  productUrl: string;
+  thumbnailUrl: string;
 }
 
 const REQUIRED_LOGICAL_FIELDS: (keyof MivaLogicalRow)[] = [
@@ -118,6 +125,9 @@ export function parseMivaSnapshotCsv(fileContent: string): ParsedMivaCsv {
     currentDataFeed: get(record, "dataFeed"),
     currentShoppingFeed: get(record, "shoppingFeed"),
     currentReportFlag: get(record, "reportFlag"),
+    productType: get(record, "productType"),
+    productUrl: get(record, "productUrl"),
+    thumbnailUrl: get(record, "thumbnailUrl"),
   }));
 
   return { rows };

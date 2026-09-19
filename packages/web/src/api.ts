@@ -50,6 +50,11 @@ export const api = {
     return body as { file: FileRecord; duplicateWarning: string | null };
   },
   downloadFileUrl: (id: string) => `/api/files/${id}/download`,
+  getCatalogRows: (fileId: string) => request<MivaCatalogRow[]>(`/files/${fileId}/catalog-rows`),
+
+  getMivaApiStatus: () => request<{ configured: boolean }>("/miva/api-status"),
+  pullMivaSnapshot: () =>
+    request<{ file: FileRecord; duplicateWarning: string | null }>("/miva/pull-snapshot", { method: "POST" }),
 
   listRuns: () => request<RunRecord[]>("/runs"),
   createRun: (olliixFileId: string, mivaFileId: string) =>
@@ -84,6 +89,24 @@ export const api = {
   listPostImportVerifications: (batchId: string) =>
     request<{ id: string; created_at: string }[]>(`/batches/${batchId}/post-import-verifications`),
 };
+
+export interface MivaCatalogRow {
+  sourceRowNumber: number;
+  productCode: string;
+  productName: string;
+  gtinRaw: string | null;
+  mpnRaw: string | null;
+  brandRaw: string | null;
+  currentSimpleInventory: string;
+  currentAvailability: string;
+  currentRestockMessage: string;
+  currentDataFeed: string;
+  currentShoppingFeed: string;
+  currentReportFlag: string;
+  productType?: string;
+  productUrl?: string;
+  thumbnailUrl?: string;
+}
 
 export interface FileRecord {
   id: string;

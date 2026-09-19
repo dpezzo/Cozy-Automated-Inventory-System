@@ -3,8 +3,11 @@ import multer from "multer";
 import path from "node:path";
 import { verifyCredentials, requireAuth } from "./auth";
 import { getRepository, type RowFilter, type FileKind } from "./db";
-import { readStoredFile } from "./storage/fileStorage";
+import { readStoredFile, readStoredFileText } from "./storage/fileStorage";
 import { uploadFile } from "./domain/uploadService";
+import { pullMivaSnapshotFromApi } from "./miva/mivaProducts";
+import { isMivaApiConfigured } from "./miva/mivaApiClient";
+import { parseMivaSnapshotCsv } from "./vendor/mivaCsv";
 import { createRun, getRunSummary, approveAllClean, setRowDecision, bulkDecision, getBatchableRows } from "./domain/runService";
 import { generateBatch } from "./domain/batchService";
 import { runLegacyComparison } from "./domain/legacyService";
@@ -84,6 +87,39 @@ router.post(
         ? `An identical ${kind} file was already uploaded on ${result.duplicateOf.uploadedAt}. Resubmit with confirmDuplicate to store it again.`
         : null,
     });
+  }),
+);
+
+router.get(
+  "/miva/api-status",
+  asyncHandler(async (_req, res) => {
+    res.json({ configured: isMivaApiConfigured() });
+  }),
+);
+
+router.post(
+  "/miva/pull-snapshot",
+  asyncHandler(async (req, res) => {
+    const result = await pullMivaSnapshotFromApi(req.session.userId!);
+    res.status(result.duplicateOf ? 200 : 201).json({
+      file: result.file,
+      duplicateWarning: result.duplicateOf
+        ? `An identical Miva snapshot was already stored on ${result.duplicateOf.uploadedAt}.`
+        : null,
+    });
+  }),
+);
+
+router.get(
+  "/files/:id/catalog-rows",
+  asyncHandler(async (req, res) => {
+    const file = await getRepository().findFileById(req.params.id!);
+    if (!file) throw new NotFoundError("File not found.");
+    if (file.kind !== "miva_snapshot" && file.kind !== "post_import_snapshot") {
+      throw new ValidationError("UNSUPPORTED_KIND", "Only Miva snapshot files can be browsed as a catalog.");
+    }
+    const { rows } = parseMivaSnapshotCsv(readStoredFileText(file.storagePath));
+    res.json(rows);
   }),
 );
 

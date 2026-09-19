@@ -5,6 +5,7 @@ import HomePage from "./pages/HomePage";
 import RunReviewPage from "./pages/RunReviewPage";
 import RunHistoryPage from "./pages/RunHistoryPage";
 import BatchDetailPage from "./pages/BatchDetailPage";
+import CatalogPage from "./pages/CatalogPage";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -17,6 +18,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             Home
           </NavLink>
           <NavLink to="/runs">Run History</NavLink>
+          <NavLink to="/catalog">Miva Catalog</NavLink>
         </nav>
         <div style={{ marginTop: 32, fontSize: 12, color: "#64748b" }}>
           <div>{user?.email}</div>
@@ -63,6 +65,14 @@ export default function App() {
           element={
             <RequireAuth>
               <RunReviewPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/catalog"
+          element={
+            <RequireAuth>
+              <CatalogPage />
             </RequireAuth>
           }
         />
