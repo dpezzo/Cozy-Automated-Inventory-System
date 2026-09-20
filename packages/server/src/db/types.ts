@@ -28,6 +28,7 @@ export interface CreateUserInput {
 }
 
 export interface UpdateUserPatch {
+  email?: string;
   role?: UserRole;
   isActive?: boolean;
   displayName?: string | null;
@@ -222,4 +223,47 @@ export interface AuditLogInput {
   entityType: string;
   entityId: string | null;
   details?: Record<string, unknown>;
+}
+
+export interface DataSizeAlertThresholds {
+  reconciliationRows: number;
+  totalFileBytes: number;
+}
+
+export const DEFAULT_DATA_SIZE_ALERT_THRESHOLDS: DataSizeAlertThresholds = {
+  reconciliationRows: 250_000,
+  totalFileBytes: 500 * 1024 * 1024,
+};
+
+export interface DataStats {
+  reconciliationRows: number;
+  totalFileBytes: number;
+  thresholds: DataSizeAlertThresholds;
+}
+
+export interface ClearDataCounts {
+  runs: number;
+  batches: number;
+  reconciliationRows: number;
+  decisions: number;
+  legacyComparisons: number;
+  postImportVerifications: number;
+  files: number;
+  totalFileBytes: number;
+}
+
+export interface ClearDataResult extends ClearDataCounts {
+  /** Storage paths (relative to UPLOAD_DIR) of files whose DB rows were deleted -- the caller unlinks these from disk after the DB commit succeeds. */
+  deletedFileStoragePaths: string[];
+}
+
+export interface AuditLogRecord {
+  id: string;
+  actorId: string | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
 }

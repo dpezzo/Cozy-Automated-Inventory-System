@@ -10,35 +10,9 @@ import {
   type BatchRecord,
   type VendorSummary,
 } from "../api";
-
-/** Upload state + submit logic, shared between a field-level dropzone and a whole-card dropzone around it. */
-function useUploadControl(kind: string, onUploaded: (file: FileRecord) => void) {
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [pendingDuplicateFile, setPendingDuplicateFile] = useState<File | null>(null);
-
-  async function handleFile(file: File, confirmDuplicate = false) {
-    setBusy(true);
-    setMessage(null);
-    try {
-      const result = await api.uploadFile(file, kind, confirmDuplicate);
-      if (result.duplicateWarning && !confirmDuplicate) {
-        setMessage(result.duplicateWarning + " Click Upload again to store it as a new copy, or reuse the existing file below.");
-        setPendingDuplicateFile(file);
-      } else {
-        setMessage(`Uploaded: ${result.file.originalFilename} (${result.file.rowCount ?? "?"} rows)`);
-        setPendingDuplicateFile(null);
-      }
-      onUploaded(result.file);
-    } catch (err) {
-      setMessage(err instanceof ApiRequestError ? `${err.body.error}: ${err.body.message}` : "Upload failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return { busy, message, pendingDuplicateFile, handleFile };
-}
+import { useUploadControl, UploadControlView, WholeCardDropzone } from "../components/UploadBox";
+import { StepBadge } from "../components/StepBadge";
+import { InstructionsCard } from "../components/InstructionsCard";
 
 /** Same shape as useUploadControl, but for the single vendor-file upload area -- the vendor is detected server-side from the file's content, never picked via a tab. */
 function useVendorAutoUploadControl(onUploaded: (file: FileRecord) => void) {
@@ -69,124 +43,6 @@ function useVendorAutoUploadControl(onUploaded: (file: FileRecord) => void) {
   }
 
   return { busy, message, pendingDuplicateFile, handleFile };
-}
-
-/** Bare upload UI (no outer card) -- the field-level dropzone, for embedding inside a TabbedCard/OrDividerRow item or a whole-card dropzone. */
-function UploadControlView({
-  kind,
-  label,
-  hint,
-  state,
-}: {
-  kind: string;
-  label: string;
-  hint?: string;
-  state: ReturnType<typeof useUploadControl>;
-}) {
-  const [dragging, setDragging] = useState(false);
-  const inputId = `upload-${kind}`;
-  const { busy, message, pendingDuplicateFile, handleFile } = state;
-
-  return (
-    <div>
-      <h4 style={{ marginTop: 0 }}>{label}</h4>
-      {hint && <p style={{ fontSize: 13, color: "#64748b", marginTop: -4 }}>{hint}</p>}
-      <label
-        htmlFor={inputId}
-        className={`dropzone${dragging ? " dragging" : ""}${busy ? " busy" : ""}`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!busy) setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setDragging(false);
-          const file = e.dataTransfer.files?.[0];
-          if (file && !busy) handleFile(file, false);
-        }}
-      >
-        <input
-          id={inputId}
-          type="file"
-          disabled={busy}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFile(file, false);
-            e.target.value = "";
-          }}
-        />
-        <span>{busy ? "Uploading..." : "Drag a file here, or click to browse"}</span>
-      </label>
-      {pendingDuplicateFile && (
-        <button style={{ marginTop: 10, display: "block" }} onClick={() => handleFile(pendingDuplicateFile, true)} disabled={busy}>
-          Confirm duplicate upload
-        </button>
-      )}
-      {message && <p style={{ fontSize: 13, marginTop: 8 }}>{message}</p>}
-    </div>
-  );
-}
-
-/**
- * Makes its whole card area a dropzone (not just the small field-level one
- * inside it) -- drop a file anywhere on the card, not only on the dashed
- * strip. A no-op wrapper (just renders a plain card) when `onFile` is omitted.
- */
-function WholeCardDropzone({
-  onFile,
-  disabled,
-  children,
-}: {
-  onFile?: (file: File) => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  const [dragging, setDragging] = useState(false);
-  const active = Boolean(onFile) && !disabled;
-
-  return (
-    <div
-      className={`card${dragging && active ? " card-dropzone-active" : ""}`}
-      onDragOver={(e) => {
-        if (!active) return;
-        e.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={(e) => {
-        if (!active) return;
-        e.preventDefault();
-        setDragging(false);
-        const file = e.dataTransfer.files?.[0];
-        if (file) onFile!(file);
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** Standalone card version, used for the Advanced/one-time uploads which aren't part of a tabbed section. */
-function UploadBox({
-  kind,
-  label,
-  hint,
-  onUploaded,
-}: {
-  kind: string;
-  label: string;
-  hint?: string;
-  onUploaded: (file: FileRecord) => void;
-}) {
-  const state = useUploadControl(kind, onUploaded);
-  return (
-    <WholeCardDropzone onFile={(file) => state.handleFile(file, false)} disabled={state.busy}>
-      <UploadControlView kind={kind} label={label} hint={hint} state={state} />
-    </WholeCardDropzone>
-  );
 }
 
 /** Bare API-pull control (no outer card), for embedding inside TabbedCard/OrDividerRow items. */
@@ -230,11 +86,6 @@ interface TabDef {
   content: React.ReactNode;
   /** When set, dropping a file anywhere on the card (while this tab is active) uploads it the same as the field-level dropzone. */
   onFileDrop?: (file: File) => void;
-}
-
-/** The numbered step badge, or a green checkmark once at least one file for that step exists. */
-function StepBadge({ step, complete }: { step: number; complete?: boolean }) {
-  return <span className={`step-badge${complete ? " complete" : ""}`}>{complete ? "✓" : step}</span>;
 }
 
 /**
@@ -417,28 +268,6 @@ function MivaCatalogDataSection({
   );
 }
 
-function AdvancedUploadsSection({ onChanged }: { onChanged: (file: FileRecord) => void }) {
-  return (
-    <details className="advanced-details">
-      <summary>Advanced / one-time options</summary>
-      <div className="grid cols-2" style={{ marginTop: 12 }}>
-        <UploadBox
-          kind="legacy_audit"
-          label="Upload legacy Olliix_Audit_Master CSV (optional, one-time)"
-          hint="Only for the old Excel/Power Query workbook's 'Olliix_Audit_Master' export (columns like SKU, UPC, Expected Date, PRODUCT_CODE). This is a one-time check that the app matches the old system's behavior, not a regular Miva import/export file. Skip this if you don't maintain that workbook — it isn't part of the normal reconciliation workflow."
-          onUploaded={onChanged}
-        />
-        <UploadBox
-          kind="post_import_snapshot"
-          label="Upload a post-import Miva export (for batch verification)"
-          hint="A full Miva catalog export taken after you manually import a generated Update CSV, used to verify the import landed correctly."
-          onUploaded={onChanged}
-        />
-      </div>
-    </details>
-  );
-}
-
 export default function HomePage() {
   const navigate = useNavigate();
   const [vendorFiles, setVendorFiles] = useState<FileRecord[]>([]);
@@ -521,6 +350,16 @@ export default function HomePage() {
       <h2>Home</h2>
       {error && <div className="error-banner">{error}</div>}
 
+      <InstructionsCard
+        pageKey="home"
+        description="Run a reconciliation by working through the three steps below."
+        steps={[
+          "Upload the vendor's inventory file (or a file for any of the supported vendors).",
+          "Upload a Miva catalog snapshot, or pull one directly from the Miva API.",
+          "Select both files and start reconciliation to generate a review.",
+        ]}
+      />
+
       <div className="grid cols-4" style={{ marginBottom: 20 }}>
         <div className="stat">
           <div className="value">{runs.length}</div>
@@ -550,7 +389,7 @@ export default function HomePage() {
 
       <div className="card">
         <div className="step-header">
-          <span className="step-badge">3</span>
+          <StepBadge step={3} />
           <h3>Start Reconciliation</h3>
         </div>
         <div className="grid cols-2">
@@ -612,34 +451,6 @@ export default function HomePage() {
         >
           {starting ? "Starting..." : "Start reconciliation"}
         </button>
-      </div>
-
-      <AdvancedUploadsSection onChanged={refresh} />
-
-      <div className="card">
-        <h3>Recent runs</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Created</th>
-              <th>Status</th>
-              <th>Rule</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((r) => (
-              <tr key={r.id}>
-                <td>{new Date(r.createdAt).toLocaleString()}</td>
-                <td>{r.status}</td>
-                <td>{r.ruleId}</td>
-                <td>
-                  <a href={`/runs/${r.id}`}>Open</a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );

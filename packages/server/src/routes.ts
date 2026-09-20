@@ -22,6 +22,7 @@ import { runLegacyComparison } from "./domain/legacyService";
 import { runPostImportVerification } from "./domain/verificationService";
 import { pushBatchToMiva, resolveMivaPushEnvironment } from "./miva/mivaApiPush";
 import { listUsers, createUser, updateUser, deactivateUser } from "./domain/userService";
+import { previewClearData, clearData } from "./domain/adminService";
 import {
   listVendorConfigs,
   listVendorConfigSummaries,
@@ -153,6 +154,15 @@ router.post(
 );
 
 router.use(requireAuth);
+
+// ---------- Data stats (every signed-in user, for the storage-growth alert) ----------
+
+router.get(
+  "/data-stats",
+  asyncHandler(async (_req, res) => {
+    res.json(await getRepository().getDataStats());
+  }),
+);
 
 // ---------- Files ----------
 
@@ -479,6 +489,99 @@ router.get(
   }),
 );
 
+// ---------- Audit log (admin only) ----------
+
+router.get(
+  "/audit-log",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    res.json(await getRepository().listAuditLog(limit));
+  }),
+);
+
+// ---------- Admin: clear data (admin only) ----------
+
+function parseBeforeDate(body: unknown): string | null {
+  const beforeDate = (body as { beforeDate?: unknown } | undefined)?.beforeDate;
+  if (beforeDate === undefined || beforeDate === null) return null;
+  if (typeof beforeDate !== "string" || Number.isNaN(Date.parse(beforeDate))) {
+    throw new ValidationError("INVALID_REQUEST", "beforeDate must be an ISO date string, or omitted to clear everything.");
+  }
+  return beforeDate;
+}
+
+router.post(
+  "/admin/clear-data/preview",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const beforeDate = parseBeforeDate(req.body);
+    res.json(await previewClearData(beforeDate));
+  }),
+);
+
+router.post(
+  "/admin/clear-data",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const beforeDate = parseBeforeDate(req.body);
+    // A second, server-side gate behind the client's type-to-confirm UI --
+    // this route is destructive and irreversible, so it should never fire
+    // without an explicit, deliberate confirmation flag in the request body.
+    if ((req.body as { confirm?: unknown } | undefined)?.confirm !== true) {
+      res.status(400).json({ error: "CONFIRMATION_REQUIRED", message: "confirm must be true to clear data." });
+      return;
+    }
+    const result = await clearData(beforeDate, req.session.userId!);
+    res.json(result);
+  }),
+);
+
+router.put(
+  "/admin/data-size-alert-thresholds",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { reconciliationRows, totalFileBytes } = req.body as { reconciliationRows?: unknown; totalFileBytes?: unknown };
+    if (
+      typeof reconciliationRows !== "number" ||
+      !Number.isFinite(reconciliationRows) ||
+      reconciliationRows <= 0 ||
+      typeof totalFileBytes !== "number" ||
+      !Number.isFinite(totalFileBytes) ||
+      totalFileBytes <= 0
+    ) {
+      res
+        .status(400)
+        .json({ error: "INVALID_REQUEST", message: "reconciliationRows and totalFileBytes must both be positive numbers." });
+      return;
+    }
+    await getRepository().setDataSizeAlertThresholds({ reconciliationRows, totalFileBytes });
+    await getRepository().insertAuditLog({
+      actorId: req.session.userId!,
+      action: "DATA_SIZE_ALERT_THRESHOLDS_UPDATED",
+      entityType: "system",
+      entityId: null,
+      details: { reconciliationRows, totalFileBytes },
+    });
+    res.json(await getRepository().getDataStats());
+  }),
+);
+
+router.delete(
+  "/admin/data-size-alert-thresholds",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    await getRepository().resetDataSizeAlertThresholds();
+    await getRepository().insertAuditLog({
+      actorId: req.session.userId!,
+      action: "DATA_SIZE_ALERT_THRESHOLDS_RESET",
+      entityType: "system",
+      entityId: null,
+    });
+    res.json(await getRepository().getDataStats());
+  }),
+);
+
 // ---------- Users (admin only) ----------
 
 router.get(
@@ -512,12 +615,14 @@ router.patch(
   "/users/:id",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const { role, isActive, displayName } = req.body as {
+    const { email, role, isActive, displayName, password } = req.body as {
+      email?: string;
       role?: "admin" | "member";
       isActive?: boolean;
       displayName?: string | null;
+      password?: string;
     };
-    const user = await updateUser(req.params.id!, { role, isActive, displayName }, req.session.userId!);
+    const user = await updateUser(req.params.id!, { email, role, isActive, displayName, password }, req.session.userId!);
     res.json(user);
   }),
 );

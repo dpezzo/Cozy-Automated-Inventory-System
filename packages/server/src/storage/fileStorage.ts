@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { defaultUploadDir } from "../config/paths";
 
@@ -56,4 +56,13 @@ export function readStoredFile(storagePath: string): Buffer {
 
 export function readStoredFileText(storagePath: string): string {
   return readStoredFile(storagePath).toString("utf8");
+}
+
+/** Best-effort delete -- the DB row is the source of truth, so a file already missing on disk (or a permissions hiccup) is not fatal to the caller's cleanup. */
+export function deleteStoredFile(storagePath: string): void {
+  try {
+    unlinkSync(path.join(storageRoot(), storagePath));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
 }

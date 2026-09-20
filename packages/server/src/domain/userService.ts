@@ -46,9 +46,11 @@ export async function createUser(input: CreateUserRequest, actorId: string): Pro
 }
 
 export interface UpdateUserRequest {
+  email?: string;
   role?: UserRole;
   isActive?: boolean;
   displayName?: string | null;
+  password?: string;
 }
 
 /** Prevents an admin from demoting or deactivating their own account, which would lock everyone out with no admin left to fix it. */
@@ -69,17 +71,43 @@ export async function updateUser(targetId: string, patch: UpdateUserRequest, act
   if (!existing) {
     throw new ValidationError("USER_NOT_FOUND", "User not found.");
   }
+
+  let email: string | undefined;
+  if (patch.email !== undefined) {
+    email = patch.email.trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      throw new ValidationError("INVALID_EMAIL", "A valid email address is required.");
+    }
+    if (email !== existing.email) {
+      const emailOwner = await repo.findUserByEmail(email);
+      if (emailOwner && emailOwner.id !== targetId) {
+        throw new ValidationError("EMAIL_IN_USE", "A user with that email already exists.");
+      }
+    }
+  }
+
+  let passwordHash: string | undefined;
+  if (patch.password !== undefined) {
+    if (patch.password.length < 8) {
+      throw new ValidationError("PASSWORD_TOO_SHORT", "Password must be at least 8 characters.");
+    }
+    passwordHash = await bcrypt.hash(patch.password, 12);
+  }
+
   const user = await repo.updateUser(targetId, {
+    email,
     role: patch.role,
     isActive: patch.isActive,
     displayName: patch.displayName,
+    passwordHash,
   });
   await repo.insertAuditLog({
     actorId,
     action: "USER_UPDATED",
     entityType: "user",
     entityId: user.id,
-    details: { ...patch },
+    // Never log the raw password -- only whether it changed.
+    details: { email: patch.email, role: patch.role, isActive: patch.isActive, displayName: patch.displayName, passwordChanged: patch.password !== undefined },
   });
   return user;
 }

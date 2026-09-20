@@ -21,10 +21,16 @@ import type {
   LegacyComparisonRowInput,
   PostImportVerificationRowInput,
   AuditLogInput,
+  AuditLogRecord,
+  DataStats,
+  DataSizeAlertThresholds,
+  ClearDataCounts,
+  ClearDataResult,
   VendorConfigRecord,
   InsertVendorConfigInput,
   UpdateVendorConfigPatch,
 } from "./types";
+import { DEFAULT_DATA_SIZE_ALERT_THRESHOLDS } from "./types";
 import { defaultSqlitePath } from "../config/paths";
 import { runSqliteMigrations } from "./sqliteMigrate";
 
@@ -39,6 +45,12 @@ function toIntBool(value: boolean): number {
 function fromIntBool(value: unknown): boolean {
   return Number(value) === 1;
 }
+
+function inClause(n: number): string {
+  return `(${Array.from({ length: n }, () => "?").join(",")})`;
+}
+
+const DATA_SIZE_ALERT_SETTINGS_KEY = "data_size_alert_thresholds";
 
 /**
  * password_hash stays NOT NULL at the schema level (see
@@ -154,6 +166,10 @@ export class SqliteRepository implements Repository {
   async updateUser(id: string, patch: UpdateUserPatch): Promise<UserRecord> {
     const sets: string[] = [];
     const params: (string | number | null)[] = [];
+    if (patch.email !== undefined) {
+      sets.push("email = ?");
+      params.push(patch.email);
+    }
     if (patch.role !== undefined) {
       sets.push("role = ?");
       params.push(patch.role);
@@ -608,6 +624,212 @@ export class SqliteRepository implements Repository {
       .run(randomUUID(), input.actorId, input.action, input.entityType, input.entityId, JSON.stringify(input.details ?? {}));
   }
 
+  async getDataStats(): Promise<DataStats> {
+    const rows = this.conn().prepare("SELECT COUNT(*) AS c FROM reconciliation_rows").get() as { c: number };
+    const files = this.conn().prepare("SELECT COALESCE(SUM(size_bytes), 0) AS b FROM files").get() as { b: number };
+    return { reconciliationRows: rows.c, totalFileBytes: files.b, thresholds: this.readDataSizeAlertThresholds() };
+  }
+
+  private readDataSizeAlertThresholds(): DataSizeAlertThresholds {
+    const row = this.conn().prepare("SELECT value FROM app_settings WHERE key = ?").get(DATA_SIZE_ALERT_SETTINGS_KEY) as
+      | { value: string }
+      | undefined;
+    if (!row) return DEFAULT_DATA_SIZE_ALERT_THRESHOLDS;
+    try {
+      return { ...DEFAULT_DATA_SIZE_ALERT_THRESHOLDS, ...JSON.parse(row.value) };
+    } catch {
+      return DEFAULT_DATA_SIZE_ALERT_THRESHOLDS;
+    }
+  }
+
+  async setDataSizeAlertThresholds(thresholds: DataSizeAlertThresholds): Promise<void> {
+    this.conn()
+      .prepare(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(DATA_SIZE_ALERT_SETTINGS_KEY, JSON.stringify(thresholds), nowIso());
+  }
+
+  async resetDataSizeAlertThresholds(): Promise<void> {
+    this.conn().prepare("DELETE FROM app_settings WHERE key = ?").run(DATA_SIZE_ALERT_SETTINGS_KEY);
+  }
+
+  async previewClearData(beforeDate: string | null): Promise<ClearDataCounts> {
+    const { deletedFileStoragePaths, ...counts } = await this.runClearData(beforeDate, true);
+    return counts;
+  }
+
+  async clearData(beforeDate: string | null): Promise<ClearDataResult> {
+    return this.runClearData(beforeDate, false);
+  }
+
+  /**
+   * Deletes in dependency order (children before parents -- see the FK
+   * layout in migrations/0001_init.sql: only reconciliation_rows/decisions/
+   * legacy_comparison_rows/post_import_verification_rows cascade from their
+   * direct parent; runs/batches/files relationships do not), then figures
+   * out which of the files referenced by the deleted rows are now
+   * unreferenced anywhere else (a file can be reused across runs via the
+   * checksum-dedupe upload flow) before deleting those file rows too.
+   * dryRun runs the identical logic and rolls back instead of committing, so
+   * the preview is guaranteed to match what a real run would do.
+   */
+  private async runClearData(beforeDate: string | null, dryRun: boolean): Promise<ClearDataResult> {
+    const db = this.conn();
+    const empty: ClearDataResult = {
+      runs: 0,
+      batches: 0,
+      reconciliationRows: 0,
+      decisions: 0,
+      legacyComparisons: 0,
+      postImportVerifications: 0,
+      files: 0,
+      totalFileBytes: 0,
+      deletedFileStoragePaths: [],
+    };
+
+    db.exec("BEGIN");
+    try {
+      const runRows = (
+        beforeDate
+          ? db.prepare("SELECT id FROM runs WHERE created_at < ?").all(beforeDate)
+          : db.prepare("SELECT id FROM runs").all()
+      ) as { id: string }[];
+      const runIds = runRows.map((r) => r.id);
+
+      if (runIds.length === 0) {
+        db.exec("ROLLBACK");
+        return empty;
+      }
+      const runPh = inClause(runIds.length);
+
+      const batchRows = db
+        .prepare(
+          `SELECT id, update_file_id, rollback_file_id, exception_file_id, reconciliation_file_id
+           FROM batches WHERE run_id IN ${runPh}`,
+        )
+        .all(...runIds) as Record<string, unknown>[];
+      const batchIds = batchRows.map((b) => b.id as string);
+      const batchPh = batchIds.length ? inClause(batchIds.length) : null;
+
+      const runFileRows = db.prepare(`SELECT vendor_file_id, miva_file_id FROM runs WHERE id IN ${runPh}`).all(...runIds) as {
+        vendor_file_id: string;
+        miva_file_id: string;
+      }[];
+      const legacyRows = db.prepare(`SELECT legacy_file_id FROM legacy_comparisons WHERE run_id IN ${runPh}`).all(...runIds) as {
+        legacy_file_id: string | null;
+      }[];
+      const postImportRows = batchPh
+        ? (db.prepare(`SELECT post_import_file_id FROM post_import_verifications WHERE batch_id IN ${batchPh}`).all(
+            ...batchIds,
+          ) as { post_import_file_id: string | null }[])
+        : [];
+
+      const candidateFileIds = new Set<string>();
+      for (const r of runFileRows) {
+        candidateFileIds.add(r.vendor_file_id);
+        candidateFileIds.add(r.miva_file_id);
+      }
+      for (const b of batchRows) {
+        for (const col of ["update_file_id", "rollback_file_id", "exception_file_id", "reconciliation_file_id"] as const) {
+          const v = b[col] as string | null;
+          if (v) candidateFileIds.add(v);
+        }
+      }
+      for (const r of legacyRows) if (r.legacy_file_id) candidateFileIds.add(r.legacy_file_id);
+      for (const r of postImportRows) if (r.post_import_file_id) candidateFileIds.add(r.post_import_file_id);
+
+      const reconciliationRows = (
+        db.prepare(`SELECT COUNT(*) AS c FROM reconciliation_rows WHERE run_id IN ${runPh}`).get(...runIds) as { c: number }
+      ).c;
+      const decisions = (db.prepare(`SELECT COUNT(*) AS c FROM decisions WHERE run_id IN ${runPh}`).get(...runIds) as { c: number })
+        .c;
+
+      // Children first, then the run itself -- see the ordering note above.
+      if (batchPh) {
+        db.prepare(
+          `DELETE FROM post_import_verification_rows
+           WHERE verification_id IN (SELECT id FROM post_import_verifications WHERE batch_id IN ${batchPh})`,
+        ).run(...batchIds);
+        db.prepare(`DELETE FROM post_import_verifications WHERE batch_id IN ${batchPh}`).run(...batchIds);
+      }
+      db.prepare(
+        `DELETE FROM legacy_comparison_rows
+         WHERE legacy_comparison_id IN (SELECT id FROM legacy_comparisons WHERE run_id IN ${runPh})`,
+      ).run(...runIds);
+      db.prepare(`DELETE FROM legacy_comparisons WHERE run_id IN ${runPh}`).run(...runIds);
+      db.prepare(`DELETE FROM decisions WHERE run_id IN ${runPh}`).run(...runIds);
+      if (batchPh) {
+        db.prepare(`DELETE FROM batches WHERE id IN ${batchPh}`).run(...batchIds);
+      }
+      db.prepare(`DELETE FROM reconciliation_rows WHERE run_id IN ${runPh}`).run(...runIds);
+      db.prepare(`DELETE FROM runs WHERE id IN ${runPh}`).run(...runIds);
+
+      // Only drop files nothing else still points at -- the same file can be
+      // reused across runs via the checksum-dedupe upload flow.
+      const fileIdList = Array.from(candidateFileIds);
+      const deletableFileIds: string[] = [];
+      for (const fid of fileIdList) {
+        const stillReferenced =
+          Boolean(db.prepare("SELECT 1 FROM runs WHERE vendor_file_id = ? OR miva_file_id = ? LIMIT 1").get(fid, fid)) ||
+          Boolean(
+            db
+              .prepare(
+                "SELECT 1 FROM batches WHERE update_file_id = ? OR rollback_file_id = ? OR exception_file_id = ? OR reconciliation_file_id = ? LIMIT 1",
+              )
+              .get(fid, fid, fid, fid),
+          ) ||
+          Boolean(db.prepare("SELECT 1 FROM legacy_comparisons WHERE legacy_file_id = ? LIMIT 1").get(fid)) ||
+          Boolean(db.prepare("SELECT 1 FROM post_import_verifications WHERE post_import_file_id = ? LIMIT 1").get(fid));
+        if (!stillReferenced) deletableFileIds.push(fid);
+      }
+
+      let totalFileBytes = 0;
+      let deletedFileStoragePaths: string[] = [];
+      if (deletableFileIds.length > 0) {
+        const filePh = inClause(deletableFileIds.length);
+        const fileRows = db.prepare(`SELECT storage_path, size_bytes FROM files WHERE id IN ${filePh}`).all(
+          ...deletableFileIds,
+        ) as { storage_path: string; size_bytes: number }[];
+        totalFileBytes = fileRows.reduce((sum, f) => sum + (f.size_bytes ?? 0), 0);
+        deletedFileStoragePaths = fileRows.map((f) => f.storage_path);
+        db.prepare(`DELETE FROM files WHERE id IN ${filePh}`).run(...deletableFileIds);
+      }
+
+      const result: ClearDataResult = {
+        runs: runIds.length,
+        batches: batchIds.length,
+        reconciliationRows,
+        decisions,
+        legacyComparisons: legacyRows.length,
+        postImportVerifications: postImportRows.length,
+        files: deletableFileIds.length,
+        totalFileBytes,
+        deletedFileStoragePaths,
+      };
+
+      db.exec(dryRun ? "ROLLBACK" : "COMMIT");
+      return result;
+    } catch (err) {
+      db.exec("ROLLBACK");
+      throw err;
+    }
+  }
+
+  async listAuditLog(limit = 200): Promise<AuditLogRecord[]> {
+    const rows = this.conn()
+      .prepare(
+        `SELECT audit_log.*, users.email AS actor_email
+         FROM audit_log
+         LEFT JOIN users ON users.id = audit_log.actor_id
+         ORDER BY audit_log.created_at DESC
+         LIMIT ?`,
+      )
+      .all(limit) as Record<string, unknown>[];
+    return rows.map(mapAuditLogRow);
+  }
+
   // ---------- Vendor configs ----------
 
   async listVendorConfigs(): Promise<VendorConfigRecord[]> {
@@ -733,6 +955,19 @@ function mapVendorConfigRow(row: Record<string, unknown>): VendorConfigRecord {
     isActive: fromIntBool(row.is_active),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
+  };
+}
+
+function mapAuditLogRow(row: Record<string, unknown>): AuditLogRecord {
+  return {
+    id: row.id as string,
+    actorId: (row.actor_id as string | null) ?? null,
+    actorEmail: (row.actor_email as string | null) ?? null,
+    action: row.action as string,
+    entityType: row.entity_type as string,
+    entityId: (row.entity_id as string | null) ?? null,
+    details: JSON.parse((row.details as string) ?? "{}"),
+    createdAt: row.created_at as string,
   };
 }
 

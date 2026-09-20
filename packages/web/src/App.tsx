@@ -6,8 +6,12 @@ import RunReviewPage from "./pages/RunReviewPage";
 import RunHistoryPage from "./pages/RunHistoryPage";
 import BatchDetailPage from "./pages/BatchDetailPage";
 import CatalogPage from "./pages/CatalogPage";
+import AuditsReviewsPage from "./pages/AuditsReviewsPage";
 import ManageUsersPage from "./pages/ManageUsersPage";
 import ManageVendorsPage from "./pages/ManageVendorsPage";
+import SettingsPage from "./pages/SettingsPage";
+import ClearDataPage from "./pages/ClearDataPage";
+import { DataSizeAlert } from "./components/DataSizeAlert";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -26,8 +30,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           </NavLink>
           <NavLink to="/runs">Run History</NavLink>
           <NavLink to="/catalog">Miva Catalog</NavLink>
-          {user?.role === "admin" && <NavLink to="/users">Manage Users</NavLink>}
-          {user?.role === "admin" && <NavLink to="/vendors">Manage Vendors</NavLink>}
+          <NavLink to="/audits">Audits &amp; Reviews</NavLink>
+          {user?.role === "admin" && <NavLink to="/settings">Settings</NavLink>}
         </nav>
         <div style={{ marginTop: 32, fontSize: 12, color: "#64748b" }}>
           <div>{user?.email}</div>
@@ -36,7 +40,10 @@ function Shell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        <DataSizeAlert />
+        {children}
+      </main>
     </div>
   );
 }
@@ -86,7 +93,23 @@ export default function App() {
           }
         />
         <Route
-          path="/users"
+          path="/audits"
+          element={
+            <RequireAuth>
+              <AuditsReviewsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <RequireAuth>
+              <SettingsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings/users"
           element={
             <RequireAuth>
               <ManageUsersPage />
@@ -94,10 +117,18 @@ export default function App() {
           }
         />
         <Route
-          path="/vendors"
+          path="/settings/vendors"
           element={
             <RequireAuth>
               <ManageVendorsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings/clear-data"
+          element={
+            <RequireAuth>
+              <ClearDataPage />
             </RequireAuth>
           }
         />

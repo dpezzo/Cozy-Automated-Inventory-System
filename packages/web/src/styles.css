@@ -83,6 +83,19 @@ a { color: var(--blue); }
   margin-bottom: 20px;
 }
 
+.settings-tile {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.settings-tile:hover {
+  border-color: var(--blue);
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.12);
+}
+.settings-tile h3 { margin-top: 0; }
+.settings-tile p { margin-bottom: 0; color: var(--muted); font-size: 13px; }
+
 .grid {
   display: grid;
   gap: 16px;
@@ -213,6 +226,67 @@ input[type="text"], input[type="password"], input[type="email"], select {
 }
 .step-badge.complete { background: var(--green); }
 
+.intro-card {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+.intro-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.intro-description {
+  margin: 0 0 8px;
+  color: var(--text);
+}
+.intro-description:last-child { margin-bottom: 0; }
+.intro-steps {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+.intro-steps li { margin: 4px 0; }
+.intro-steps li:last-child { margin-bottom: 0; }
+.intro-toggle {
+  flex: none;
+  background: transparent;
+  border: none;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.intro-toggle:hover { text-decoration: underline; }
+button.intro-collapsed {
+  display: inline-block;
+  width: auto;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+  text-align: left;
+}
+button.intro-collapsed:hover { background: #e0e7ff; }
+
+.size-alert-card {
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+button.size-alert-collapsed {
+  display: inline-block;
+  width: auto;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--amber);
+  cursor: pointer;
+  text-align: left;
+}
+button.size-alert-collapsed:hover { background: #fde68a; }
+
 .tab-strip {
   display: flex;
   gap: 20px;
@@ -305,6 +379,36 @@ input[type="text"], input[type="password"], input[type="email"], select {
   height: 1px;
   overflow: hidden;
   opacity: 0;
+}
+
+.radio-card {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.radio-card.selected {
+  border-color: var(--blue);
+  background: #eef2ff;
+}
+.radio-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 600;
+}
+.radio-card-head input[type="radio"] {
+  margin-top: 3px;
+}
+.radio-card-hint {
+  margin: 4px 0 0 24px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.radio-card-body {
+  margin: 14px 0 0 24px;
 }
 
 .advanced-details { margin-bottom: 20px; }

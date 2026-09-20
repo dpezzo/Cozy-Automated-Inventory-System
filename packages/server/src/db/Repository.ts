@@ -16,6 +16,11 @@ import type {
   LegacyComparisonRowInput,
   PostImportVerificationRowInput,
   AuditLogInput,
+  AuditLogRecord,
+  DataStats,
+  DataSizeAlertThresholds,
+  ClearDataCounts,
+  ClearDataResult,
   VendorConfigRecord,
   InsertVendorConfigInput,
   UpdateVendorConfigPatch,
@@ -99,6 +104,27 @@ export interface Repository {
 
   // Audit log
   insertAuditLog(input: AuditLogInput): Promise<void>;
+  listAuditLog(limit?: number): Promise<AuditLogRecord[]>;
+
+  /**
+   * Admin data clearing: wipes runs and everything hanging off them
+   * (reconciliation rows, decisions, batches, legacy comparisons, post-import
+   * verifications) plus the files that become orphaned as a result, both the
+   * DB rows and (via the returned storage paths) the files on disk. Users,
+   * vendor configs, and the audit log itself are never touched.
+   * `beforeDate` null clears every run; otherwise only runs created before it.
+   * previewClearData runs the exact same logic and rolls back instead of
+   * committing, so the preview counts are guaranteed to match a real run.
+   */
+  previewClearData(beforeDate: string | null): Promise<ClearDataCounts>;
+  clearData(beforeDate: string | null): Promise<ClearDataResult>;
+
+  /** Cheap overall-size stats (no per-run breakdown) for the storage-growth alert every signed-in user sees -- unlike previewClearData, this is just two aggregate queries, safe to call on every page load. Includes the current alert thresholds so the client never has to fetch them separately. */
+  getDataStats(): Promise<DataStats>;
+  /** Admin-only: where the alert thresholds live (app_settings), read back via getDataStats(). */
+  setDataSizeAlertThresholds(thresholds: DataSizeAlertThresholds): Promise<void>;
+  /** Clears any saved override, so getDataStats() falls back to DEFAULT_DATA_SIZE_ALERT_THRESHOLDS again. */
+  resetDataSizeAlertThresholds(): Promise<void>;
 
   // Vendor configs
   listVendorConfigs(): Promise<VendorConfigRecord[]>;

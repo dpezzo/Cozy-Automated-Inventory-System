@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { api, ApiRequestError, type UserAccount } from "../api";
+import { InstructionsCard } from "../components/InstructionsCard";
 
 export default function ManageUsersPage() {
   const { user: currentUser } = useAuth();
@@ -14,6 +16,13 @@ export default function ManageUsersPage() {
   const [newRole, setNewRole] = useState<"admin" | "member">("member");
   const [newPassword, setNewPassword] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   function refresh() {
     setLoading(true);
@@ -41,6 +50,7 @@ export default function ManageUsersPage() {
       setNewDisplayName("");
       setNewRole("member");
       setNewPassword("");
+      setShowAddUser(false);
       refresh();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to create user.");
@@ -75,9 +85,64 @@ export default function ManageUsersPage() {
     }
   }
 
+  function startEdit(u: UserAccount) {
+    setEditingId(u.id);
+    setEditEmail(u.email);
+    setEditDisplayName(u.displayName ?? "");
+    setEditPassword("");
+    setError(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEdit(u: UserAccount) {
+    setSavingEdit(true);
+    setError(null);
+    try {
+      const patch: Partial<{ email: string; displayName: string | null; password: string }> = {};
+      const trimmedEmail = editEmail.trim().toLowerCase();
+      if (trimmedEmail !== u.email) patch.email = trimmedEmail;
+      const trimmedName = editDisplayName.trim();
+      if (trimmedName !== (u.displayName ?? "")) patch.displayName = trimmedName || null;
+      if (editPassword) patch.password = editPassword;
+      if (Object.keys(patch).length > 0) {
+        await api.updateUser(u.id, patch);
+        refresh();
+      }
+      setEditingId(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.body.message : "Failed to update user.");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   return (
     <div>
-      <h2>Manage Users</h2>
+      <div style={{ marginBottom: 4 }}>
+        <Link to="/settings" style={{ fontSize: 13 }}>
+          ← Settings
+        </Link>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h2>Manage Users</h2>
+        {!showAddUser && (
+          <button className="primary" onClick={() => setShowAddUser(true)}>
+            + Add user
+          </button>
+        )}
+      </div>
+      <InstructionsCard
+        pageKey="manage-users"
+        description="Add operators and admins, change roles, and deactivate accounts."
+        steps={[
+          "Click + Add user to invite someone new.",
+          "Click Edit to change a user's email, display name, or password.",
+          "Change a user's role or deactivate their account from the table below.",
+        ]}
+      />
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
@@ -134,6 +199,12 @@ export default function ManageUsersPage() {
                   </td>
                   <td>
                     <button
+                      disabled={busyId === u.id || editingId === u.id}
+                      onClick={() => startEdit(u)}
+                    >
+                      Edit
+                    </button>{" "}
+                    <button
                       className={u.isActive ? "danger" : ""}
                       disabled={isSelf || busyId === u.id}
                       onClick={() => toggleActive(u)}
@@ -145,12 +216,66 @@ export default function ManageUsersPage() {
                 </tr>
               );
             })}
+            {editingId &&
+              (() => {
+                const u = users.find((x) => x.id === editingId);
+                if (!u) return null;
+                return (
+                  <tr key={`${u.id}-edit`}>
+                    <td colSpan={5}>
+                      <div className="grid cols-2" style={{ margin: "8px 0" }}>
+                        <label>
+                          Email
+                          <br />
+                          <input
+                            type="email"
+                            value={editEmail}
+                            onChange={(e) => setEditEmail(e.target.value)}
+                            style={{ width: "100%" }}
+                          />
+                        </label>
+                        <label>
+                          Display name
+                          <br />
+                          <input
+                            type="text"
+                            value={editDisplayName}
+                            onChange={(e) => setEditDisplayName(e.target.value)}
+                            style={{ width: "100%" }}
+                          />
+                        </label>
+                        <label>
+                          New password
+                          <br />
+                          <input
+                            type="password"
+                            value={editPassword}
+                            onChange={(e) => setEditPassword(e.target.value)}
+                            style={{ width: "100%" }}
+                            placeholder="Leave blank to keep current password"
+                          />
+                        </label>
+                      </div>
+                      <button className="primary" onClick={() => saveEdit(u)} disabled={savingEdit}>
+                        {savingEdit ? "Saving..." : "Save"}
+                      </button>{" "}
+                      <button onClick={cancelEdit} disabled={savingEdit}>
+                        Cancel
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })()}
           </tbody>
         </table>
       </div>
 
+      {showAddUser && (
       <div className="card">
-        <h3>Add user</h3>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h3>Add user</h3>
+          <button onClick={() => setShowAddUser(false)}>Cancel</button>
+        </div>
         <form onSubmit={submitCreate}>
           <div className="grid cols-2">
             <label>
@@ -199,6 +324,7 @@ export default function ManageUsersPage() {
           </button>
         </form>
       </div>
+      )}
     </div>
   );
 }

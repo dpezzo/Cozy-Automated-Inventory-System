@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { api, ApiRequestError, type VendorConfig, type CreateVendorInput } from "../api";
+import { InstructionsCard } from "../components/InstructionsCard";
 
 function parseAllowlist(text: string): string[] {
   return text
@@ -81,9 +83,14 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
           </select>
         </label>
         <label style={{ gridColumn: "1 / -1" }}>
-          Brand allowlist (comma-separated)
+          Brand allowlist (comma-separated, e.g. "Beautyrest, Serta, Woolrich" for Olliix)
           <br />
-          <input value={brandAllowlist} onChange={(e) => setBrandAllowlist(e.target.value)} style={{ width: "100%" }} required />
+          <input
+            value={brandAllowlist}
+            onChange={(e) => setBrandAllowlist(e.target.value)}
+            style={{ width: "100%" }}
+            required
+          />
         </label>
       </div>
 
@@ -127,7 +134,17 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
   );
 }
 
-function AddVendorForm({ pluginFiles, onDone, onReloadPlugins }: { pluginFiles: string[]; onDone: () => void; onReloadPlugins: () => void }) {
+function AddVendorForm({
+  pluginFiles,
+  onDone,
+  onCancel,
+  onReloadPlugins,
+}: {
+  pluginFiles: string[];
+  onDone: () => void;
+  onCancel: () => void;
+  onReloadPlugins: () => void;
+}) {
   const [mode, setMode] = useState<"simple_csv" | "plugin">("simple_csv");
   const [vendorKey, setVendorKey] = useState("");
   const [vendorLabel, setVendorLabel] = useState("");
@@ -184,14 +201,6 @@ function AddVendorForm({ pluginFiles, onDone, onReloadPlugins }: { pluginFiles: 
   return (
     <form onSubmit={submit}>
       {error && <div className="error-banner">{error}</div>}
-      <div style={{ marginBottom: 12 }}>
-        <button type="button" className={mode === "simple_csv" ? "active" : ""} onClick={() => setMode("simple_csv")}>
-          Simple CSV
-        </button>
-        <button type="button" className={mode === "plugin" ? "active" : ""} onClick={() => setMode("plugin")} style={{ marginLeft: 8 }}>
-          Register parser file
-        </button>
-      </div>
 
       <div className="grid cols-2">
         <label>
@@ -230,65 +239,113 @@ function AddVendorForm({ pluginFiles, onDone, onReloadPlugins }: { pluginFiles: 
           </select>
         </label>
         <label style={{ gridColumn: "1 / -1" }}>
-          Brand allowlist (comma-separated)
+          Brand allowlist (comma-separated, e.g. "Beautyrest, Serta, Woolrich" for Olliix)
           <br />
-          <input value={brandAllowlist} onChange={(e) => setBrandAllowlist(e.target.value)} style={{ width: "100%" }} required />
+          <input
+            value={brandAllowlist}
+            onChange={(e) => setBrandAllowlist(e.target.value)}
+            style={{ width: "100%" }}
+            required
+          />
         </label>
       </div>
 
-      {mode === "simple_csv" ? (
-        <div className="grid cols-2" style={{ marginTop: 12 }}>
-          <label>
-            Identifier column name
-            <br />
-            <input value={identifierColumn} onChange={(e) => setIdentifierColumn(e.target.value)} style={{ width: "100%" }} required />
-          </label>
-          <label>
-            Identifier type
-            <br />
-            <select value={identifierType} onChange={(e) => setIdentifierType(e.target.value as "upc" | "sku")} style={{ width: "100%" }}>
-              <option value="upc">UPC</option>
-              <option value="sku">SKU</option>
-            </select>
-          </label>
-          <label>
-            Description column name (optional)
-            <br />
-            <input value={descriptionColumn} onChange={(e) => setDescriptionColumn(e.target.value)} style={{ width: "100%" }} />
-          </label>
-          <label>
-            Quantity column name
-            <br />
-            <input value={quantityColumn} onChange={(e) => setQuantityColumn(e.target.value)} style={{ width: "100%" }} required />
-          </label>
-        </div>
-      ) : (
-        <div style={{ marginTop: 12 }}>
-          <p style={{ fontSize: 13, color: "#64748b" }}>
-            Plugin files are placed directly on the server's filesystem (under the vendor plugins folder) by a developer or admin --
-            this form only registers and configures an already-present file, it never uploads code.
-          </p>
-          <label>
-            Parser file
-            <br />
-            <select value={pluginFilename} onChange={(e) => setPluginFilename(e.target.value)} style={{ width: "100%" }} required>
-              <option value="">Select a file...</option>
-              {pluginFiles.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" onClick={onReloadPlugins} style={{ marginTop: 8 }}>
-            Reload plugin files
-          </button>
-        </div>
-      )}
+      <p style={{ fontWeight: 600, marginTop: 20, marginBottom: 8 }}>How does this vendor's file work?</p>
 
-      <button className="primary" type="submit" disabled={creating} style={{ marginTop: 16 }}>
-        {creating ? "Adding..." : "Add vendor"}
-      </button>
+      <div className={`radio-card${mode === "simple_csv" ? " selected" : ""}`}>
+        <label className="radio-card-head">
+          <input type="radio" name="fileShapeMode" checked={mode === "simple_csv"} onChange={() => setMode("simple_csv")} />
+          CSV / XLSX with named columns
+        </label>
+        <p className="radio-card-hint">
+          A plain table with one header row -- e.g. UPC, Description, Qty. Either .csv or .xlsx (first sheet) is
+          accepted; no code needed.
+        </p>
+        {mode === "simple_csv" && (
+          <div className="radio-card-body grid cols-2">
+            <label>
+              Identifier column name
+              <br />
+              <input value={identifierColumn} onChange={(e) => setIdentifierColumn(e.target.value)} style={{ width: "100%" }} required />
+            </label>
+            <label>
+              Identifier type
+              <br />
+              <select value={identifierType} onChange={(e) => setIdentifierType(e.target.value as "upc" | "sku")} style={{ width: "100%" }}>
+                <option value="upc">UPC</option>
+                <option value="sku">SKU</option>
+              </select>
+            </label>
+            <label>
+              Description column name (optional)
+              <br />
+              <input value={descriptionColumn} onChange={(e) => setDescriptionColumn(e.target.value)} style={{ width: "100%" }} />
+            </label>
+            <label>
+              Quantity column name
+              <br />
+              <input value={quantityColumn} onChange={(e) => setQuantityColumn(e.target.value)} style={{ width: "100%" }} required />
+            </label>
+          </div>
+        )}
+      </div>
+
+      <div className={`radio-card${mode === "plugin" ? " selected" : ""}`}>
+        <label className="radio-card-head">
+          <input type="radio" name="fileShapeMode" checked={mode === "plugin"} onChange={() => setMode("plugin")} />
+          Custom parser file
+        </label>
+        <p className="radio-card-hint">
+          For irregular files (multi-row headers, brand filtering) that named columns can't describe. Requires a
+          developer to write a small parser file -- this form never uploads or runs arbitrary code, it only points
+          at a file already placed on the server.
+        </p>
+        {mode === "plugin" && (
+          <div className="radio-card-body">
+            <div
+              style={{
+                fontSize: 13,
+                background: "#f8fafc",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                padding: "10px 12px",
+                marginBottom: 12,
+              }}
+            >
+              <strong>To add a new parser file:</strong> a developer places a <code>.js</code> file in{" "}
+              <code>data/vendor-plugins/</code> on the server (or the folder set by the{" "}
+              <code>VENDOR_PLUGINS_DIR</code> env var). The file must export a <code>parse(buffer)</code> function
+              returning <code>{"{ rows: VendorRawRow[] }"}</code> -- see any existing file in{" "}
+              <code>packages/server/src/vendor/</code> for the shape. Once it's on disk, click "Reload plugin files"
+              below and it will appear in the dropdown.
+            </div>
+            <label>
+              Parser file
+              <br />
+              <select value={pluginFilename} onChange={(e) => setPluginFilename(e.target.value)} style={{ width: "100%" }} required>
+                <option value="">Select a file...</option>
+                {pluginFiles.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" onClick={onReloadPlugins} style={{ marginTop: 8 }}>
+              Reload plugin files
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <button className="primary" type="submit" disabled={creating}>
+          {creating ? "Adding..." : "Add vendor"}
+        </button>
+        <button type="button" onClick={onCancel} style={{ marginLeft: 8 }} disabled={creating}>
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }
@@ -301,6 +358,7 @@ export default function ManageVendorsPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [showAddVendor, setShowAddVendor] = useState(false);
 
   function refresh() {
     setLoading(true);
@@ -349,7 +407,27 @@ export default function ManageVendorsPage() {
 
   return (
     <div>
-      <h2>Manage Vendors</h2>
+      <div style={{ marginBottom: 4 }}>
+        <Link to="/settings" style={{ fontSize: 13 }}>
+          ← Settings
+        </Link>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h2>Manage Vendors</h2>
+        {!showAddVendor && (
+          <button className="primary" onClick={() => setShowAddVendor(true)}>
+            + Add vendor
+          </button>
+        )}
+      </div>
+      <InstructionsCard
+        pageKey="manage-vendors"
+        description="Configure vendor file shapes, column mappings, and matching rules."
+        steps={[
+          "Click + Add vendor to configure a new vendor file source.",
+          "Edit or deactivate an existing vendor from the table below.",
+        ]}
+      />
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
@@ -429,10 +507,20 @@ export default function ManageVendorsPage() {
         </table>
       </div>
 
-      <div className="card">
-        <h3>Add vendor</h3>
-        <AddVendorForm pluginFiles={pluginFiles} onDone={refresh} onReloadPlugins={reloadPlugins} />
-      </div>
+      {showAddVendor && (
+        <div className="card">
+          <h3>Add vendor</h3>
+          <AddVendorForm
+            pluginFiles={pluginFiles}
+            onDone={() => {
+              setShowAddVendor(false);
+              refresh();
+            }}
+            onCancel={() => setShowAddVendor(false)}
+            onReloadPlugins={reloadPlugins}
+          />
+        </div>
+      )}
     </div>
   );
 }

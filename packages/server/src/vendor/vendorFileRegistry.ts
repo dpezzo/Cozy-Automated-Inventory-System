@@ -6,7 +6,7 @@ import { parseOlliixWorkbook } from "./olliixParser";
 import { parseKhWorkbook } from "./khParser";
 import { parseGobiWorkbook } from "./gobiParser";
 import { parseFieldSheerWorkbook } from "./fieldSheerParser";
-import { parseGenericCsv } from "./genericCsvParser";
+import { parseGenericVendorFile } from "./genericCsvParser";
 import { getPluginParser } from "./pluginLoader";
 
 export interface VendorFileAdapter {
@@ -30,7 +30,7 @@ export const VENDOR_FILE_ADAPTERS: Partial<Record<FileKind, VendorFileAdapter>> 
 function adapterForDynamicConfig(record: VendorConfigRecord): VendorFileAdapter | undefined {
   if (record.fileShape === "simple_csv" && record.columnMapping) {
     const mapping = record.columnMapping;
-    return { vendorKey: record.vendorKey, parse: (buffer) => parseGenericCsv(buffer, mapping) };
+    return { vendorKey: record.vendorKey, parse: (buffer) => parseGenericVendorFile(buffer, mapping) };
   }
   if (record.fileShape === "plugin" && record.pluginFilename) {
     const pluginFilename = record.pluginFilename;

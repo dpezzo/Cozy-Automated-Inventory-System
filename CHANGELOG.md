@@ -2,6 +2,43 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-09-20 — Audits & Reviews page, storage cleanup + alerting, and page-wide UX pass
+
+### Added
+
+**Audits & Reviews page**
+- New dedicated page (`/audits`) for one-time/periodic checks that don't belong in the regular reconciliation workflow. Legacy comparison (upload + run + results) moved here from the run detail page, with a run picker so it works standalone instead of requiring entry from a specific run.
+- Structured for future audit types to be added alongside legacy comparison without a redesign.
+
+**Admin: Clear Data**
+- New Settings tool to permanently delete old runs and everything generated from them — reconciliation rows, decisions, batches, legacy comparisons, post-import verifications — plus the uploaded/generated files that become orphaned as a result, both the DB rows *and* the files on disk (nothing previously cleaned up files on disk at all).
+- Two modes: clear everything (fresh-install reset) or clear runs created before a chosen date (periodic cleanup). A live preview shows exact counts and disk space before anything is deleted.
+- Type-to-confirm safety gate (must type `DELETE`), backed by a server-side confirmation requirement as a second gate. Every clear is recorded in the audit log. Users, vendor configuration, and the audit log itself are never touched.
+- Correctly handles files shared across multiple runs (via the checksum-dedupe upload flow) — a file is only deleted once nothing else still references it.
+
+**Storage-size alert**
+- Global, collapsible banner (visible on every page) warning that stored data has crossed a configurable size threshold — admins get a direct link to Clear Data; other users are told to ask an admin.
+- Threshold (default 250,000 reconciliation rows or 500MB of files) is admin-configurable from the Clear Data page, with a one-click "Reset to default."
+
+**Admin: edit users**
+- Manage Users now supports editing a user's email, display name, and password in place, in addition to the existing role/active-status controls.
+
+**Activity log**
+- Admin-only browser (on the Audits & Reviews page) for the `audit_log` table, which was previously written on every significant action but never surfaced anywhere in the UI.
+
+**Vendor onboarding: .xlsx support for "simple CSV" vendors**
+- A dynamically-configured vendor (Manage Vendors → simple CSV column mapping) now accepts either a plain CSV or an `.xlsx` workbook for its inventory file — the parser detects which one it got from the file's own bytes (the zip "PK" signature), never the filename, so nothing about vendor setup changes.
+- Verified end-to-end against the real upload/auto-detect pipeline with a temporary dummy vendor: a matching `.xlsx` parsed correctly (`rowCount` and detected vendor both correct) and one missing a mapped column was correctly rejected with the same `REQUIRED_COLUMNS_MISSING` message the CSV path already gives. No real vendor has needed this yet — first real use should still get a quick sanity check (row count matches the source file) the way any new vendor onboarding would.
+
+**Page-wide UX pass**
+- Every page now has a collapsible "Instructions" card explaining what the page does and how to use it — collapsed state remembered per page (per browser).
+- Run History's Runs/Batches tables now scroll independently within a fixed page height instead of one long page scroll; copy expanded to explain what a run vs. a batch actually is.
+- Miva Catalog: added a "Pull latest catalog" button (previously only available from Home); MPN added to the free-text search; fixed a bug where per-column filter dropdowns appeared to silently fail to open for *every* column (not just high-cardinality ones) due to the header clipping its own popover; capped filter dropdowns to 200 rendered values for near-unique columns (GTIN, MPN) to keep them responsive.
+- Home: removed the redundant "Recent runs" table (already covered by Run History) and the "Advanced / one-time options" section (post-import-verification upload moved to the batch detail page, where it's actually used).
+
+### Fixed
+- Legacy comparison and post-import-verification file uploads were only reachable from Home, disconnected from where they're actually used (a specific run's audit, a specific batch's verification).
+
 ## 2026-09-19 — Miva API integration, multi-vendor support, and review UX
 
 ### Added

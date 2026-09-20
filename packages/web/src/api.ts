@@ -71,10 +71,22 @@ export const api = {
   getAuthConfig: () => request<{ googleClientId: string | null }>("/auth/config"),
 
   listUsers: () => request<UserAccount[]>("/users"),
+  listAuditLog: (limit?: number) => request<AuditLogRecord[]>(`/audit-log${limit ? `?limit=${limit}` : ""}`),
+  previewClearData: (beforeDate: string | null) =>
+    request<ClearDataCounts>("/admin/clear-data/preview", { method: "POST", body: JSON.stringify({ beforeDate }) }),
+  clearData: (beforeDate: string | null) =>
+    request<ClearDataResult>("/admin/clear-data", { method: "POST", body: JSON.stringify({ beforeDate, confirm: true }) }),
+
+  getDataStats: () => request<DataStats>("/data-stats"),
+  setDataSizeAlertThresholds: (thresholds: DataSizeAlertThresholds) =>
+    request<DataStats>("/admin/data-size-alert-thresholds", { method: "PUT", body: JSON.stringify(thresholds) }),
+  resetDataSizeAlertThresholds: () => request<DataStats>("/admin/data-size-alert-thresholds", { method: "DELETE" }),
   createUser: (input: { email: string; role: "admin" | "member"; displayName?: string; password?: string }) =>
     request<UserAccount>("/users", { method: "POST", body: JSON.stringify(input) }),
-  updateUser: (id: string, patch: Partial<{ role: "admin" | "member"; isActive: boolean; displayName: string | null }>) =>
-    request<UserAccount>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  updateUser: (
+    id: string,
+    patch: Partial<{ email: string; role: "admin" | "member"; isActive: boolean; displayName: string | null; password: string }>,
+  ) => request<UserAccount>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   deleteUser: (id: string) => request(`/users/${id}`, { method: "DELETE" }),
 
   // Admin-only full vendor config CRUD (Manage Vendors page).
@@ -335,6 +347,43 @@ export interface BatchRecord {
   exceptionFileId: string | null;
   reconciliationFileId: string | null;
   importStatus: string;
+  createdAt: string;
+}
+
+export interface DataSizeAlertThresholds {
+  reconciliationRows: number;
+  totalFileBytes: number;
+}
+
+export interface DataStats {
+  reconciliationRows: number;
+  totalFileBytes: number;
+  thresholds: DataSizeAlertThresholds;
+}
+
+export interface ClearDataCounts {
+  runs: number;
+  batches: number;
+  reconciliationRows: number;
+  decisions: number;
+  legacyComparisons: number;
+  postImportVerifications: number;
+  files: number;
+  totalFileBytes: number;
+}
+
+export interface ClearDataResult extends ClearDataCounts {
+  deletedFileStoragePaths: string[];
+}
+
+export interface AuditLogRecord {
+  id: string;
+  actorId: string | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  details: Record<string, unknown>;
   createdAt: string;
 }
 

@@ -20,10 +20,18 @@ import type {
   LegacyComparisonRowInput,
   PostImportVerificationRowInput,
   AuditLogInput,
+  AuditLogRecord,
+  DataStats,
+  DataSizeAlertThresholds,
+  ClearDataCounts,
+  ClearDataResult,
   VendorConfigRecord,
   InsertVendorConfigInput,
   UpdateVendorConfigPatch,
 } from "./types";
+import { DEFAULT_DATA_SIZE_ALERT_THRESHOLDS } from "./types";
+
+const DATA_SIZE_ALERT_SETTINGS_KEY = "data_size_alert_thresholds";
 
 /**
  * Optional PostgreSQL/Docker persistence path. Implements the same
@@ -99,6 +107,10 @@ export class PostgresRepository implements Repository {
   async updateUser(id: string, patch: UpdateUserPatch): Promise<UserRecord> {
     const sets: string[] = [];
     const params: unknown[] = [];
+    if (patch.email !== undefined) {
+      params.push(patch.email);
+      sets.push(`email = $${params.length}`);
+    }
     if (patch.role !== undefined) {
       params.push(patch.role);
       sets.push(`role = $${params.length}`);
@@ -482,6 +494,200 @@ export class PostgresRepository implements Repository {
     );
   }
 
+  async getDataStats(): Promise<DataStats> {
+    const {
+      rows: [{ c: reconciliationRows }],
+    } = await this.getPool().query("SELECT COUNT(*)::int AS c FROM reconciliation_rows");
+    const {
+      rows: [{ b: totalFileBytes }],
+    } = await this.getPool().query("SELECT COALESCE(SUM(size_bytes), 0)::bigint AS b FROM files");
+    const thresholds = await this.readDataSizeAlertThresholds();
+    return { reconciliationRows, totalFileBytes: Number(totalFileBytes), thresholds };
+  }
+
+  private async readDataSizeAlertThresholds(): Promise<DataSizeAlertThresholds> {
+    const { rows } = await this.getPool().query("SELECT value FROM app_settings WHERE key = $1", [
+      DATA_SIZE_ALERT_SETTINGS_KEY,
+    ]);
+    if (rows.length === 0) return DEFAULT_DATA_SIZE_ALERT_THRESHOLDS;
+    try {
+      return { ...DEFAULT_DATA_SIZE_ALERT_THRESHOLDS, ...JSON.parse(rows[0].value) };
+    } catch {
+      return DEFAULT_DATA_SIZE_ALERT_THRESHOLDS;
+    }
+  }
+
+  async setDataSizeAlertThresholds(thresholds: DataSizeAlertThresholds): Promise<void> {
+    await this.getPool().query(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [DATA_SIZE_ALERT_SETTINGS_KEY, JSON.stringify(thresholds)],
+    );
+  }
+
+  async resetDataSizeAlertThresholds(): Promise<void> {
+    await this.getPool().query("DELETE FROM app_settings WHERE key = $1", [DATA_SIZE_ALERT_SETTINGS_KEY]);
+  }
+
+  async previewClearData(beforeDate: string | null): Promise<ClearDataCounts> {
+    const { deletedFileStoragePaths, ...counts } = await this.runClearData(beforeDate, true);
+    return counts;
+  }
+
+  async clearData(beforeDate: string | null): Promise<ClearDataResult> {
+    return this.runClearData(beforeDate, false);
+  }
+
+  /** Same deletion-order and "is this file still referenced elsewhere" logic as SqliteRepository -- see the comment there. */
+  private async runClearData(beforeDate: string | null, dryRun: boolean): Promise<ClearDataResult> {
+    const client = await this.getPool().connect();
+    const empty: ClearDataResult = {
+      runs: 0,
+      batches: 0,
+      reconciliationRows: 0,
+      decisions: 0,
+      legacyComparisons: 0,
+      postImportVerifications: 0,
+      files: 0,
+      totalFileBytes: 0,
+      deletedFileStoragePaths: [],
+    };
+    try {
+      await client.query("BEGIN");
+
+      const { rows: runRows } = beforeDate
+        ? await client.query("SELECT id FROM runs WHERE created_at < $1", [beforeDate])
+        : await client.query("SELECT id FROM runs");
+      const runIds: string[] = runRows.map((r) => r.id);
+
+      if (runIds.length === 0) {
+        await client.query("ROLLBACK");
+        return empty;
+      }
+
+      const { rows: batchRows } = await client.query(
+        `SELECT id, update_file_id, rollback_file_id, exception_file_id, reconciliation_file_id
+         FROM batches WHERE run_id = ANY($1)`,
+        [runIds],
+      );
+      const batchIds: string[] = batchRows.map((b) => b.id);
+
+      const { rows: runFileRows } = await client.query("SELECT vendor_file_id, miva_file_id FROM runs WHERE id = ANY($1)", [
+        runIds,
+      ]);
+      const { rows: legacyRows } = await client.query("SELECT legacy_file_id FROM legacy_comparisons WHERE run_id = ANY($1)", [
+        runIds,
+      ]);
+      const { rows: postImportRows } = batchIds.length
+        ? await client.query("SELECT post_import_file_id FROM post_import_verifications WHERE batch_id = ANY($1)", [batchIds])
+        : { rows: [] as { post_import_file_id: string | null }[] };
+
+      const candidateFileIds = new Set<string>();
+      for (const r of runFileRows) {
+        candidateFileIds.add(r.vendor_file_id);
+        candidateFileIds.add(r.miva_file_id);
+      }
+      for (const b of batchRows) {
+        for (const col of ["update_file_id", "rollback_file_id", "exception_file_id", "reconciliation_file_id"]) {
+          if (b[col]) candidateFileIds.add(b[col]);
+        }
+      }
+      for (const r of legacyRows) if (r.legacy_file_id) candidateFileIds.add(r.legacy_file_id);
+      for (const r of postImportRows) if (r.post_import_file_id) candidateFileIds.add(r.post_import_file_id);
+
+      const {
+        rows: [{ c: reconciliationRows }],
+      } = await client.query("SELECT COUNT(*)::int AS c FROM reconciliation_rows WHERE run_id = ANY($1)", [runIds]);
+      const {
+        rows: [{ c: decisions }],
+      } = await client.query("SELECT COUNT(*)::int AS c FROM decisions WHERE run_id = ANY($1)", [runIds]);
+
+      // Children first, then the run itself -- runs/batches/files relationships
+      // have no ON DELETE CASCADE (see migrations/0001_init.sql), only the
+      // direct child tables (reconciliation_rows/decisions/legacy_comparison_rows/
+      // post_import_verification_rows) do.
+      if (batchIds.length > 0) {
+        await client.query(
+          `DELETE FROM post_import_verification_rows
+           WHERE verification_id IN (SELECT id FROM post_import_verifications WHERE batch_id = ANY($1))`,
+          [batchIds],
+        );
+        await client.query("DELETE FROM post_import_verifications WHERE batch_id = ANY($1)", [batchIds]);
+      }
+      await client.query(
+        `DELETE FROM legacy_comparison_rows
+         WHERE legacy_comparison_id IN (SELECT id FROM legacy_comparisons WHERE run_id = ANY($1))`,
+        [runIds],
+      );
+      await client.query("DELETE FROM legacy_comparisons WHERE run_id = ANY($1)", [runIds]);
+      await client.query("DELETE FROM decisions WHERE run_id = ANY($1)", [runIds]);
+      if (batchIds.length > 0) {
+        await client.query("DELETE FROM batches WHERE id = ANY($1)", [batchIds]);
+      }
+      await client.query("DELETE FROM reconciliation_rows WHERE run_id = ANY($1)", [runIds]);
+      await client.query("DELETE FROM runs WHERE id = ANY($1)", [runIds]);
+
+      // Only drop files nothing else still points at -- the same file can be
+      // reused across runs via the checksum-dedupe upload flow.
+      const fileIdList = Array.from(candidateFileIds);
+      const deletableFileIds: string[] = [];
+      for (const fid of fileIdList) {
+        const { rows: stillRef } = await client.query(
+          `SELECT 1 FROM runs WHERE vendor_file_id = $1 OR miva_file_id = $1
+           UNION ALL SELECT 1 FROM batches WHERE update_file_id = $1 OR rollback_file_id = $1 OR exception_file_id = $1 OR reconciliation_file_id = $1
+           UNION ALL SELECT 1 FROM legacy_comparisons WHERE legacy_file_id = $1
+           UNION ALL SELECT 1 FROM post_import_verifications WHERE post_import_file_id = $1
+           LIMIT 1`,
+          [fid],
+        );
+        if (stillRef.length === 0) deletableFileIds.push(fid);
+      }
+
+      let totalFileBytes = 0;
+      let deletedFileStoragePaths: string[] = [];
+      if (deletableFileIds.length > 0) {
+        const { rows: fileRows } = await client.query("SELECT storage_path, size_bytes FROM files WHERE id = ANY($1)", [
+          deletableFileIds,
+        ]);
+        totalFileBytes = fileRows.reduce((sum, f) => sum + Number(f.size_bytes ?? 0), 0);
+        deletedFileStoragePaths = fileRows.map((f) => f.storage_path);
+        await client.query("DELETE FROM files WHERE id = ANY($1)", [deletableFileIds]);
+      }
+
+      const result: ClearDataResult = {
+        runs: runIds.length,
+        batches: batchIds.length,
+        reconciliationRows,
+        decisions,
+        legacyComparisons: legacyRows.length,
+        postImportVerifications: postImportRows.length,
+        files: deletableFileIds.length,
+        totalFileBytes,
+        deletedFileStoragePaths,
+      };
+
+      await client.query(dryRun ? "ROLLBACK" : "COMMIT");
+      return result;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listAuditLog(limit = 200): Promise<AuditLogRecord[]> {
+    const { rows } = await this.getPool().query(
+      `SELECT audit_log.*, users.email AS actor_email
+       FROM audit_log
+       LEFT JOIN users ON users.id = audit_log.actor_id
+       ORDER BY audit_log.created_at DESC
+       LIMIT $1`,
+      [limit],
+    );
+    return rows.map(mapAuditLogRow);
+  }
+
   // ---------- Vendor configs ----------
 
   async listVendorConfigs(): Promise<VendorConfigRecord[]> {
@@ -570,6 +776,19 @@ export class PostgresRepository implements Repository {
  * bcrypt.compare against it always returns false.
  */
 const PASSWORD_HASH_SENTINEL = "";
+
+function mapAuditLogRow(row: Record<string, unknown>): AuditLogRecord {
+  return {
+    id: row.id as string,
+    actorId: (row.actor_id as string | null) ?? null,
+    actorEmail: (row.actor_email as string | null) ?? null,
+    action: row.action as string,
+    entityType: row.entity_type as string,
+    entityId: (row.entity_id as string | null) ?? null,
+    details: (row.details as Record<string, unknown>) ?? {},
+    createdAt: (row.created_at as Date).toISOString(),
+  };
+}
 
 function mapUserRow(row: Record<string, unknown>): UserRecord {
   const passwordHash = row.password_hash as string;

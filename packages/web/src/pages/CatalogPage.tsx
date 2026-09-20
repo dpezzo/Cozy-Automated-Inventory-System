@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiRequestError, type FileRecord, type MivaCatalogRow } from "../api";
+import { InstructionsCard } from "../components/InstructionsCard";
 
 interface ColumnDef {
   key: string;
@@ -22,6 +23,14 @@ const COLUMN_WIDTHS_KEY = "cw-catalog-column-widths-v1";
 // correct total height.
 const ROW_HEIGHT = 52;
 const OVERSCAN = 8;
+
+// A near-unique column (GTIN, MPN, product code) can have thousands of
+// distinct values -- rendering all of them as checkboxes in the filter
+// popover is what actually made it "not open": it does open, it's just
+// synchronously rendering thousands of DOM nodes first. Same fix as the
+// main table's row windowing, just capped instead of scrolled: show the
+// first N and tell the user to type to narrow down further.
+const MAX_FILTER_VALUES_SHOWN = 200;
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -138,6 +147,9 @@ export default function CatalogPage() {
   const [rows, setRows] = useState<MivaCatalogRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mivaApiConfigured, setMivaApiConfigured] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [pullMessage, setPullMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [columnFilterValues, setColumnFilterValues] = useState<Record<string, Set<string>>>({});
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
@@ -185,12 +197,36 @@ export default function CatalogPage() {
     return () => window.removeEventListener("resize", recomputeHeight);
   }, []);
 
-  useEffect(() => {
+  function loadFiles(selectId?: string) {
     api.listFiles("miva_snapshot").then((f) => {
       setFiles(f);
-      if (f[0]) setSelectedFile(f[0].id);
+      if (selectId) setSelectedFile(selectId);
+      else if (f[0] && !selectedFile) setSelectedFile(f[0].id);
     });
+  }
+
+  useEffect(() => {
+    loadFiles();
+    api.getMivaApiStatus().then((s) => setMivaApiConfigured(s.configured));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function pullLatest() {
+    setPulling(true);
+    setPullMessage(null);
+    setError(null);
+    try {
+      const result = await api.pullMivaSnapshot();
+      setPullMessage(
+        result.duplicateWarning ?? `Pulled: ${result.file.originalFilename} (${result.file.rowCount ?? "?"} rows)`,
+      );
+      loadFiles(result.file.id);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.body.message : "Failed to pull catalog from Miva.");
+    } finally {
+      setPulling(false);
+    }
+  }
 
   useEffect(() => {
     if (!selectedFile) {
@@ -221,7 +257,8 @@ export default function CatalogPage() {
       (r) =>
         (r.productCode ?? "").toLowerCase().includes(needle) ||
         (r.productName ?? "").toLowerCase().includes(needle) ||
-        (r.gtinRaw ?? "").toLowerCase().includes(needle),
+        (r.gtinRaw ?? "").toLowerCase().includes(needle) ||
+        (r.mpnRaw ?? "").toLowerCase().includes(needle),
     );
   }, [rows, search]);
 
@@ -365,13 +402,23 @@ export default function CatalogPage() {
   return (
     <div>
       <h2>Miva Catalog</h2>
+      <InstructionsCard
+        pageKey="catalog"
+        description="A read-only browser for a Miva catalog snapshot -- the same kind of file used as the 'Miva Catalog Data' input on Home, but here purely for inspecting what's currently in Miva. Each snapshot is a point-in-time export; pull a fresh one below instead of trusting an old one if you need the current state."
+        steps={[
+          "Pick a snapshot from the dropdown, or click Pull latest catalog to fetch the current one from Miva.",
+          "Search by product code, name, GTIN, or MPN, or use the funnel on any column header to filter its values.",
+          "Click a column header to sort, drag its right edge to resize, and use Columns to show or hide any of them.",
+        ]}
+      />
       {error && <div className="error-banner">{error}</div>}
+      {pullMessage && <p style={{ fontSize: 13, color: "#64748b" }}>{pullMessage}</p>}
 
       <div className="card">
-        <div className="toolbar">
+        <div className="toolbar" style={{ flexWrap: "wrap" }}>
           <label>
             Snapshot:{" "}
-            <select value={selectedFile} onChange={(e) => setSelectedFile(e.target.value)}>
+            <select value={selectedFile} onChange={(e) => setSelectedFile(e.target.value)} style={{ maxWidth: 320 }}>
               <option value="">Select a snapshot...</option>
               {files.map((f) => (
                 <option key={f.id} value={f.id}>
@@ -380,9 +427,19 @@ export default function CatalogPage() {
               ))}
             </select>
           </label>
+          {mivaApiConfigured && (
+            <button
+              className="charcoal"
+              onClick={pullLatest}
+              disabled={pulling}
+              style={{ marginLeft: 16, whiteSpace: "nowrap", flex: "none" }}
+            >
+              {pulling ? "Pulling..." : "Pull latest catalog"}
+            </button>
+          )}
           <input
             type="text"
-            placeholder="Search product code / name / GTIN"
+            placeholder="Search product code / name / GTIN / MPN"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ marginLeft: 16 }}
@@ -454,8 +511,24 @@ export default function CatalogPage() {
                   const visibleValues = popoverSearch
                     ? allValues.filter((v) => v.toLowerCase().includes(popoverSearch.toLowerCase()))
                     : allValues;
+                  const shownValues = visibleValues.slice(0, MAX_FILTER_VALUES_SHOWN);
+                  const truncatedCount = visibleValues.length - shownValues.length;
                   return (
-                    <th key={col.key} style={{ zIndex: 2, position: "sticky", top: 0, overflow: "hidden" }}>
+                    <th
+                      key={col.key}
+                      style={{
+                        zIndex: 2,
+                        position: "sticky",
+                        top: 0,
+                        // Clipped so a long label ellipsizes instead of
+                        // overflowing into the next column -- but that same
+                        // clipping was hiding the filter popover below it,
+                        // which is what made every filter dropdown (not just
+                        // high-cardinality ones) look like it wasn't opening.
+                        // Let it escape while this column's popover is open.
+                        overflow: openFilterColumn === col.key ? "visible" : "hidden",
+                      }}
+                    >
                       <div className="col-filter-wrap" style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
                         <span
                           onClick={() => toggleSort(col.key)}
@@ -520,12 +593,17 @@ export default function CatalogPage() {
                               {visibleValues.length === 0 && (
                                 <div style={{ fontSize: 12, color: "#94a3b8", padding: "4px 0" }}>No values</div>
                               )}
-                              {visibleValues.map((val) => (
+                              {shownValues.map((val) => (
                                 <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "2px 0" }}>
                                   <input type="checkbox" checked={selectedSet.has(val)} onChange={() => toggleValue(col.key, val)} />
                                   {val}
                                 </label>
                               ))}
+                              {truncatedCount > 0 && (
+                                <div style={{ fontSize: 11, color: "#94a3b8", padding: "4px 0 0", fontStyle: "italic" }}>
+                                  +{truncatedCount} more -- type above to narrow down
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}

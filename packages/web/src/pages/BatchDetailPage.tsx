@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api, ApiRequestError, type BatchRecord, type FileRecord, type VerificationRow, type PushBatchResult } from "../api";
+import { UploadBox } from "../components/UploadBox";
+import { InstructionsCard } from "../components/InstructionsCard";
 
 const IMPORT_STATUSES = ["GENERATED", "DOWNLOADED", "IMPORT_REPORTED", "IMPORT_FAILED"];
 
@@ -25,9 +27,13 @@ export default function BatchDetailPage() {
     setBatch(await api.getBatch(batchId));
   }
 
+  const loadPostImportFiles = () => {
+    api.listFiles("post_import_snapshot").then(setPostImportFiles);
+  };
+
   useEffect(() => {
     load();
-    api.listFiles("post_import_snapshot").then(setPostImportFiles);
+    loadPostImportFiles();
     api.getMivaApiStatus().then(setMivaApi);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchId]);
@@ -80,6 +86,15 @@ export default function BatchDetailPage() {
   return (
     <div>
       <h2>Batch {batch.id.slice(0, 8)}</h2>
+      <InstructionsCard
+        pageKey="batch-detail"
+        description="Review a generated batch, apply it, and verify the import landed correctly."
+        steps={[
+          "Download or push the update/rollback CSVs.",
+          "Record what happened when you imported.",
+          "Upload a post-import snapshot to verify the changes landed.",
+        ]}
+      />
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card">
@@ -201,7 +216,13 @@ export default function BatchDetailPage() {
         <p style={{ fontSize: 13, color: "#64748b" }}>
           Upload a fresh Miva export taken after the import to verify approved changes landed and nothing else moved.
         </p>
-        <div className="toolbar">
+        <UploadBox
+          kind="post_import_snapshot"
+          label="Upload a post-import Miva export"
+          hint="A full Miva catalog export taken after you manually import a generated Update CSV, used to verify the import landed correctly."
+          onUploaded={loadPostImportFiles}
+        />
+        <div className="toolbar" style={{ marginTop: 12 }}>
           <select value={selectedPostImport} onChange={(e) => setSelectedPostImport(e.target.value)}>
             <option value="">Select post-import Miva snapshot...</option>
             {postImportFiles.map((f) => (

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api, ApiRequestError, type RunRecord, type RunSummary, type ReviewRowView, type FileRecord, type ManagedValuesView } from "../api";
+import { api, ApiRequestError, type RunRecord, type RunSummary, type ReviewRowView, type ManagedValuesView } from "../api";
+import { InstructionsCard } from "../components/InstructionsCard";
 
 const REVIEW_CLASS_FILTERS = ["CLEAN", "WARNING", "BLOCKED", "UNCHANGED"];
 const DECISION_FILTERS = ["PENDING", "APPROVED", "APPROVED_WARNING_ACK", "REJECTED"];
@@ -72,11 +73,6 @@ export default function RunReviewPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [legacyFiles, setLegacyFiles] = useState<FileRecord[]>([]);
-  const [selectedLegacy, setSelectedLegacy] = useState("");
-  const [legacyResult, setLegacyResult] = useState<{ exact: number; approved: number; unexplained: number; notComparable: number } | null>(
-    null,
-  );
 
   const columns = useMemo(() => {
     if (!highlightDiff) return BASE_COLUMNS;
@@ -110,10 +106,6 @@ export default function RunReviewPage() {
   useEffect(() => {
     loadRows();
   }, [loadRows]);
-
-  useEffect(() => {
-    api.listFiles("legacy_audit").then(setLegacyFiles);
-  }, []);
 
   function toggleFilter(list: string[], setList: (v: string[]) => void, value: string) {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -286,26 +278,20 @@ export default function RunReviewPage() {
     });
   }
 
-  async function runLegacy() {
-    if (!selectedLegacy) return;
-    await withBusy(async () => {
-      const result = await api.runLegacyComparison(runId!, selectedLegacy);
-      const counts = { exact: 0, approved: 0, unexplained: 0, notComparable: 0 };
-      for (const r of result.rows) {
-        if (r.comparison_class === "EXACT_MATCH") counts.exact++;
-        else if (r.comparison_class === "APPROVED_DEVIATION") counts.approved++;
-        else if (r.comparison_class === "UNEXPLAINED_DIFFERENCE") counts.unexplained++;
-        else counts.notComparable++;
-      }
-      setLegacyResult(counts);
-    });
-  }
-
   if (!run) return <div>Loading...</div>;
 
   return (
     <div>
       <h2>Run {run.id.slice(0, 8)}</h2>
+      <InstructionsCard
+        pageKey="run-review"
+        description="Review this run's reconciliation results row by row."
+        steps={[
+          "Filter and search the rows below to focus on what needs attention.",
+          "Approve or reject each row, or approve all clean rows at once.",
+          "Generate a batch once you're done reviewing.",
+        ]}
+      />
       <div className="card">
         <div className="grid cols-4">
           <div>
@@ -607,44 +593,9 @@ export default function RunReviewPage() {
       </div>
 
       <div className="card">
-        <h3>Legacy comparison</h3>
-        <div className="toolbar">
-          <select value={selectedLegacy} onChange={(e) => setSelectedLegacy(e.target.value)}>
-            <option value="">Select legacy audit CSV...</option>
-            {legacyFiles.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.originalFilename}
-              </option>
-            ))}
-          </select>
-          <button onClick={runLegacy} disabled={busy || !selectedLegacy}>
-            Run legacy comparison
-          </button>
-        </div>
-        {legacyResult && (
-          <div className="grid cols-4">
-            <div className="stat">
-              <div className="value">{legacyResult.exact}</div>
-              <div className="label">Exact match</div>
-            </div>
-            <div className="stat">
-              <div className="value">{legacyResult.approved}</div>
-              <div className="label">Approved deviation</div>
-            </div>
-            <div className="stat">
-              <div className="value">{legacyResult.unexplained}</div>
-              <div className="label">Unexplained difference</div>
-            </div>
-            <div className="stat">
-              <div className="value">{legacyResult.notComparable}</div>
-              <div className="label">Not comparable</div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="card">
         <Link to="/runs">Back to run history</Link>
+        {" · "}
+        <Link to={`/audits?runId=${run.id}`}>Legacy comparison for this run</Link>
       </div>
     </div>
   );
