@@ -20,6 +20,9 @@ import type {
   LegacyComparisonRowInput,
   PostImportVerificationRowInput,
   AuditLogInput,
+  VendorConfigRecord,
+  InsertVendorConfigInput,
+  UpdateVendorConfigPatch,
 } from "./types";
 
 /**
@@ -136,10 +139,19 @@ export class PostgresRepository implements Repository {
 
   async insertFile(input: InsertFileInput): Promise<FileRecord> {
     const { rows } = await this.getPool().query(
-      `INSERT INTO files (kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_at`,
-      [input.kind, input.originalFilename, input.storagePath, input.checksumSha256, input.sizeBytes, input.rowCount ?? null, input.uploadedBy],
+      `INSERT INTO files (kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, vendor_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_at, vendor_key`,
+      [
+        input.kind,
+        input.originalFilename,
+        input.storagePath,
+        input.checksumSha256,
+        input.sizeBytes,
+        input.rowCount ?? null,
+        input.uploadedBy,
+        input.vendorKey ?? null,
+      ],
     );
     return mapFileRow(rows[0]);
   }
@@ -469,6 +481,86 @@ export class PostgresRepository implements Repository {
       [input.actorId, input.action, input.entityType, input.entityId, JSON.stringify(input.details ?? {})],
     );
   }
+
+  // ---------- Vendor configs ----------
+
+  async listVendorConfigs(): Promise<VendorConfigRecord[]> {
+    const { rows } = await this.getPool().query("SELECT * FROM vendor_configs ORDER BY vendor_label");
+    return rows.map(mapVendorConfigRow);
+  }
+
+  async findVendorConfigByKey(key: string): Promise<VendorConfigRecord | null> {
+    const { rows } = await this.getPool().query("SELECT * FROM vendor_configs WHERE vendor_key = $1", [key]);
+    if (rows.length === 0) return null;
+    return mapVendorConfigRow(rows[0]);
+  }
+
+  async insertVendorConfig(input: InsertVendorConfigInput): Promise<VendorConfigRecord> {
+    const { rows } = await this.getPool().query(
+      `INSERT INTO vendor_configs
+        (vendor_key, vendor_label, in_stock_threshold, timezone, brand_allowlist, match_strategy, missing_blocker_code, file_shape, column_mapping, plugin_filename)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       RETURNING *`,
+      [
+        input.vendorKey,
+        input.vendorLabel,
+        input.inStockThreshold,
+        input.timezone,
+        input.brandAllowlist,
+        input.matchStrategy,
+        input.missingBlockerCode ?? null,
+        input.fileShape,
+        input.columnMapping ? JSON.stringify(input.columnMapping) : null,
+        input.pluginFilename ?? null,
+      ],
+    );
+    return mapVendorConfigRow(rows[0]);
+  }
+
+  async updateVendorConfig(key: string, patch: UpdateVendorConfigPatch): Promise<VendorConfigRecord> {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (patch.vendorLabel !== undefined) {
+      params.push(patch.vendorLabel);
+      sets.push(`vendor_label = $${params.length}`);
+    }
+    if (patch.inStockThreshold !== undefined) {
+      params.push(patch.inStockThreshold);
+      sets.push(`in_stock_threshold = $${params.length}`);
+    }
+    if (patch.timezone !== undefined) {
+      params.push(patch.timezone);
+      sets.push(`timezone = $${params.length}`);
+    }
+    if (patch.brandAllowlist !== undefined) {
+      params.push(patch.brandAllowlist);
+      sets.push(`brand_allowlist = $${params.length}`);
+    }
+    if (patch.matchStrategy !== undefined) {
+      params.push(patch.matchStrategy);
+      sets.push(`match_strategy = $${params.length}`);
+    }
+    if (patch.columnMapping !== undefined) {
+      params.push(patch.columnMapping ? JSON.stringify(patch.columnMapping) : null);
+      sets.push(`column_mapping = $${params.length}`);
+    }
+    if (patch.isActive !== undefined) {
+      params.push(patch.isActive);
+      sets.push(`is_active = $${params.length}`);
+    }
+    sets.push("updated_at = now()");
+    params.push(key);
+    const { rows } = await this.getPool().query(
+      `UPDATE vendor_configs SET ${sets.join(", ")} WHERE vendor_key = $${params.length} RETURNING *`,
+      params,
+    );
+    if (rows.length === 0) throw new Error(`Vendor config ${key} not found.`);
+    return mapVendorConfigRow(rows[0]);
+  }
+
+  async deactivateVendorConfig(key: string): Promise<void> {
+    await this.getPool().query("UPDATE vendor_configs SET is_active = false, updated_at = now() WHERE vendor_key = $1", [key]);
+  }
 }
 
 /**
@@ -502,6 +594,25 @@ function mapFileRow(row: Record<string, unknown>): FileRecord {
     sizeBytes: Number(row.size_bytes),
     rowCount: row.row_count === null ? null : Number(row.row_count),
     uploadedAt: (row.uploaded_at as Date).toISOString(),
+    vendorKey: (row.vendor_key as string | null) ?? null,
+  };
+}
+
+function mapVendorConfigRow(row: Record<string, unknown>): VendorConfigRecord {
+  return {
+    vendorKey: row.vendor_key as string,
+    vendorLabel: row.vendor_label as string,
+    inStockThreshold: Number(row.in_stock_threshold),
+    timezone: row.timezone as string,
+    brandAllowlist: (row.brand_allowlist as string[]) ?? [],
+    matchStrategy: row.match_strategy as VendorConfigRecord["matchStrategy"],
+    missingBlockerCode: (row.missing_blocker_code as VendorConfigRecord["missingBlockerCode"]) ?? null,
+    fileShape: row.file_shape as VendorConfigRecord["fileShape"],
+    columnMapping: (row.column_mapping as VendorConfigRecord["columnMapping"]) ?? null,
+    pluginFilename: (row.plugin_filename as string | null) ?? null,
+    isActive: row.is_active as boolean,
+    createdAt: (row.created_at as Date).toISOString(),
+    updatedAt: (row.updated_at as Date).toISOString(),
   };
 }
 

@@ -1,4 +1,5 @@
-import type { ReconciliationRow } from "@cozywinters/shared";
+import type { ReconciliationRow, BlockerCode } from "@cozywinters/shared";
+import type { GenericCsvColumnMapping } from "../vendor/genericCsvParser";
 
 // Shared record and filter shapes for both the SQLite (default, native
 // Windows) and PostgreSQL (optional, Docker) repository implementations.
@@ -45,7 +46,9 @@ export type FileKind =
   | "batch_update"
   | "batch_rollback"
   | "batch_exception"
-  | "batch_reconciliation";
+  | "batch_reconciliation"
+  /** A dynamically-configured vendor's file (file_shape 'simple_csv' or 'plugin'). Which vendor is recorded in FileRecord.vendorKey, not in this kind. */
+  | "vendor_dynamic";
 
 export interface FileRecord {
   id: string;
@@ -56,6 +59,8 @@ export interface FileRecord {
   sizeBytes: number;
   rowCount: number | null;
   uploadedAt: string;
+  /** Set only for kind === "vendor_dynamic"; null for every built-in FileKind. */
+  vendorKey: string | null;
 }
 
 export interface InsertFileInput {
@@ -66,6 +71,51 @@ export interface InsertFileInput {
   sizeBytes: number;
   rowCount?: number;
   uploadedBy: string;
+  vendorKey?: string | null;
+}
+
+// ---------- Vendor configs ----------
+
+export type VendorFileShape = "custom" | "simple_csv" | "plugin";
+export type VendorMatchStrategy = "upc-to-gtin" | "sku-to-mpn";
+
+export interface VendorConfigRecord {
+  vendorKey: string;
+  vendorLabel: string;
+  inStockThreshold: number;
+  timezone: string;
+  brandAllowlist: string[];
+  matchStrategy: VendorMatchStrategy;
+  missingBlockerCode: BlockerCode | null;
+  fileShape: VendorFileShape;
+  columnMapping: GenericCsvColumnMapping | null;
+  pluginFilename: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsertVendorConfigInput {
+  vendorKey: string;
+  vendorLabel: string;
+  inStockThreshold: number;
+  timezone: string;
+  brandAllowlist: string[];
+  matchStrategy: VendorMatchStrategy;
+  missingBlockerCode?: BlockerCode | null;
+  fileShape: VendorFileShape;
+  columnMapping?: GenericCsvColumnMapping | null;
+  pluginFilename?: string | null;
+}
+
+export interface UpdateVendorConfigPatch {
+  vendorLabel?: string;
+  inStockThreshold?: number;
+  timezone?: string;
+  brandAllowlist?: string[];
+  matchStrategy?: VendorMatchStrategy;
+  columnMapping?: GenericCsvColumnMapping | null;
+  isActive?: boolean;
 }
 
 export type RunStatus = "validating" | "normalizing" | "matching" | "calculating" | "ready" | "failed";

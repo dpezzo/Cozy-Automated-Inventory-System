@@ -54,4 +54,25 @@ describe("pushBatchToMiva production confirmation gate", () => {
     });
     expect(findFileById).not.toHaveBeenCalled();
   });
+
+  it("reads the rollback file (not the update file) when target is 'rollback'", async () => {
+    process.env.MIVA_ENVIRONMENT = "development";
+    findBatchById.mockResolvedValue({ id: "batch-1", updateFileId: "update-file", rollbackFileId: "rollback-file" });
+    findFileById.mockResolvedValue(null); // fails later (FILE_NOT_FOUND), proving which file id it looked up
+    const { pushBatchToMiva } = await import("./mivaApiPush");
+    await expect(pushBatchToMiva("batch-1", "user-1", false, "rollback")).rejects.toMatchObject({
+      code: "FILE_NOT_FOUND",
+    });
+    expect(findFileById).toHaveBeenCalledWith("rollback-file");
+  });
+
+  it("reports BATCH_INCOMPLETE when the batch has no rollback file", async () => {
+    process.env.MIVA_ENVIRONMENT = "development";
+    findBatchById.mockResolvedValue({ id: "batch-1", updateFileId: "update-file", rollbackFileId: null });
+    const { pushBatchToMiva } = await import("./mivaApiPush");
+    await expect(pushBatchToMiva("batch-1", "user-1", false, "rollback")).rejects.toMatchObject({
+      code: "BATCH_INCOMPLETE",
+    });
+    expect(findFileById).not.toHaveBeenCalled();
+  });
 });

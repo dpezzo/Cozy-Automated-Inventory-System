@@ -132,21 +132,29 @@ async function verifyPushedRows(rows: BatchCsvRow[]): Promise<number> {
   return mismatches;
 }
 
+export type MivaPushTarget = "update" | "rollback";
+
 /**
- * Pushes an already-generated, immutable batch's Update CSV rows directly to
- * Miva via Product_Update, instead of (or in addition to) manually importing
- * the CSV. Reads the exact same frozen data the CSV download uses, so both
- * outputs always come from one approved change set.
+ * Pushes an already-generated, immutable batch's Update (or Rollback) CSV
+ * rows directly to Miva via Product_Update, instead of (or in addition to)
+ * manually importing the CSV. Reads the exact same frozen data the CSV
+ * download uses, so the API push and the downloadable file always agree.
+ * Rollback pushes use the identical safety gating, chunking, and post-push
+ * verification as an update push -- this is still a live write to
+ * production, just restoring the batch's pre-run values instead of applying
+ * the proposed ones.
  */
 export async function pushBatchToMiva(
   batchId: string,
   userId: string,
   confirmProduction: boolean,
+  target: MivaPushTarget = "update",
 ): Promise<PushBatchResult> {
   const repo = getRepository();
   const batch = await repo.findBatchById(batchId);
-  if (!batch || !batch.updateFileId) {
-    throw new ValidationError("BATCH_INCOMPLETE", "Batch is missing its update file.");
+  const targetFileId = target === "rollback" ? batch?.rollbackFileId : batch?.updateFileId;
+  if (!batch || !targetFileId) {
+    throw new ValidationError("BATCH_INCOMPLETE", `Batch is missing its ${target} file.`);
   }
 
   // Fail-closed: only the explicit "development" value skips the confirmation
@@ -161,9 +169,9 @@ export async function pushBatchToMiva(
     );
   }
 
-  const updateFile = await repo.findFileById(batch.updateFileId);
-  if (!updateFile) throw new ValidationError("FILE_NOT_FOUND", "Batch update file not found.");
-  const rows = readBatchCsv(readStoredFileText(updateFile.storagePath));
+  const targetFile = await repo.findFileById(targetFileId);
+  if (!targetFile) throw new ValidationError("FILE_NOT_FOUND", `Batch ${target} file not found.`);
+  const rows = readBatchCsv(readStoredFileText(targetFile.storagePath));
   if (rows.length === 0) {
     throw new ValidationError("NO_ROWS", "This batch has no rows to push.");
   }
@@ -198,6 +206,7 @@ export async function pushBatchToMiva(
     entityType: "batch",
     entityId: batchId,
     details: {
+      target,
       pushed,
       failed,
       verificationMismatches,

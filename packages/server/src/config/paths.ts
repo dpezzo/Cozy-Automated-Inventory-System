@@ -20,6 +20,17 @@ export function defaultUploadDir(): string {
   return process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.join(defaultDataDir(), "files");
 }
 
+/**
+ * Where vendor parser plugin .js files live (see vendor/pluginLoader.ts).
+ * Never written to by any HTTP route -- an admin or developer places a
+ * plugin file here directly on the server's filesystem.
+ */
+export function defaultVendorPluginsDir(): string {
+  return process.env.VENDOR_PLUGINS_DIR
+    ? path.resolve(process.env.VENDOR_PLUGINS_DIR)
+    : path.join(defaultDataDir(), "vendor-plugins");
+}
+
 export function defaultLogDir(): string {
   return path.join(defaultDataDir(), "logs");
 }

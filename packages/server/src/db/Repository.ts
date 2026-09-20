@@ -16,6 +16,9 @@ import type {
   LegacyComparisonRowInput,
   PostImportVerificationRowInput,
   AuditLogInput,
+  VendorConfigRecord,
+  InsertVendorConfigInput,
+  UpdateVendorConfigPatch,
 } from "./types";
 
 /**
@@ -96,4 +99,12 @@ export interface Repository {
 
   // Audit log
   insertAuditLog(input: AuditLogInput): Promise<void>;
+
+  // Vendor configs
+  listVendorConfigs(): Promise<VendorConfigRecord[]>;
+  findVendorConfigByKey(key: string): Promise<VendorConfigRecord | null>;
+  insertVendorConfig(input: InsertVendorConfigInput): Promise<VendorConfigRecord>;
+  updateVendorConfig(key: string, patch: UpdateVendorConfigPatch): Promise<VendorConfigRecord>;
+  /** Soft delete: sets is_active = false. */
+  deactivateVendorConfig(key: string): Promise<void>;
 }

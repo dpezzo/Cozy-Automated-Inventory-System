@@ -1,4 +1,4 @@
-import { getVendorFileAdapter } from "../vendor/vendorFileRegistry";
+import { getVendorFileAdapter, getDynamicVendorFileAdapter } from "../vendor/vendorFileRegistry";
 import { parseMivaSnapshotCsv } from "../vendor/mivaCsv";
 import { readStoredFile, readStoredFileText } from "../storage/fileStorage";
 import { ValidationError, ForbiddenError, NotFoundError } from "../errors";
@@ -11,13 +11,19 @@ export interface CreateRunInput {
   mivaFileId: string;
   runDate: ParsedCalendarDate;
   createdBy: string;
+  /** Bypasses the duplicate-run guard below -- set when the caller has already been warned and wants to proceed anyway (e.g. intentionally re-testing the same file pair after a config change). */
+  confirmDuplicate?: boolean;
 }
 
 export async function createRun(input: CreateRunInput): Promise<RunRecord> {
   const repo = getRepository();
   const vendorFile = await repo.findFileById(input.vendorFileId);
   const mivaFile = await repo.findFileById(input.mivaFileId);
-  const vendorAdapter = vendorFile ? getVendorFileAdapter(vendorFile.kind) : undefined;
+  const vendorAdapter = vendorFile
+    ? vendorFile.kind === "vendor_dynamic" && vendorFile.vendorKey
+      ? await getDynamicVendorFileAdapter(vendorFile.vendorKey)
+      : getVendorFileAdapter(vendorFile.kind)
+    : undefined;
   if (!vendorFile || !vendorAdapter) {
     throw new ValidationError("FILE_NOT_FOUND", "The selected vendor file was not found.");
   }
@@ -27,17 +33,22 @@ export async function createRun(input: CreateRunInput): Promise<RunRecord> {
 
   // Guard against an accidental double-click or retried request silently
   // creating two independent, both-approvable runs for the same file pair.
-  // A prior run that failed doesn't block a fresh attempt.
-  const existingRuns = await repo.listRuns();
-  const duplicate = existingRuns.find(
-    (r) => r.vendorFileId === vendorFile.id && r.mivaFileId === mivaFile.id && r.status !== "failed",
-  );
-  if (duplicate) {
-    throw new ValidationError(
-      "DUPLICATE_RUN",
-      "A run already exists for this vendor file and Miva snapshot pair.",
-      { existingRunId: duplicate.id },
+  // A prior run that failed doesn't block a fresh attempt. This is a warning,
+  // not a hard rule -- intentionally re-running the same file pair (e.g. to
+  // compare output after a vendor config change) is legitimate, so the
+  // caller can bypass it with confirmDuplicate once they've seen the warning.
+  if (!input.confirmDuplicate) {
+    const existingRuns = await repo.listRuns();
+    const duplicate = existingRuns.find(
+      (r) => r.vendorFileId === vendorFile.id && r.mivaFileId === mivaFile.id && r.status !== "failed",
     );
+    if (duplicate) {
+      throw new ValidationError(
+        "DUPLICATE_RUN",
+        "A run already exists for this vendor file and Miva snapshot pair.",
+        { existingRunId: duplicate.id },
+      );
+    }
   }
 
   const runDateStr = `${input.runDate.year}-${String(input.runDate.month).padStart(2, "0")}-${String(input.runDate.day).padStart(2, "0")}`;
@@ -60,7 +71,7 @@ export async function createRun(input: CreateRunInput): Promise<RunRecord> {
     const { rows: mivaRows } = parseMivaSnapshotCsv(mivaText);
 
     await repo.updateRunStatus(run.id, "matching");
-    const { rows, ruleId, ruleConfigHash } = runReconciliation({
+    const { rows, ruleId, ruleConfigHash } = await runReconciliation({
       vendorKey: vendorAdapter.vendorKey,
       vendorRows,
       mivaRows,

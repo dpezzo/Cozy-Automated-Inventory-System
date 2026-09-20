@@ -7,6 +7,7 @@ import RunHistoryPage from "./pages/RunHistoryPage";
 import BatchDetailPage from "./pages/BatchDetailPage";
 import CatalogPage from "./pages/CatalogPage";
 import ManageUsersPage from "./pages/ManageUsersPage";
+import ManageVendorsPage from "./pages/ManageVendorsPage";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -26,6 +27,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <NavLink to="/runs">Run History</NavLink>
           <NavLink to="/catalog">Miva Catalog</NavLink>
           {user?.role === "admin" && <NavLink to="/users">Manage Users</NavLink>}
+          {user?.role === "admin" && <NavLink to="/vendors">Manage Vendors</NavLink>}
         </nav>
         <div style={{ marginTop: 32, fontSize: 12, color: "#64748b" }}>
           <div>{user?.email}</div>
@@ -88,6 +90,14 @@ export default function App() {
           element={
             <RequireAuth>
               <ManageUsersPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/vendors"
+          element={
+            <RequireAuth>
+              <ManageVendorsPage />
             </RequireAuth>
           }
         />

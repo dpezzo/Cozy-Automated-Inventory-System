@@ -1,6 +1,15 @@
 import { Fragment, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, ApiRequestError, VENDOR_FILE_DEFS, type FileRecord, type RunRecord, type BatchRecord } from "../api";
+import {
+  api,
+  ApiRequestError,
+  VENDOR_FILE_KINDS,
+  vendorLabelForFile,
+  type FileRecord,
+  type RunRecord,
+  type BatchRecord,
+  type VendorSummary,
+} from "../api";
 
 /** Upload state + submit logic, shared between a field-level dropzone and a whole-card dropzone around it. */
 function useUploadControl(kind: string, onUploaded: (file: FileRecord) => void) {
@@ -441,18 +450,21 @@ export default function HomePage() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mivaApiConfigured, setMivaApiConfigured] = useState(false);
+  const [vendors, setVendors] = useState<VendorSummary[]>([]);
 
   async function refresh() {
-    const [vf, mv, r, b] = await Promise.all([
+    const [vf, mv, r, b, vendorList] = await Promise.all([
       api.listVendorFiles(),
       api.listFiles("miva_snapshot"),
       api.listRuns(),
       api.listBatches(),
+      api.listVendorSummaries(),
     ]);
     setVendorFiles(vf);
     setMivaFiles(mv);
     setRuns(r);
     setBatches(b);
+    setVendors(vendorList);
     // Deliberately no auto-select of an existing file here: a returning visit
     // to this page should never silently pre-load "whichever file happens to
     // be newest" into Start Reconciliation. Selecting a file for a run is
@@ -460,7 +472,7 @@ export default function HomePage() {
     // handleFileChanged, immediately after *this session* uploads/pulls one.
   }
 
-  const vendorFileKinds = new Set<string>(VENDOR_FILE_DEFS.map((v) => v.kind));
+  const vendorFileKinds = new Set<string>(VENDOR_FILE_KINDS);
 
   function handleFileChanged(file: FileRecord) {
     refresh();
@@ -474,14 +486,27 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function startReconciliation() {
+  async function startReconciliation(confirmDuplicate = false) {
     if (!selectedVendorFile || !selectedMiva) return;
     setStarting(true);
     setError(null);
     try {
-      const run = await api.createRun(selectedVendorFile, selectedMiva);
+      const run = await api.createRun(selectedVendorFile, selectedMiva, confirmDuplicate);
       navigate(`/runs/${run.id}`);
     } catch (err) {
+      if (err instanceof ApiRequestError && err.body.error === "DUPLICATE_RUN") {
+        const existingRunId = (err.body.details as { existingRunId?: string } | undefined)?.existingRunId;
+        const proceed = window.confirm(
+          `A run already exists for this vendor file and Miva snapshot pair${existingRunId ? ` (run ${existingRunId.slice(0, 8)})` : ""}. ` +
+            "Create another run anyway? This is normal when intentionally re-testing the same files, e.g. after a vendor config change.",
+        );
+        if (proceed) {
+          await startReconciliation(true);
+          return;
+        }
+        setStarting(false);
+        return;
+      }
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to start reconciliation.");
     } finally {
       setStarting(false);
@@ -540,7 +565,7 @@ export default function HomePage() {
               <option value="">Select a file...</option>
               {vendorFiles.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {VENDOR_FILE_DEFS.find((v) => v.kind === f.kind)?.label ?? f.kind} — {f.originalFilename} (
+                  {vendorLabelForFile(f, vendors)} — {f.originalFilename} (
                   {f.rowCount} rows, {new Date(f.uploadedAt).toLocaleString()})
                 </option>
               ))}
@@ -583,7 +608,7 @@ export default function HomePage() {
           className="primary"
           style={{ marginTop: 16 }}
           disabled={!selectedVendorFile || !selectedMiva || starting}
-          onClick={startReconciliation}
+          onClick={() => startReconciliation()}
         >
           {starting ? "Starting..." : "Start reconciliation"}
         </button>

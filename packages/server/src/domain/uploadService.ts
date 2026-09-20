@@ -4,7 +4,6 @@ import { getVendorFileAdapter, detectVendorFile } from "../vendor/vendorFileRegi
 import { parseMivaSnapshotCsv } from "../vendor/mivaCsv";
 import { parseLegacyAuditCsv } from "../vendor/legacyAuditCsv";
 import { ValidationError } from "../errors";
-import { VENDOR_REGISTRY } from "@cozywinters/shared";
 
 export interface UploadResult {
   file: FileRecord;
@@ -48,6 +47,7 @@ async function finishUpload(
   rowCount: number,
   userId: string,
   confirmDuplicate: boolean,
+  vendorKey: string | null = null,
 ): Promise<UploadResult> {
   const repo = getRepository();
 
@@ -66,6 +66,7 @@ async function finishUpload(
     sizeBytes: saved.sizeBytes,
     rowCount,
     uploadedBy: userId,
+    vendorKey,
   });
 
   await repo.insertAuditLog({
@@ -105,6 +106,16 @@ export async function uploadVendorFileAutoDetect(
   confirmDuplicate: boolean,
 ): Promise<UploadResult & { detectedVendorLabel: string }> {
   const { vendorKey, fileKind, rows } = await detectVendorFile(buffer);
-  const result = await finishUpload(buffer, originalFilename, fileKind, rows.length, userId, confirmDuplicate);
-  return { ...result, detectedVendorLabel: VENDOR_REGISTRY[vendorKey].vendorLabel };
+  const isDynamic = fileKind === "vendor_dynamic";
+  const result = await finishUpload(
+    buffer,
+    originalFilename,
+    fileKind,
+    rows.length,
+    userId,
+    confirmDuplicate,
+    isDynamic ? vendorKey : null,
+  );
+  const config = await getRepository().findVendorConfigByKey(vendorKey);
+  return { ...result, detectedVendorLabel: config?.vendorLabel ?? vendorKey };
 }

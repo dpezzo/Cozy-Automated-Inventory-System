@@ -1,6 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+// vendorFileRegistry.ts now also looks up dynamically-configured
+// ('simple_csv'/'plugin') vendor_configs rows via ../db, which transitively
+// pulls in node:sqlite -- not resolvable in this test environment and
+// irrelevant to these built-in-vendor detection tests, so mock it out with
+// no dynamic vendors registered (matching real behavior when none exist).
+vi.mock("../db", () => ({ getRepository: () => ({ listVendorConfigs: async () => [] }) }));
+
 import { detectVendorFile } from "./vendorFileRegistry";
 
 const VENDORS_DIR = path.resolve(__dirname, "../../../../../Vendors");

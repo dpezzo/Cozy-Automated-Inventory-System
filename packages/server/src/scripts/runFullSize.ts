@@ -13,10 +13,16 @@ import { parseLegacyAuditCsv } from "../vendor/legacyAuditCsv";
 import { runReconciliation } from "../domain/runPipeline";
 import { rowsToCsv } from "../csv/writeCsv";
 import { UPDATE_ROLLBACK_HEADERS } from "@cozywinters/shared";
+import { initRepository } from "../db";
 
 const SEED_DIR = path.resolve(__dirname, "../../../../../package/CozyWinters_Olliix_MVP_Bakeoff_Seed");
 
 async function main() {
+  // This script now needs the vendor_configs table (runPipeline.ts reads the
+  // Olliix rule config from it instead of the static VENDOR_REGISTRY object),
+  // so it needs a real repository -- runs migrations against the default
+  // SQLite path the same way the server does on boot.
+  await initRepository();
   const start = Date.now();
   const olliixBuffer = readFileSync(path.join(SEED_DIR, "Olliix_daily_inventory.xlsx"));
   const { rows: olliixRows } = await parseOlliixWorkbook(olliixBuffer);
@@ -27,7 +33,7 @@ async function main() {
   console.log(`Miva rows parsed: ${mivaRows.length}`);
 
   const runDate = { year: 2026, month: 9, day: 18 };
-  const { rows, ruleId, ruleConfigHash } = runReconciliation({
+  const { rows, ruleId, ruleConfigHash } = await runReconciliation({
     vendorKey: "olliix",
     vendorRows: olliixRows,
     mivaRows,

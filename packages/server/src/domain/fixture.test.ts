@@ -1,13 +1,42 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { parse } from "csv-parse/sync";
 import type { ReconciliationRow } from "@cozywinters/shared";
-import { toExceptionRows, toUpdateBatchRows, toRollbackBatchRows, compareWithLegacy, verifyPostImport } from "@cozywinters/shared";
+import { toExceptionRows, toUpdateBatchRows, toRollbackBatchRows, compareWithLegacy, verifyPostImport, VENDOR_REGISTRY } from "@cozywinters/shared";
 import { parseOlliixWorkbook } from "../vendor/olliixParser";
 import { parseMivaSnapshotCsv, mivaRowsByProductCode } from "../vendor/mivaCsv";
 import { parseLegacyAuditCsv } from "../vendor/legacyAuditCsv";
 import { runReconciliation } from "./runPipeline";
+
+// runPipeline.ts now sources vendor config from the vendor_configs table
+// instead of the static VENDOR_REGISTRY object -- mock the repository lookup
+// with the exact same Olliix values the registry used to hold, so this
+// byte-identical fixture suite proves the DB-backed path produces the same
+// output as before, without needing a real database in this test.
+vi.mock("../db", () => ({
+  getRepository: () => ({
+    findVendorConfigByKey: async (key: string) => {
+      if (key !== "olliix") return null;
+      const cfg = VENDOR_REGISTRY.olliix;
+      return {
+        vendorKey: "olliix",
+        vendorLabel: cfg.vendorLabel,
+        inStockThreshold: cfg.inStockThreshold,
+        timezone: cfg.timezone,
+        brandAllowlist: cfg.brandAllowlist,
+        matchStrategy: cfg.matchStrategy,
+        missingBlockerCode: cfg.missingBlockerCode ?? null,
+        fileShape: "custom",
+        columnMapping: null,
+        pluginFilename: null,
+        isActive: true,
+        createdAt: "",
+        updatedAt: "",
+      };
+    },
+  }),
+}));
 
 // A byte-identical copy of the shared bake-off synthetic fixture bundle,
 // vendored into this package so the automated test suite is self-contained
@@ -43,7 +72,7 @@ describe("synthetic fixture suite (28 cases)", () => {
     const { rows: olliixRows } = await parseOlliixWorkbook(olliixBuffer);
     const mivaText = readFileSync(fx("Miva_synthetic_pre_import.csv"), "utf8");
     const { rows: mivaRows } = parseMivaSnapshotCsv(mivaText);
-    const result = runReconciliation({ vendorKey: "olliix", vendorRows: olliixRows, mivaRows, runDate: RUN_DATE });
+    const result = await runReconciliation({ vendorKey: "olliix", vendorRows: olliixRows, mivaRows, runDate: RUN_DATE });
     rows = result.rows;
   });
 

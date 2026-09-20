@@ -17,6 +17,7 @@ export default function BatchDetailPage() {
     environment: "development",
   });
   const [confirmProduction, setConfirmProduction] = useState(false);
+  const [pushTarget, setPushTarget] = useState<"update" | "rollback">("update");
   const [pushResult, setPushResult] = useState<PushBatchResult | null>(null);
 
   async function load() {
@@ -36,7 +37,7 @@ export default function BatchDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.pushBatchToMiva(batchId, confirmProduction);
+      const result = await api.pushBatchToMiva(batchId, confirmProduction, pushTarget);
       setPushResult(result);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.body.message : "Push to Miva failed.");
@@ -127,9 +128,16 @@ export default function BatchDetailPage() {
         <div className="card">
           <h3>Push to Miva via API</h3>
           <p style={{ fontSize: 13, color: "#64748b" }}>
-            Applies this batch's Update CSV rows directly to Miva via the JSON API, instead of manually importing the
-            CSV. Uses the exact same frozen, approved data as the downloadable CSV above.
+            Applies this batch's Update or Rollback CSV rows directly to Miva via the JSON API, instead of manually
+            importing the CSV. Uses the exact same frozen, approved data as the downloadable CSVs above.
           </p>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 8 }}>
+            Push:
+            <select value={pushTarget} onChange={(e) => setPushTarget(e.target.value as "update" | "rollback")}>
+              <option value="update">Update (apply proposed changes)</option>
+              <option value="rollback">Rollback (restore pre-run values)</option>
+            </select>
+          </label>
           {mivaApi.environment === "production" && (
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 8 }}>
               <input type="checkbox" checked={confirmProduction} onChange={(e) => setConfirmProduction(e.target.checked)} />
@@ -141,7 +149,7 @@ export default function BatchDetailPage() {
             onClick={pushToMiva}
             disabled={busy || (mivaApi.environment === "production" && !confirmProduction)}
           >
-            {busy ? "Pushing..." : "Push to Miva via API"}
+            {busy ? "Pushing..." : `Push ${pushTarget === "rollback" ? "Rollback" : "Update"} to Miva via API`}
           </button>
           {pushResult && (
             <div style={{ marginTop: 12 }}>

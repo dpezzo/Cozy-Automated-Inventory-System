@@ -21,6 +21,9 @@ import type {
   LegacyComparisonRowInput,
   PostImportVerificationRowInput,
   AuditLogInput,
+  VendorConfigRecord,
+  InsertVendorConfigInput,
+  UpdateVendorConfigPatch,
 } from "./types";
 import { defaultSqlitePath } from "../config/paths";
 import { runSqliteMigrations } from "./sqliteMigrate";
@@ -192,8 +195,8 @@ export class SqliteRepository implements Repository {
     const uploadedAt = nowIso();
     this.conn()
       .prepare(
-        `INSERT INTO files (id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, uploaded_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO files (id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, uploaded_at, vendor_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -205,6 +208,7 @@ export class SqliteRepository implements Repository {
         input.rowCount ?? null,
         input.uploadedBy,
         uploadedAt,
+        input.vendorKey ?? null,
       );
     return {
       id,
@@ -215,6 +219,7 @@ export class SqliteRepository implements Repository {
       sizeBytes: input.sizeBytes,
       rowCount: input.rowCount ?? null,
       uploadedAt,
+      vendorKey: input.vendorKey ?? null,
     };
   }
 
@@ -602,6 +607,101 @@ export class SqliteRepository implements Repository {
       .prepare("INSERT INTO audit_log (id, actor_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?, ?)")
       .run(randomUUID(), input.actorId, input.action, input.entityType, input.entityId, JSON.stringify(input.details ?? {}));
   }
+
+  // ---------- Vendor configs ----------
+
+  async listVendorConfigs(): Promise<VendorConfigRecord[]> {
+    const rows = this.conn().prepare("SELECT * FROM vendor_configs ORDER BY vendor_label").all() as Record<
+      string,
+      unknown
+    >[];
+    return rows.map(mapVendorConfigRow);
+  }
+
+  async findVendorConfigByKey(key: string): Promise<VendorConfigRecord | null> {
+    const row = this.conn().prepare("SELECT * FROM vendor_configs WHERE vendor_key = ?").get(key) as
+      | Record<string, unknown>
+      | undefined;
+    return row ? mapVendorConfigRow(row) : null;
+  }
+
+  async insertVendorConfig(input: InsertVendorConfigInput): Promise<VendorConfigRecord> {
+    const now = nowIso();
+    this.conn()
+      .prepare(
+        `INSERT INTO vendor_configs
+          (vendor_key, vendor_label, in_stock_threshold, timezone, brand_allowlist, match_strategy, missing_blocker_code, file_shape, column_mapping, plugin_filename, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.vendorKey,
+        input.vendorLabel,
+        input.inStockThreshold,
+        input.timezone,
+        JSON.stringify(input.brandAllowlist),
+        input.matchStrategy,
+        input.missingBlockerCode ?? null,
+        input.fileShape,
+        input.columnMapping ? JSON.stringify(input.columnMapping) : null,
+        input.pluginFilename ?? null,
+        now,
+        now,
+      );
+    const row = this.conn().prepare("SELECT * FROM vendor_configs WHERE vendor_key = ?").get(input.vendorKey) as Record<
+      string,
+      unknown
+    >;
+    return mapVendorConfigRow(row);
+  }
+
+  async updateVendorConfig(key: string, patch: UpdateVendorConfigPatch): Promise<VendorConfigRecord> {
+    const sets: string[] = [];
+    const params: (string | number | null)[] = [];
+    if (patch.vendorLabel !== undefined) {
+      sets.push("vendor_label = ?");
+      params.push(patch.vendorLabel);
+    }
+    if (patch.inStockThreshold !== undefined) {
+      sets.push("in_stock_threshold = ?");
+      params.push(patch.inStockThreshold);
+    }
+    if (patch.timezone !== undefined) {
+      sets.push("timezone = ?");
+      params.push(patch.timezone);
+    }
+    if (patch.brandAllowlist !== undefined) {
+      sets.push("brand_allowlist = ?");
+      params.push(JSON.stringify(patch.brandAllowlist));
+    }
+    if (patch.matchStrategy !== undefined) {
+      sets.push("match_strategy = ?");
+      params.push(patch.matchStrategy);
+    }
+    if (patch.columnMapping !== undefined) {
+      sets.push("column_mapping = ?");
+      params.push(patch.columnMapping ? JSON.stringify(patch.columnMapping) : null);
+    }
+    if (patch.isActive !== undefined) {
+      sets.push("is_active = ?");
+      params.push(toIntBool(patch.isActive));
+    }
+    sets.push("updated_at = ?");
+    params.push(nowIso());
+    this.conn()
+      .prepare(`UPDATE vendor_configs SET ${sets.join(", ")} WHERE vendor_key = ?`)
+      .run(...params, key);
+    const row = this.conn().prepare("SELECT * FROM vendor_configs WHERE vendor_key = ?").get(key) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) throw new Error(`Vendor config ${key} not found.`);
+    return mapVendorConfigRow(row);
+  }
+
+  async deactivateVendorConfig(key: string): Promise<void> {
+    this.conn()
+      .prepare("UPDATE vendor_configs SET is_active = 0, updated_at = ? WHERE vendor_key = ?")
+      .run(nowIso(), key);
+  }
 }
 
 function mapFileRow(row: Record<string, unknown>): FileRecord {
@@ -614,6 +714,25 @@ function mapFileRow(row: Record<string, unknown>): FileRecord {
     sizeBytes: Number(row.size_bytes),
     rowCount: row.row_count === null || row.row_count === undefined ? null : Number(row.row_count),
     uploadedAt: row.uploaded_at as string,
+    vendorKey: (row.vendor_key as string | null) ?? null,
+  };
+}
+
+function mapVendorConfigRow(row: Record<string, unknown>): VendorConfigRecord {
+  return {
+    vendorKey: row.vendor_key as string,
+    vendorLabel: row.vendor_label as string,
+    inStockThreshold: Number(row.in_stock_threshold),
+    timezone: row.timezone as string,
+    brandAllowlist: JSON.parse((row.brand_allowlist as string) ?? "[]"),
+    matchStrategy: row.match_strategy as VendorConfigRecord["matchStrategy"],
+    missingBlockerCode: (row.missing_blocker_code as VendorConfigRecord["missingBlockerCode"]) ?? null,
+    fileShape: row.file_shape as VendorConfigRecord["fileShape"],
+    columnMapping: row.column_mapping ? JSON.parse(row.column_mapping as string) : null,
+    pluginFilename: (row.plugin_filename as string | null) ?? null,
+    isActive: fromIntBool(row.is_active),
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
   };
 }
 

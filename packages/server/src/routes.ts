@@ -22,6 +22,16 @@ import { runLegacyComparison } from "./domain/legacyService";
 import { runPostImportVerification } from "./domain/verificationService";
 import { pushBatchToMiva } from "./miva/mivaApiPush";
 import { listUsers, createUser, updateUser, deactivateUser } from "./domain/userService";
+import {
+  listVendorConfigs,
+  listVendorConfigSummaries,
+  createVendorConfig,
+  updateVendorConfig,
+  deactivateVendorConfig,
+  listAvailablePluginFiles,
+  reloadPlugins,
+  type CreateVendorConfigRequest,
+} from "./domain/vendorConfigService";
 import { ValidationError, ForbiddenError, NotFoundError } from "./errors";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -292,10 +302,11 @@ export function resolveRunDate(runDate: string | undefined, now: Date = new Date
 router.post(
   "/runs",
   asyncHandler(async (req, res) => {
-    const { vendorFileId, mivaFileId, runDate } = req.body as {
+    const { vendorFileId, mivaFileId, runDate, confirmDuplicate } = req.body as {
       vendorFileId?: string;
       mivaFileId?: string;
       runDate?: string; // YYYY-MM-DD, defaults to today in America/New_York
+      confirmDuplicate?: boolean;
     };
     if (!vendorFileId || !mivaFileId) {
       res.status(400).json({ error: "INVALID_REQUEST", message: "vendorFileId and mivaFileId are required." });
@@ -303,7 +314,13 @@ router.post(
     }
     const parsedRunDate = resolveRunDate(runDate);
 
-    const run = await createRun({ vendorFileId, mivaFileId, runDate: parsedRunDate, createdBy: req.session.userId! });
+    const run = await createRun({
+      vendorFileId,
+      mivaFileId,
+      runDate: parsedRunDate,
+      createdBy: req.session.userId!,
+      confirmDuplicate: confirmDuplicate === true,
+    });
     res.status(201).json(run);
   }),
 );
@@ -419,8 +436,12 @@ router.get(
 router.post(
   "/batches/:id/push-to-miva",
   asyncHandler(async (req, res) => {
-    const { confirmProduction } = req.body as { confirmProduction?: boolean };
-    const result = await pushBatchToMiva(req.params.id!, req.session.userId!, confirmProduction === true);
+    const { confirmProduction, target } = req.body as { confirmProduction?: boolean; target?: "update" | "rollback" };
+    if (target !== undefined && target !== "update" && target !== "rollback") {
+      res.status(400).json({ error: "INVALID_REQUEST", message: "target must be 'update' or 'rollback'." });
+      return;
+    }
+    const result = await pushBatchToMiva(req.params.id!, req.session.userId!, confirmProduction === true, target);
     res.status(201).json(result);
   }),
 );
@@ -506,6 +527,115 @@ router.delete(
   requireAdmin,
   asyncHandler(async (req, res) => {
     await deactivateUser(req.params.id!, req.session.userId!);
+    res.json({ ok: true });
+  }),
+);
+
+// ---------- Vendors ----------
+
+// Deliberately NOT requireAdmin: every signed-in user needs this to label
+// vendor files and build the upload/run-selection UI on the Home page. It
+// exposes only vendorKey/vendorLabel/fileShape/isActive -- never the
+// tunables (threshold, brand allowlist, match strategy) that only the full
+// admin-only routes below expose.
+router.get(
+  "/vendors/summary",
+  asyncHandler(async (_req, res) => {
+    res.json(await listVendorConfigSummaries());
+  }),
+);
+
+router.get(
+  "/vendors",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json(await listVendorConfigs());
+  }),
+);
+
+router.get(
+  "/vendors/available-plugin-files",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json(await listAvailablePluginFiles());
+  }),
+);
+
+router.post(
+  "/vendors/reload-plugins",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    reloadPlugins();
+    res.json({ ok: true });
+  }),
+);
+
+router.post(
+  "/vendors",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const body = req.body as {
+      vendorKey?: string;
+      vendorLabel?: string;
+      inStockThreshold?: number;
+      timezone?: string;
+      brandAllowlist?: string[];
+      matchStrategy?: "upc-to-gtin" | "sku-to-mpn";
+      fileShape?: "simple_csv" | "plugin";
+      columnMapping?: { identifierColumn: string; identifierType: "upc" | "sku"; descriptionColumn?: string; quantityColumn: string };
+      pluginFilename?: string;
+    };
+    const { vendorKey, vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, fileShape } = body;
+    if (!vendorKey || !vendorLabel || !inStockThreshold || !timezone || !brandAllowlist || !matchStrategy || !fileShape) {
+      res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "vendorKey, vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, and fileShape are required.",
+      });
+      return;
+    }
+    if (fileShape !== "simple_csv" && fileShape !== "plugin") {
+      res.status(400).json({
+        error: "INVALID_REQUEST",
+        message: "fileShape must be 'simple_csv' or 'plugin' -- 'custom' vendors cannot be created via the API.",
+      });
+      return;
+    }
+    const common = { vendorKey, vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy };
+    const request: CreateVendorConfigRequest =
+      fileShape === "simple_csv"
+        ? { ...common, fileShape: "simple_csv", columnMapping: body.columnMapping! }
+        : { ...common, fileShape: "plugin", pluginFilename: body.pluginFilename! };
+    const vendor = await createVendorConfig(request, req.session.userId!);
+    res.status(201).json(vendor);
+  }),
+);
+
+router.patch(
+  "/vendors/:key",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping } = req.body as {
+      vendorLabel?: string;
+      inStockThreshold?: number;
+      timezone?: string;
+      brandAllowlist?: string[];
+      matchStrategy?: "upc-to-gtin" | "sku-to-mpn";
+      columnMapping?: { identifierColumn: string; identifierType: "upc" | "sku"; descriptionColumn?: string; quantityColumn: string };
+    };
+    const vendor = await updateVendorConfig(
+      req.params.key!,
+      { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping },
+      req.session.userId!,
+    );
+    res.json(vendor);
+  }),
+);
+
+router.delete(
+  "/vendors/:key",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    await deactivateVendorConfig(req.params.key!, req.session.userId!);
     res.json({ ok: true });
   }),
 );

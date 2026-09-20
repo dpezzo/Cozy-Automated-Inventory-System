@@ -59,6 +59,22 @@ describe("createRun duplicate-run guard", () => {
     expect(insertRun).toHaveBeenCalled();
   });
 
+  it("allows creating a duplicate run when confirmDuplicate is set", async () => {
+    findFileById.mockImplementation(async (id: string) => (id === "v1" ? vendorFile("v1") : mivaFile("m1")));
+    listRuns.mockResolvedValue([{ id: "run-existing", vendorFileId: "v1", mivaFileId: "m1", status: "ready" }]);
+    insertRun.mockResolvedValue({ id: "run-new", status: "validating" });
+
+    const { createRun } = await import("./runService");
+    await createRun({
+      vendorFileId: "v1",
+      mivaFileId: "m1",
+      runDate: { year: 2026, month: 9, day: 18 },
+      createdBy: "u1",
+      confirmDuplicate: true,
+    }).catch(() => undefined);
+    expect(insertRun).toHaveBeenCalled();
+  });
+
   it("does not block a run for a different vendor/Miva file pair", async () => {
     findFileById.mockImplementation(async (id: string) => (id === "v2" ? vendorFile("v2") : mivaFile("m2")));
     listRuns.mockResolvedValue([{ id: "run-existing", vendorFileId: "v1", mivaFileId: "m1", status: "ready" }]);
