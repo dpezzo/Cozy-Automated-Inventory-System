@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type AuditLogRecord, type FileRecord, type RunRecord } from "../api";
 import { UploadBox } from "../components/UploadBox";
@@ -185,6 +185,32 @@ function ActivityLogSection() {
     );
   }, [entries, search]);
 
+  // Fills the rest of the viewport below the table instead of a fixed
+  // maxHeight, so it adapts to the monitor size and to whatever's above it
+  // changing height (e.g. the instructions card being expanded/collapsed) --
+  // same technique as Run History's tables and the Miva Catalog table.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [tableHeight, setTableHeight] = useState(400);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    function recompute() {
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      // 64px = the enclosing .card's own bottom padding + margin (20 + 20) plus .main's bottom padding (24).
+      setTableHeight(Math.max(200, window.innerHeight - top - 64));
+    }
+    recompute();
+    const observer = new ResizeObserver(recompute);
+    observer.observe(document.body);
+    window.addEventListener("resize", recompute);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", recompute);
+    };
+  }, []);
+
   return (
     <div className="card">
       <h3>Activity log</h3>
@@ -200,7 +226,7 @@ function ActivityLogSection() {
           Showing {filtered.length} of {entries.length} most recent event{entries.length === 1 ? "" : "s"}
         </span>
       </div>
-      <div className="table-scroll" style={{ maxHeight: 400 }}>
+      <div className="table-scroll" ref={scrollRef} style={{ height: tableHeight, maxHeight: tableHeight }}>
         <table>
           <thead>
             <tr>
@@ -237,8 +263,13 @@ function ActivityLogSection() {
   );
 }
 
+type AuditTab = "legacy-comparison" | "activity-log";
+
 export default function AuditsReviewsPage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [tab, setTab] = useState<AuditTab>("legacy-comparison");
+
   return (
     <div>
       <h2>Audits &amp; Reviews</h2>
@@ -251,8 +282,28 @@ export default function AuditsReviewsPage() {
           "Run the audit and review the results.",
         ]}
       />
-      <LegacyComparisonSection />
-      {user?.role === "admin" && <ActivityLogSection />}
+      <div className="tab-strip" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === "legacy-comparison"}
+          className={tab === "legacy-comparison" ? "active" : ""}
+          onClick={() => setTab("legacy-comparison")}
+        >
+          Legacy comparison
+        </button>
+        {isAdmin && (
+          <button
+            role="tab"
+            aria-selected={tab === "activity-log"}
+            className={tab === "activity-log" ? "active" : ""}
+            onClick={() => setTab("activity-log")}
+          >
+            Activity log
+          </button>
+        )}
+      </div>
+      {tab === "legacy-comparison" && <LegacyComparisonSection />}
+      {tab === "activity-log" && isAdmin && <ActivityLogSection />}
     </div>
   );
 }

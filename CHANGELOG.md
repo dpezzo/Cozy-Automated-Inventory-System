@@ -24,7 +24,7 @@ All notable changes to the CozyWinters Olliix inventory reconciliation app are d
 - Manage Users now supports editing a user's email, display name, and password in place, in addition to the existing role/active-status controls.
 
 **Activity log**
-- Admin-only browser (on the Audits & Reviews page) for the `audit_log` table, which was previously written on every significant action but never surfaced anywhere in the UI.
+- Admin-only browser for the `audit_log` table, which was previously written on every significant action but never surfaced anywhere in the UI. Lives on its own tab on the Audits & Reviews page (separate from Legacy comparison), with its table sized to fill the available viewport height — adapting to monitor size and to the instructions card being expanded or collapsed, same as Run History and Miva Catalog.
 
 **Vendor onboarding: .xlsx support for "simple CSV" vendors**
 - A dynamically-configured vendor (Manage Vendors → simple CSV column mapping) now accepts either a plain CSV or an `.xlsx` workbook for its inventory file — the parser detects which one it got from the file's own bytes (the zip "PK" signature), never the filename, so nothing about vendor setup changes.
