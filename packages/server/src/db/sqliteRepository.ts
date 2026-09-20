@@ -4,6 +4,8 @@ import type { ManagedValues, ReconciliationRow, WarehouseCode } from "@cozywinte
 import type { Repository } from "./Repository";
 import type {
   UserRecord,
+  CreateUserInput,
+  UpdateUserPatch,
   FileKind,
   FileRecord,
   InsertFileInput,
@@ -33,6 +35,27 @@ function toIntBool(value: boolean): number {
 
 function fromIntBool(value: unknown): boolean {
   return Number(value) === 1;
+}
+
+/**
+ * password_hash stays NOT NULL at the schema level (see
+ * migrations-sqlite/0002_users_roles_and_google.sql) -- a Google-only user
+ * is stored with this sentinel instead of a real hash. It is never a valid
+ * bcrypt hash, so bcrypt.compare against it always returns false.
+ */
+const PASSWORD_HASH_SENTINEL = "";
+
+function mapUserRow(row: Record<string, unknown>): UserRecord {
+  const passwordHash = row.password_hash as string;
+  return {
+    id: row.id as string,
+    email: row.email as string,
+    passwordHash: passwordHash === PASSWORD_HASH_SENTINEL ? null : passwordHash,
+    role: row.role as UserRecord["role"],
+    googleId: (row.google_id as string | null) ?? null,
+    displayName: (row.display_name as string | null) ?? null,
+    isActive: fromIntBool(row.is_active),
+  };
 }
 
 export class SqliteRepository implements Repository {
@@ -69,16 +92,21 @@ export class SqliteRepository implements Repository {
 
   async findUserByEmail(email: string): Promise<UserRecord | null> {
     const row = this.conn()
-      .prepare("SELECT id, email, password_hash FROM users WHERE email = ?")
+      .prepare("SELECT * FROM users WHERE email = ?")
       .get(email.toLowerCase().trim()) as Record<string, unknown> | undefined;
-    return row ? { id: row.id as string, email: row.email as string, passwordHash: row.password_hash as string } : null;
+    return row ? mapUserRow(row) : null;
   }
 
   async findUserById(id: string): Promise<UserRecord | null> {
-    const row = this.conn().prepare("SELECT id, email, password_hash FROM users WHERE id = ?").get(id) as
+    const row = this.conn().prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    return row ? mapUserRow(row) : null;
+  }
+
+  async findUserByGoogleId(googleId: string): Promise<UserRecord | null> {
+    const row = this.conn().prepare("SELECT * FROM users WHERE google_id = ?").get(googleId) as
       | Record<string, unknown>
       | undefined;
-    return row ? { id: row.id as string, email: row.email as string, passwordHash: row.password_hash as string } : null;
+    return row ? mapUserRow(row) : null;
   }
 
   async upsertUser(email: string, passwordHash: string): Promise<UserRecord> {
@@ -91,7 +119,70 @@ export class SqliteRepository implements Repository {
          ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash`,
       )
       .run(id, normalized, passwordHash);
-    return { id, email: normalized, passwordHash };
+    const row = this.conn().prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown>;
+    return mapUserRow(row);
+  }
+
+  async listUsers(): Promise<UserRecord[]> {
+    const rows = this.conn().prepare("SELECT * FROM users ORDER BY email").all() as Record<string, unknown>[];
+    return rows.map(mapUserRow);
+  }
+
+  async createUser(input: CreateUserInput): Promise<UserRecord> {
+    const id = randomUUID();
+    const normalized = input.email.toLowerCase().trim();
+    this.conn()
+      .prepare(
+        `INSERT INTO users (id, email, password_hash, google_id, role, display_name)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        normalized,
+        input.passwordHash ?? PASSWORD_HASH_SENTINEL,
+        input.googleId ?? null,
+        input.role,
+        input.displayName ?? null,
+      );
+    const row = this.conn().prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown>;
+    return mapUserRow(row);
+  }
+
+  async updateUser(id: string, patch: UpdateUserPatch): Promise<UserRecord> {
+    const sets: string[] = [];
+    const params: (string | number | null)[] = [];
+    if (patch.role !== undefined) {
+      sets.push("role = ?");
+      params.push(patch.role);
+    }
+    if (patch.isActive !== undefined) {
+      sets.push("is_active = ?");
+      params.push(toIntBool(patch.isActive));
+    }
+    if (patch.displayName !== undefined) {
+      sets.push("display_name = ?");
+      params.push(patch.displayName);
+    }
+    if (patch.googleId !== undefined) {
+      sets.push("google_id = ?");
+      params.push(patch.googleId);
+    }
+    if (patch.passwordHash !== undefined) {
+      sets.push("password_hash = ?");
+      params.push(patch.passwordHash ?? PASSWORD_HASH_SENTINEL);
+    }
+    if (sets.length > 0) {
+      this.conn()
+        .prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`)
+        .run(...params, id);
+    }
+    const row = this.conn().prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!row) throw new Error(`User ${id} not found.`);
+    return mapUserRow(row);
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    this.conn().prepare("UPDATE users SET is_active = 0 WHERE id = ?").run(id);
   }
 
   // ---------- Files ----------

@@ -5,10 +5,33 @@ import type { ReconciliationRow } from "@cozywinters/shared";
 // Domain services depend only on these types and the Repository interface
 // in Repository.ts -- never on a concrete database driver.
 
+export type UserRole = "admin" | "member";
+
 export interface UserRecord {
   id: string;
   email: string;
-  passwordHash: string;
+  /** Never a real value the client sees; null means "no password set" (Google-only account). */
+  passwordHash: string | null;
+  role: UserRole;
+  googleId: string | null;
+  displayName: string | null;
+  isActive: boolean;
+}
+
+export interface CreateUserInput {
+  email: string;
+  passwordHash?: string | null;
+  googleId?: string | null;
+  role: UserRole;
+  displayName?: string | null;
+}
+
+export interface UpdateUserPatch {
+  role?: UserRole;
+  isActive?: boolean;
+  displayName?: string | null;
+  googleId?: string | null;
+  passwordHash?: string | null;
 }
 
 export type FileKind =

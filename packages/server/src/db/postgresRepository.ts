@@ -3,6 +3,8 @@ import type { ManagedValues, ReconciliationRow, WarehouseCode } from "@cozywinte
 import type { Repository } from "./Repository";
 import type {
   UserRecord,
+  CreateUserInput,
+  UpdateUserPatch,
   FileKind,
   FileRecord,
   InsertFileInput,
@@ -48,17 +50,21 @@ export class PostgresRepository implements Repository {
   }
 
   async findUserByEmail(email: string): Promise<UserRecord | null> {
-    const { rows } = await this.getPool().query("SELECT id, email, password_hash FROM users WHERE email = $1", [
-      email.toLowerCase().trim(),
-    ]);
+    const { rows } = await this.getPool().query("SELECT * FROM users WHERE email = $1", [email.toLowerCase().trim()]);
     if (rows.length === 0) return null;
-    return { id: rows[0].id, email: rows[0].email, passwordHash: rows[0].password_hash };
+    return mapUserRow(rows[0]);
   }
 
   async findUserById(id: string): Promise<UserRecord | null> {
-    const { rows } = await this.getPool().query("SELECT id, email, password_hash FROM users WHERE id = $1", [id]);
+    const { rows } = await this.getPool().query("SELECT * FROM users WHERE id = $1", [id]);
     if (rows.length === 0) return null;
-    return { id: rows[0].id, email: rows[0].email, passwordHash: rows[0].password_hash };
+    return mapUserRow(rows[0]);
+  }
+
+  async findUserByGoogleId(googleId: string): Promise<UserRecord | null> {
+    const { rows } = await this.getPool().query("SELECT * FROM users WHERE google_id = $1", [googleId]);
+    if (rows.length === 0) return null;
+    return mapUserRow(rows[0]);
   }
 
   async upsertUser(email: string, passwordHash: string): Promise<UserRecord> {
@@ -66,10 +72,66 @@ export class PostgresRepository implements Repository {
     const { rows } = await this.getPool().query(
       `INSERT INTO users (email, password_hash) VALUES ($1, $2)
        ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
-       RETURNING id, email, password_hash`,
+       RETURNING *`,
       [normalized, passwordHash],
     );
-    return { id: rows[0].id, email: rows[0].email, passwordHash: rows[0].password_hash };
+    return mapUserRow(rows[0]);
+  }
+
+  async listUsers(): Promise<UserRecord[]> {
+    const { rows } = await this.getPool().query("SELECT * FROM users ORDER BY email");
+    return rows.map(mapUserRow);
+  }
+
+  async createUser(input: CreateUserInput): Promise<UserRecord> {
+    const normalized = input.email.toLowerCase().trim();
+    const { rows } = await this.getPool().query(
+      `INSERT INTO users (email, password_hash, google_id, role, display_name)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [normalized, input.passwordHash ?? PASSWORD_HASH_SENTINEL, input.googleId ?? null, input.role, input.displayName ?? null],
+    );
+    return mapUserRow(rows[0]);
+  }
+
+  async updateUser(id: string, patch: UpdateUserPatch): Promise<UserRecord> {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (patch.role !== undefined) {
+      params.push(patch.role);
+      sets.push(`role = $${params.length}`);
+    }
+    if (patch.isActive !== undefined) {
+      params.push(patch.isActive);
+      sets.push(`is_active = $${params.length}`);
+    }
+    if (patch.displayName !== undefined) {
+      params.push(patch.displayName);
+      sets.push(`display_name = $${params.length}`);
+    }
+    if (patch.googleId !== undefined) {
+      params.push(patch.googleId);
+      sets.push(`google_id = $${params.length}`);
+    }
+    if (patch.passwordHash !== undefined) {
+      params.push(patch.passwordHash ?? PASSWORD_HASH_SENTINEL);
+      sets.push(`password_hash = $${params.length}`);
+    }
+    if (sets.length === 0) {
+      const existing = await this.findUserById(id);
+      if (!existing) throw new Error(`User ${id} not found.`);
+      return existing;
+    }
+    params.push(id);
+    const { rows } = await this.getPool().query(
+      `UPDATE users SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`,
+      params,
+    );
+    if (rows.length === 0) throw new Error(`User ${id} not found.`);
+    return mapUserRow(rows[0]);
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await this.getPool().query("UPDATE users SET is_active = false WHERE id = $1", [id]);
   }
 
   async insertFile(input: InsertFileInput): Promise<FileRecord> {
@@ -407,6 +469,27 @@ export class PostgresRepository implements Repository {
       [input.actorId, input.action, input.entityType, input.entityId, JSON.stringify(input.details ?? {})],
     );
   }
+}
+
+/**
+ * password_hash stays NOT NULL at the schema level (kept mechanically in
+ * sync with the SQLite path) -- a Google-only user is stored with this
+ * sentinel instead of a real hash. It is never a valid bcrypt hash, so
+ * bcrypt.compare against it always returns false.
+ */
+const PASSWORD_HASH_SENTINEL = "";
+
+function mapUserRow(row: Record<string, unknown>): UserRecord {
+  const passwordHash = row.password_hash as string;
+  return {
+    id: row.id as string,
+    email: row.email as string,
+    passwordHash: passwordHash === PASSWORD_HASH_SENTINEL ? null : passwordHash,
+    role: row.role as UserRecord["role"],
+    googleId: (row.google_id as string | null) ?? null,
+    displayName: (row.display_name as string | null) ?? null,
+    isActive: row.is_active as boolean,
+  };
 }
 
 function mapFileRow(row: Record<string, unknown>): FileRecord {

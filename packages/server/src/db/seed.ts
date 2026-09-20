@@ -14,8 +14,17 @@ async function main() {
   }
 
   const driver = getDbDriver();
-  const passwordHash = await bcrypt.hash(password, 12);
   const repo = await initRepository();
+  // One-time bootstrap only -- once any user exists (including one created
+  // via Manage Users), never touch it again here, so a later run of this
+  // script can't silently reset a live admin's password.
+  const existingUsers = await repo.listUsers();
+  if (existingUsers.length > 0) {
+    console.log(`Users table already has ${existingUsers.length} user(s); skipping seed.`);
+    await closeRepository();
+    return;
+  }
+  const passwordHash = await bcrypt.hash(password, 12);
   await repo.upsertUser(email, passwordHash);
   console.log(`Seeded administrator account (${driver}): ${email}`);
   await closeRepository();

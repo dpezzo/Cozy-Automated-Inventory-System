@@ -1,7 +1,15 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "node:path";
-import { verifyCredentials, requireAuth, getLoginLockoutRemainingMs, recordFailedLogin, clearLoginAttempts } from "./auth";
+import { OAuth2Client } from "google-auth-library";
+import {
+  verifyCredentials,
+  requireAuth,
+  requireAdmin,
+  getLoginLockoutRemainingMs,
+  recordFailedLogin,
+  clearLoginAttempts,
+} from "./auth";
 import { getRepository, type RowFilter, type FileKind } from "./db";
 import { readStoredFile, readStoredFileText } from "./storage/fileStorage";
 import { uploadFile, uploadVendorFileAutoDetect } from "./domain/uploadService";
@@ -13,6 +21,7 @@ import { generateBatch } from "./domain/batchService";
 import { runLegacyComparison } from "./domain/legacyService";
 import { runPostImportVerification } from "./domain/verificationService";
 import { pushBatchToMiva } from "./miva/mivaApiPush";
+import { listUsers, createUser, updateUser, deactivateUser } from "./domain/userService";
 import { ValidationError, ForbiddenError, NotFoundError } from "./errors";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -62,7 +71,8 @@ router.post(
     await regenerateSession(req);
     req.session.userId = user.id;
     req.session.email = user.email;
-    res.json({ id: user.id, email: user.email });
+    req.session.role = user.role;
+    res.json({ id: user.id, email: user.email, role: user.role });
   }),
 );
 
@@ -75,8 +85,62 @@ router.get("/auth/me", (req, res) => {
     res.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
     return;
   }
-  res.json({ id: req.session.userId, email: req.session.email });
+  res.json({ id: req.session.userId, email: req.session.email, role: req.session.role });
 });
+
+router.get("/auth/config", (_req, res) => {
+  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null });
+});
+
+router.post(
+  "/auth/google",
+  asyncHandler(async (req, res) => {
+    const { credential } = req.body as { credential?: string };
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      res.status(400).json({ error: "GOOGLE_NOT_CONFIGURED", message: "Google sign-in is not configured." });
+      return;
+    }
+    if (!credential) {
+      res.status(400).json({ error: "INVALID_REQUEST", message: "credential is required." });
+      return;
+    }
+    const client = new OAuth2Client(clientId);
+    const ticket = await client.verifyIdToken({ idToken: credential, audience: clientId });
+    const payload = ticket.getPayload();
+    if (!payload?.sub || !payload.email) {
+      res.status(401).json({ error: "INVALID_CREDENTIAL", message: "Could not verify Google credential." });
+      return;
+    }
+
+    const repo = getRepository();
+    let user = await repo.findUserByGoogleId(payload.sub);
+    if (!user) {
+      const byEmail = await repo.findUserByEmail(payload.email);
+      if (byEmail) {
+        // A password-only account can start using Google sign-in the first time it succeeds -- link it here.
+        user = await repo.updateUser(byEmail.id, { googleId: payload.sub });
+      }
+    }
+    if (!user) {
+      res.status(403).json({
+        error: "ACCOUNT_NOT_PROVISIONED",
+        message: "Your Google account isn't set up yet -- ask an admin to add you.",
+      });
+      return;
+    }
+    if (!user.isActive) {
+      res.status(401).json({ error: "INVALID_CREDENTIALS", message: "Incorrect email or password." });
+      return;
+    }
+
+    await regenerateSession(req);
+    req.session.userId = user.id;
+    req.session.email = user.email;
+    req.session.role = user.role;
+    res.json({ id: user.id, email: user.email, role: user.role });
+  }),
+);
 
 router.use(requireAuth);
 
@@ -391,6 +455,58 @@ router.get(
   "/batches/:id/post-import-verifications",
   asyncHandler(async (req, res) => {
     res.json(await getRepository().listPostImportVerificationsForBatch(req.params.id!));
+  }),
+);
+
+// ---------- Users (admin only) ----------
+
+router.get(
+  "/users",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json(await listUsers());
+  }),
+);
+
+router.post(
+  "/users",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { email, role, displayName, password } = req.body as {
+      email?: string;
+      role?: "admin" | "member";
+      displayName?: string;
+      password?: string;
+    };
+    if (!email || !role) {
+      res.status(400).json({ error: "INVALID_REQUEST", message: "email and role are required." });
+      return;
+    }
+    const user = await createUser({ email, role, displayName, password }, req.session.userId!);
+    res.status(201).json(user);
+  }),
+);
+
+router.patch(
+  "/users/:id",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { role, isActive, displayName } = req.body as {
+      role?: "admin" | "member";
+      isActive?: boolean;
+      displayName?: string | null;
+    };
+    const user = await updateUser(req.params.id!, { role, isActive, displayName }, req.session.userId!);
+    res.json(user);
+  }),
+);
+
+router.delete(
+  "/users/:id",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    await deactivateUser(req.params.id!, req.session.userId!);
+    res.json({ ok: true });
   }),
 );
 

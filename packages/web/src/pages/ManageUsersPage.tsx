@@ -1,0 +1,204 @@
+import { useEffect, useState } from "react";
+import { useAuth } from "../AuthContext";
+import { api, ApiRequestError, type UserAccount } from "../api";
+
+export default function ManageUsersPage() {
+  const { user: currentUser } = useAuth();
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [newEmail, setNewEmail] = useState("");
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [newRole, setNewRole] = useState<"admin" | "member">("member");
+  const [newPassword, setNewPassword] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  function refresh() {
+    setLoading(true);
+    api
+      .listUsers()
+      .then(setUsers)
+      .catch((err) => setError(err instanceof ApiRequestError ? err.body.message : "Failed to load users."))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(refresh, []);
+
+  async function submitCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    setError(null);
+    try {
+      await api.createUser({
+        email: newEmail,
+        role: newRole,
+        displayName: newDisplayName || undefined,
+        password: newPassword || undefined,
+      });
+      setNewEmail("");
+      setNewDisplayName("");
+      setNewRole("member");
+      setNewPassword("");
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.body.message : "Failed to create user.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function toggleActive(u: UserAccount) {
+    setBusyId(u.id);
+    setError(null);
+    try {
+      await api.updateUser(u.id, { isActive: !u.isActive });
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.body.message : "Failed to update user.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function changeRole(u: UserAccount, role: "admin" | "member") {
+    setBusyId(u.id);
+    setError(null);
+    try {
+      await api.updateUser(u.id, { role });
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.body.message : "Failed to update user.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div>
+      <h2>Manage Users</h2>
+      {error && <div className="error-banner">{error}</div>}
+
+      <div className="card">
+        <h3>Users</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Display name</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr>
+                <td colSpan={5}>Loading...</td>
+              </tr>
+            )}
+            {!loading && users.length === 0 && (
+              <tr>
+                <td colSpan={5}>No users yet.</td>
+              </tr>
+            )}
+            {users.map((u) => {
+              const isSelf = u.id === currentUser?.id;
+              return (
+                <tr key={u.id}>
+                  <td>{u.email}</td>
+                  <td>{u.displayName ?? "-"}</td>
+                  <td>
+                    <select
+                      value={u.role}
+                      disabled={isSelf || busyId === u.id}
+                      onChange={(e) => changeRole(u, e.target.value as "admin" | "member")}
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="member">Member</option>
+                    </select>
+                  </td>
+                  <td>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: u.isActive ? "#dcfce7" : "#f1f5f9",
+                        color: u.isActive ? "#166534" : "#64748b",
+                      }}
+                    >
+                      {u.isActive ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      className={u.isActive ? "danger" : ""}
+                      disabled={isSelf || busyId === u.id}
+                      onClick={() => toggleActive(u)}
+                      title={isSelf ? "You cannot deactivate your own account" : undefined}
+                    >
+                      {u.isActive ? "Deactivate" : "Reactivate"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="card">
+        <h3>Add user</h3>
+        <form onSubmit={submitCreate}>
+          <div className="grid cols-2">
+            <label>
+              Email
+              <br />
+              <input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                style={{ width: "100%" }}
+                required
+              />
+            </label>
+            <label>
+              Display name
+              <br />
+              <input
+                type="text"
+                value={newDisplayName}
+                onChange={(e) => setNewDisplayName(e.target.value)}
+                style={{ width: "100%" }}
+              />
+            </label>
+            <label>
+              Role
+              <br />
+              <select value={newRole} onChange={(e) => setNewRole(e.target.value as "admin" | "member")} style={{ width: "100%" }}>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+            <label>
+              Initial password (optional)
+              <br />
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                style={{ width: "100%" }}
+                placeholder="Leave blank for Google sign-in only"
+              />
+            </label>
+          </div>
+          <button className="primary" type="submit" disabled={creating} style={{ marginTop: 16 }}>
+            {creating ? "Adding..." : "Add user"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

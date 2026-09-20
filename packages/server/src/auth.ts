@@ -1,17 +1,19 @@
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
-import { getRepository, type UserRecord } from "./db";
+import { getRepository, type UserRecord, type UserRole } from "./db";
 
 declare module "express-session" {
   interface SessionData {
     userId?: string;
     email?: string;
+    role?: UserRole;
   }
 }
 
 export async function verifyCredentials(email: string, password: string): Promise<UserRecord | null> {
   const user = await getRepository().findUserByEmail(email);
-  if (!user) return null;
+  // Same 401 as a wrong password -- never leak whether a deactivated account exists.
+  if (!user || !user.isActive || !user.passwordHash) return null;
   const ok = await bcrypt.compare(password, user.passwordHash);
   return ok ? user : null;
 }
@@ -66,6 +68,15 @@ export function clearLoginAttempts(email: string): void {
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   if (!req.session.userId) {
     res.status(401).json({ error: "AUTHENTICATION_REQUIRED", message: "Sign in to continue." });
+    return;
+  }
+  next();
+}
+
+/** Gates user-management routes to admins only. Must run after requireAuth. */
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (req.session.role !== "admin") {
+    res.status(403).json({ error: "FORBIDDEN", message: "Admin access required." });
     return;
   }
   next();

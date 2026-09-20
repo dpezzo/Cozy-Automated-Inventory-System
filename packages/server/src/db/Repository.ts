@@ -1,6 +1,8 @@
 import type { ReconciliationRow } from "@cozywinters/shared";
 import type {
   UserRecord,
+  CreateUserInput,
+  UpdateUserPatch,
   FileKind,
   FileRecord,
   InsertFileInput,
@@ -31,7 +33,13 @@ export interface Repository {
   // Users
   findUserByEmail(email: string): Promise<UserRecord | null>;
   findUserById(id: string): Promise<UserRecord | null>;
+  findUserByGoogleId(googleId: string): Promise<UserRecord | null>;
   upsertUser(email: string, passwordHash: string): Promise<UserRecord>;
+  listUsers(): Promise<UserRecord[]>;
+  createUser(input: CreateUserInput): Promise<UserRecord>;
+  updateUser(id: string, patch: UpdateUserPatch): Promise<UserRecord>;
+  /** Soft delete: sets is_active = false. Never actually deletes the row -- attribution FKs elsewhere must keep resolving. */
+  deleteUser(id: string): Promise<void>;
 
   // Files
   insertFile(input: InsertFileInput): Promise<FileRecord>;

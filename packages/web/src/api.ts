@@ -70,9 +70,19 @@ export const VENDOR_FILE_DEFS = [
 
 export const api = {
   login: (email: string, password: string) =>
-    request<{ id: string; email: string }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    request<AuthUserView>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  loginWithGoogle: (credential: string) =>
+    request<AuthUserView>("/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
   logout: () => request("/auth/logout", { method: "POST" }),
-  me: () => request<{ id: string; email: string }>("/auth/me"),
+  me: () => request<AuthUserView>("/auth/me"),
+  getAuthConfig: () => request<{ googleClientId: string | null }>("/auth/config"),
+
+  listUsers: () => request<UserAccount[]>("/users"),
+  createUser: (input: { email: string; role: "admin" | "member"; displayName?: string; password?: string }) =>
+    request<UserAccount>("/users", { method: "POST", body: JSON.stringify(input) }),
+  updateUser: (id: string, patch: Partial<{ role: "admin" | "member"; isActive: boolean; displayName: string | null }>) =>
+    request<UserAccount>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  deleteUser: (id: string) => request(`/users/${id}`, { method: "DELETE" }),
 
   listFiles: (kind?: string) => request<FileRecord[]>(`/files${kind ? `?kind=${kind}` : ""}`),
   /** Every uploaded/pulled file across all vendor FileKinds, newest first -- what Step 3's vendor-file dropdown lists. */
@@ -162,6 +172,20 @@ export interface MivaCatalogRow {
   productType?: string;
   productUrl?: string;
   thumbnailUrl?: string;
+}
+
+export interface AuthUserView {
+  id: string;
+  email: string;
+  role: "admin" | "member";
+}
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  role: "admin" | "member";
+  displayName: string | null;
+  isActive: boolean;
 }
 
 export interface FileRecord {
