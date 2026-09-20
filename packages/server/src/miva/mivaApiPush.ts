@@ -135,6 +135,21 @@ async function verifyPushedRows(rows: BatchCsvRow[]): Promise<number> {
 export type MivaPushTarget = "update" | "rollback";
 
 /**
+ * Single source of truth for the production-confirmation gate's effective
+ * environment -- only the literal "development" ever skips confirmation.
+ * Used both to enforce the gate here and to decide whether the UI shows the
+ * confirmation checkbox (GET /miva/api-status) -- those two MUST stay in
+ * sync, since a mismatch (e.g. the status endpoint defaulting to
+ * "development" while this defaulted to "") previously let a push reach the
+ * server with no checkbox ever shown, only to be rejected with a confusing
+ * "requires explicit confirmation" error.
+ */
+export function resolveMivaPushEnvironment(): "development" | "production" {
+  const raw = (process.env.MIVA_ENVIRONMENT ?? "").toLowerCase();
+  return raw === "development" ? "development" : "production";
+}
+
+/**
  * Pushes an already-generated, immutable batch's Update (or Rollback) CSV
  * rows directly to Miva via Product_Update, instead of (or in addition to)
  * manually importing the CSV. Reads the exact same frozen data the CSV
@@ -161,7 +176,7 @@ export async function pushBatchToMiva(
   // requirement. Any unset, misspelled, or unrecognized MIVA_ENVIRONMENT value
   // (e.g. a missing env var in a real deployment) is treated as production
   // rather than silently allowing an unconfirmed live push.
-  const environment = (process.env.MIVA_ENVIRONMENT ?? "").toLowerCase();
+  const environment = resolveMivaPushEnvironment();
   if (environment !== "development" && !confirmProduction) {
     throw new ValidationError(
       "PRODUCTION_CONFIRMATION_REQUIRED",

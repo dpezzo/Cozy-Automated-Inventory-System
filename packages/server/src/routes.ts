@@ -20,7 +20,7 @@ import { createRun, getRunSummary, approveAllClean, setRowDecision, bulkDecision
 import { generateBatch } from "./domain/batchService";
 import { runLegacyComparison } from "./domain/legacyService";
 import { runPostImportVerification } from "./domain/verificationService";
-import { pushBatchToMiva } from "./miva/mivaApiPush";
+import { pushBatchToMiva, resolveMivaPushEnvironment } from "./miva/mivaApiPush";
 import { listUsers, createUser, updateUser, deactivateUser } from "./domain/userService";
 import {
   listVendorConfigs,
@@ -215,7 +215,7 @@ router.get(
   asyncHandler(async (_req, res) => {
     res.json({
       configured: isMivaApiConfigured(),
-      environment: (process.env.MIVA_ENVIRONMENT ?? "development").toLowerCase(),
+      environment: resolveMivaPushEnvironment(),
     });
   }),
 );

@@ -76,3 +76,32 @@ describe("pushBatchToMiva production confirmation gate", () => {
     expect(findFileById).not.toHaveBeenCalled();
   });
 });
+
+describe("resolveMivaPushEnvironment", () => {
+  const originalEnv = process.env.MIVA_ENVIRONMENT;
+
+  afterEach(() => {
+    process.env.MIVA_ENVIRONMENT = originalEnv;
+  });
+
+  // Regression test: GET /miva/api-status (which decides whether the UI shows
+  // the confirmation checkbox) must agree with pushBatchToMiva's own gate on
+  // every input -- they previously used different defaults (this function
+  // returning "production" for anything but literal "development", while the
+  // status route defaulted an unset env var to "development"), so a real
+  // deployment with no MIVA_ENVIRONMENT set showed no checkbox at all yet
+  // still rejected the push with PRODUCTION_CONFIRMATION_REQUIRED.
+  it.each([
+    ["development", "development"],
+    ["production", "production"],
+    ["", "production"],
+    [undefined, "production"],
+    ["prod", "production"],
+    ["DEVELOPMENT", "development"],
+  ] as const)("MIVA_ENVIRONMENT=%s -> %s", async (raw, expected) => {
+    if (raw === undefined) delete process.env.MIVA_ENVIRONMENT;
+    else process.env.MIVA_ENVIRONMENT = raw;
+    const { resolveMivaPushEnvironment } = await import("./mivaApiPush");
+    expect(resolveMivaPushEnvironment()).toBe(expected);
+  });
+});
