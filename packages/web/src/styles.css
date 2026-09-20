@@ -34,9 +34,26 @@ a { color: var(--blue); }
   padding: 16px;
 }
 
-.sidebar h1 {
-  font-size: 16px;
+.brand {
   margin: 0 0 24px 0;
+}
+
+.brand-logo {
+  display: block;
+  line-height: 0;
+}
+.brand-logo img {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+}
+
+.brand-subtitle {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .sidebar nav a {

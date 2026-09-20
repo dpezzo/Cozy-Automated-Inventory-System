@@ -28,7 +28,12 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <form className="card" style={{ width: 340 }} onSubmit={submit}>
-        <h2>CozyWinters Olliix Reconciliation</h2>
+        <div className="brand" style={{ marginBottom: 16 }}>
+          <div className="brand-logo">
+            <img src="/cozywinters-logo-light.png" alt="CozyWinters" />
+          </div>
+          <div className="brand-subtitle">Automated Inventory System</div>
+        </div>
         <p style={{ color: "#64748b", fontSize: 13 }}>Sign in with the pre-authorized administrator account.</p>
         {error && <div className="error-banner">{error}</div>}
         <div style={{ marginBottom: 12 }}>

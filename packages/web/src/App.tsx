@@ -12,7 +12,12 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <h1>CozyWinters Olliix</h1>
+        <div className="brand">
+          <div className="brand-logo">
+            <img src="/cozywinters-logo-light.png" alt="CozyWinters" />
+          </div>
+          <div className="brand-subtitle">Automated Inventory System</div>
+        </div>
         <nav>
           <NavLink to="/" end>
             Home

@@ -168,13 +168,17 @@ export default function CatalogPage() {
 
   // Fill the rest of the viewport below the table's own top offset, instead
   // of the shared .table-scroll class's fixed 65vh cap, which leaves a lot of
-  // dead space on a tall browser window.
+  // dead space on a tall browser window. The trailing 64px accounts for the
+  // space still below the scroll container: the enclosing .card's bottom
+  // padding and margin (20px + 20px) plus .main's bottom padding (24px) --
+  // without it the page was ~40px taller than the viewport, forcing a whole
+  // second (outer) scrollbar even though only the row list needs to scroll.
   useEffect(() => {
     function recomputeHeight() {
       const el = scrollRef.current;
       if (!el) return;
       const top = el.getBoundingClientRect().top;
-      setContainerHeight(Math.max(240, window.innerHeight - top - 24));
+      setContainerHeight(Math.max(240, window.innerHeight - top - 64));
     }
     recomputeHeight();
     window.addEventListener("resize", recomputeHeight);
@@ -451,7 +455,7 @@ export default function CatalogPage() {
                     ? allValues.filter((v) => v.toLowerCase().includes(popoverSearch.toLowerCase()))
                     : allValues;
                   return (
-                    <th key={col.key} style={{ zIndex: 2, position: "relative", overflow: "hidden" }}>
+                    <th key={col.key} style={{ zIndex: 2, position: "sticky", top: 0, overflow: "hidden" }}>
                       <div className="col-filter-wrap" style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
                         <span
                           onClick={() => toggleSort(col.key)}
