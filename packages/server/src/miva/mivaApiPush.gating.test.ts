@@ -36,4 +36,22 @@ describe("pushBatchToMiva production confirmation gate", () => {
     const { pushBatchToMiva } = await import("./mivaApiPush");
     await expect(pushBatchToMiva("batch-1", "user-1", false)).rejects.toMatchObject({ code: "FILE_NOT_FOUND" });
   });
+
+  it("fails closed (requires confirmation) when MIVA_ENVIRONMENT is unset", async () => {
+    delete process.env.MIVA_ENVIRONMENT;
+    const { pushBatchToMiva } = await import("./mivaApiPush");
+    await expect(pushBatchToMiva("batch-1", "user-1", false)).rejects.toMatchObject({
+      code: "PRODUCTION_CONFIRMATION_REQUIRED",
+    });
+    expect(findFileById).not.toHaveBeenCalled();
+  });
+
+  it("fails closed (requires confirmation) when MIVA_ENVIRONMENT is misspelled/unrecognized", async () => {
+    process.env.MIVA_ENVIRONMENT = "prod";
+    const { pushBatchToMiva } = await import("./mivaApiPush");
+    await expect(pushBatchToMiva("batch-1", "user-1", false)).rejects.toMatchObject({
+      code: "PRODUCTION_CONFIRMATION_REQUIRED",
+    });
+    expect(findFileById).not.toHaveBeenCalled();
+  });
 });

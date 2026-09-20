@@ -149,8 +149,12 @@ export async function pushBatchToMiva(
     throw new ValidationError("BATCH_INCOMPLETE", "Batch is missing its update file.");
   }
 
-  const environment = (process.env.MIVA_ENVIRONMENT ?? "development").toLowerCase();
-  if (environment === "production" && !confirmProduction) {
+  // Fail-closed: only the explicit "development" value skips the confirmation
+  // requirement. Any unset, misspelled, or unrecognized MIVA_ENVIRONMENT value
+  // (e.g. a missing env var in a real deployment) is treated as production
+  // rather than silently allowing an unconfirmed live push.
+  const environment = (process.env.MIVA_ENVIRONMENT ?? "").toLowerCase();
+  if (environment !== "development" && !confirmProduction) {
     throw new ValidationError(
       "PRODUCTION_CONFIRMATION_REQUIRED",
       "Pushing to the production Miva store requires explicit confirmation.",
@@ -165,28 +169,45 @@ export async function pushBatchToMiva(
   }
 
   const results: PushRowResult[] = [];
-  for (const group of chunk(rows, CHUNK_SIZE)) {
-    results.push(...(await pushChunk(group)));
+  let chunkError: unknown;
+  try {
+    for (const group of chunk(rows, CHUNK_SIZE)) {
+      results.push(...(await pushChunk(group)));
+    }
+  } catch (err) {
+    // A chunk failure after prior chunks already succeeded means those rows are
+    // now live in Miva -- record what actually happened before propagating the
+    // error, so the audit trail never goes silent on a partial live write.
+    chunkError = err;
   }
 
   const succeededRows = rows.filter((_, i) => results[i]?.success);
   const verificationMismatches = succeededRows.length > 0 ? await verifyPushedRows(succeededRows) : 0;
 
   const pushed = results.filter((r) => r.success).length;
-  const failed = results.length - pushed;
+  const failed = results.length - pushed + (chunkError ? rows.length - results.length : 0);
 
   await repo.insertAuditLog({
     actorId: userId,
-    action: failed === 0 && verificationMismatches === 0 ? "API_PUSH_SUCCEEDED" : "API_PUSH_FAILED",
+    action:
+      chunkError !== undefined
+        ? "API_PUSH_PARTIAL_FAILURE"
+        : failed === 0 && verificationMismatches === 0
+          ? "API_PUSH_SUCCEEDED"
+          : "API_PUSH_FAILED",
     entityType: "batch",
     entityId: batchId,
     details: {
       pushed,
       failed,
       verificationMismatches,
+      unattempted: chunkError ? rows.length - results.length : 0,
+      chunkError: chunkError instanceof Error ? chunkError.message : chunkError ? String(chunkError) : undefined,
       results: results.slice(0, MAX_RESULTS_IN_AUDIT_LOG),
     },
   });
+
+  if (chunkError !== undefined) throw chunkError;
 
   return { pushed, failed, verificationMismatches, results };
 }

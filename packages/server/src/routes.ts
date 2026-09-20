@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "node:path";
-import { verifyCredentials, requireAuth } from "./auth";
+import { verifyCredentials, requireAuth, getLoginLockoutRemainingMs, recordFailedLogin, clearLoginAttempts } from "./auth";
 import { getRepository, type RowFilter, type FileKind } from "./db";
 import { readStoredFile, readStoredFileText } from "./storage/fileStorage";
 import { uploadFile, uploadVendorFileAutoDetect } from "./domain/uploadService";
@@ -27,6 +27,12 @@ function asyncHandler(fn: (req: import("express").Request, res: import("express"
 
 // ---------- Auth ----------
 
+function regenerateSession(req: import("express").Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => (err ? reject(err) : resolve()));
+  });
+}
+
 router.post(
   "/auth/login",
   asyncHandler(async (req, res) => {
@@ -35,11 +41,25 @@ router.post(
       res.status(400).json({ error: "INVALID_REQUEST", message: "Email and password are required." });
       return;
     }
+    const lockoutRemainingMs = getLoginLockoutRemainingMs(email);
+    if (lockoutRemainingMs !== null) {
+      res.status(429).json({
+        error: "TOO_MANY_ATTEMPTS",
+        message: "Too many failed login attempts. Try again in a few minutes.",
+      });
+      return;
+    }
     const user = await verifyCredentials(email, password);
     if (!user) {
+      recordFailedLogin(email);
       res.status(401).json({ error: "INVALID_CREDENTIALS", message: "Incorrect email or password." });
       return;
     }
+    clearLoginAttempts(email);
+    // Regenerate the session on login so a session ID established before
+    // authentication (e.g. one an attacker fixed via cookie injection) can
+    // never become an authenticated session -- only a freshly-issued ID can.
+    await regenerateSession(req);
     req.session.userId = user.id;
     req.session.email = user.email;
     res.json({ id: user.id, email: user.email });
@@ -173,6 +193,38 @@ router.get(
   }),
 );
 
+export interface ParsedRunDate {
+  year: number;
+  month: number;
+  day: number;
+}
+
+/**
+ * An explicit runDate is an unambiguous calendar date (YYYY-MM-DD) chosen by
+ * the caller -- its Y/M/D digits are parsed directly rather than round-tripped
+ * through a UTC Date and reprojected to America/New_York, which shifted the
+ * effective date back by a day (NY is UTC-4/-5, so UTC midnight lands on the
+ * previous NY calendar day). Only the no-argument ("today") default needs an
+ * actual timezone conversion, since "today" depends on the current instant.
+ */
+export function resolveRunDate(runDate: string | undefined, now: Date = new Date()): ParsedRunDate {
+  if (runDate) {
+    const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(runDate);
+    if (!isoMatch) {
+      throw new ValidationError("INVALID_REQUEST", "runDate must be in YYYY-MM-DD format.");
+    }
+    return { year: Number(isoMatch[1]), month: Number(isoMatch[2]), day: Number(isoMatch[3]) };
+  }
+  const nyParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (t: string) => Number(nyParts.find((p) => p.type === t)!.value);
+  return { year: get("year"), month: get("month"), day: get("day") };
+}
+
 router.post(
   "/runs",
   asyncHandler(async (req, res) => {
@@ -185,15 +237,7 @@ router.post(
       res.status(400).json({ error: "INVALID_REQUEST", message: "vendorFileId and mivaFileId are required." });
       return;
     }
-    const date = runDate ? new Date(`${runDate}T00:00:00Z`) : new Date();
-    const nyParts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(date);
-    const get = (t: string) => Number(nyParts.find((p) => p.type === t)!.value);
-    const parsedRunDate = { year: get("year"), month: get("month"), day: get("day") };
+    const parsedRunDate = resolveRunDate(runDate);
 
     const run = await createRun({ vendorFileId, mivaFileId, runDate: parsedRunDate, createdBy: req.session.userId! });
     res.status(201).json(run);

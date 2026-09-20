@@ -25,6 +25,21 @@ export async function createRun(input: CreateRunInput): Promise<RunRecord> {
     throw new ValidationError("FILE_NOT_FOUND", "The selected Miva snapshot was not found.");
   }
 
+  // Guard against an accidental double-click or retried request silently
+  // creating two independent, both-approvable runs for the same file pair.
+  // A prior run that failed doesn't block a fresh attempt.
+  const existingRuns = await repo.listRuns();
+  const duplicate = existingRuns.find(
+    (r) => r.vendorFileId === vendorFile.id && r.mivaFileId === mivaFile.id && r.status !== "failed",
+  );
+  if (duplicate) {
+    throw new ValidationError(
+      "DUPLICATE_RUN",
+      "A run already exists for this vendor file and Miva snapshot pair.",
+      { existingRunId: duplicate.id },
+    );
+  }
+
   const runDateStr = `${input.runDate.year}-${String(input.runDate.month).padStart(2, "0")}-${String(input.runDate.day).padStart(2, "0")}`;
   const run = await repo.insertRun({
     vendorFileId: vendorFile.id,

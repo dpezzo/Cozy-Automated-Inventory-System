@@ -17,6 +17,30 @@ const parser = new XMLParser({
   trimValues: false,
 });
 
+/** Total decompressed bytes an uploaded .xlsx is allowed to expand to, guarding against a zip-bomb-style crafted file exhausting the server's memory. */
+const MAX_DECOMPRESSED_BYTES = 500 * 1024 * 1024;
+
+/**
+ * Sums each zip entry's uncompressed size (read from the local file header,
+ * before actually decompressing anything) and rejects the archive outright
+ * if the total would exceed MAX_DECOMPRESSED_BYTES. JSZip doesn't expose this
+ * as public API, but every entry loaded from a real zip file carries a
+ * CompressedObject `_data` with a populated `uncompressedSize` field.
+ */
+function assertSafeDecompressedSize(zip: JSZip): void {
+  let total = 0;
+  zip.forEach((_relativePath, entry) => {
+    const size = (entry as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize;
+    if (typeof size === "number") total += size;
+  });
+  if (total > MAX_DECOMPRESSED_BYTES) {
+    throw new ValidationError(
+      "FILE_TOO_LARGE",
+      `The uploaded file would expand to ${total} bytes when decompressed, exceeding the ${MAX_DECOMPRESSED_BYTES}-byte limit.`,
+    );
+  }
+}
+
 function asArray<T>(value: T | T[] | undefined): T[] {
   if (value === undefined) return [];
   return Array.isArray(value) ? value : [value];
@@ -91,6 +115,8 @@ export class XlsxDocument {
     } catch (err) {
       throw new ValidationError("FILE_UNREADABLE", "The uploaded file is not a valid .xlsx archive.", err);
     }
+
+    assertSafeDecompressedSize(zip);
 
     const workbookXml = await zip.file("xl/workbook.xml")?.async("string");
     if (!workbookXml) {

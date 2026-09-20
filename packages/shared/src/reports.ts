@@ -1,4 +1,10 @@
 import type { ReconciliationRow } from "./types";
+import { vendorConfigByRuleId } from "./vendorRegistry";
+
+const MATCH_METHOD_BY_STRATEGY = {
+  "upc-to-gtin": "EXACT_UPC_TO_GTIN",
+  "sku-to-mpn": "EXACT_SKU_TO_MPN",
+} as const;
 
 /** Deterministic display order: natural vendor source-row order, Miva-only rows last. */
 export function sortForReview(rows: ReconciliationRow[]): ReconciliationRow[] {
@@ -105,6 +111,8 @@ export function toFullReconciliationRows(
   ruleConfigHash: string,
   entries: { row: ReconciliationRow & { id: string }; decision: DecisionView }[],
 ) {
+  const matchStrategy = vendorConfigByRuleId(ruleId)?.matchStrategy;
+  const matchMethod = matchStrategy ? MATCH_METHOD_BY_STRATEGY[matchStrategy] : "EXACT_UPC_TO_GTIN";
   return sortForReview(entries.map((e) => e.row)).map((row) => {
     const entry = entries.find((e) => e.row.id === (row as ReconciliationRow & { id: string }).id)!;
     const r = row as ReconciliationRow & { id: string };
@@ -118,7 +126,7 @@ export function toFullReconciliationRows(
       NORMALIZED_UPC: r.normalizedUpc ?? "",
       PRODUCT_CODE: r.productCode ?? "",
       MATCH_OUTCOME: r.matchOutcome,
-      MATCH_METHOD: "EXACT_UPC_TO_GTIN",
+      MATCH_METHOD: matchMethod,
       CURRENT_SIMPLE_INVENTORY: r.current.simpleInventory ?? "",
       PROPOSED_SIMPLE_INVENTORY: r.proposed.simpleInventory ?? "",
       CURRENT_AVAILABILITY: r.current.availability ?? "",
