@@ -389,6 +389,10 @@ export class PostgresRepository implements Repository {
     await this.getPool().query("UPDATE batches SET import_status = $2 WHERE id = $1", [batchId, status]);
   }
 
+  async markBatchRolledBack(batchId: string): Promise<void> {
+    await this.getPool().query("UPDATE batches SET rolled_back_at = now() WHERE id = $1", [batchId]);
+  }
+
   async insertLegacyComparison(
     runId: string,
     legacyFileId: string,
@@ -405,9 +409,22 @@ export class PostgresRepository implements Repository {
       const comparisonId = rows[0].id as string;
       for (const r of results) {
         await client.query(
-          `INSERT INTO legacy_comparison_rows (legacy_comparison_id, source_row_number, product_code, comparison_class, deviation_id, note)
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [comparisonId, r.sourceRowNumber, r.productCode, r.comparisonClass, r.deviationId, r.note],
+          `INSERT INTO legacy_comparison_rows (legacy_comparison_id, source_row_number, product_code, item_no, raw_upc, item_name, comparison_class, deviation_id, note, our_values, legacy_values, miva_values)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [
+            comparisonId,
+            r.sourceRowNumber,
+            r.productCode,
+            r.itemNo,
+            r.rawUpc,
+            r.itemName,
+            r.comparisonClass,
+            r.deviationId,
+            r.note,
+            r.ourValues ? JSON.stringify(r.ourValues) : null,
+            r.legacyValues ? JSON.stringify(r.legacyValues) : null,
+            r.mivaValues ? JSON.stringify(r.mivaValues) : null,
+          ],
         );
       }
       await client.query("COMMIT");
@@ -860,6 +877,7 @@ function mapBatchRow(row: Record<string, unknown>): BatchRecord {
     reconciliationFileId: (row.reconciliation_file_id as string) ?? null,
     importStatus: row.import_status as string,
     createdAt: (row.created_at as Date).toISOString(),
+    rolledBackAt: row.rolled_back_at ? (row.rolled_back_at as Date).toISOString() : null,
   };
 }
 

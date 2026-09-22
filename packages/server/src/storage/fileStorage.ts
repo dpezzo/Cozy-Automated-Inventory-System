@@ -36,12 +36,12 @@ export function saveUploadedFile(buffer: Buffer, kind: string, extension: string
   };
 }
 
-export function saveGeneratedFile(content: string, kind: string, filename: string): SavedFile {
+export function saveGeneratedFile(content: string | Buffer, kind: string, filename: string): SavedFile {
   const root = storageRoot();
   const subdir = path.join(root, kind);
   mkdirSync(subdir, { recursive: true });
   const fullPath = path.join(subdir, filename);
-  const buffer = Buffer.from(content, "utf8");
+  const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content, "utf8");
   writeFileSync(fullPath, buffer);
   return {
     storagePath: path.relative(root, fullPath),

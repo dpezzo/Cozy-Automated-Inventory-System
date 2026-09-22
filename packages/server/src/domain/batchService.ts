@@ -14,7 +14,7 @@ import { rowsToCsv } from "../csv/writeCsv";
 import { getBatchableRows } from "./runService";
 
 /** Formats a run's YYYY-MM-DD run date as MMDDYY, matching the operator's own file-naming convention. */
-function formatRunDateMMDDYY(runDate: string): string {
+export function formatRunDateMMDDYY(runDate: string): string {
   const [year, month, day] = runDate.split("-");
   return `${month}${day}${(year ?? "").slice(2)}`;
 }
@@ -28,7 +28,7 @@ function formatRunDateMMDDYY(runDate: string): string {
  * produces correctly-prefixed filenames automatically, with no change to
  * batch generation.
  */
-function vendorSlugFromRuleId(ruleId: string): string {
+export function vendorSlugFromRuleId(ruleId: string): string {
   const match = /^([a-z0-9]+)-inventory-/i.exec(ruleId);
   if (match) return match[1]!.toLowerCase();
   const firstSegment = ruleId.split("-")[0] ?? ruleId;

@@ -1,10 +1,42 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { api, ApiRequestError, type RunRecord, type RunSummary, type ReviewRowView, type ManagedValuesView } from "../api";
+import {
+  api,
+  ApiRequestError,
+  type RunRecord,
+  type RunSummary,
+  type ReviewRowView,
+  type ManagedValuesView,
+  type BatchRecord,
+  type VendorSummary,
+} from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { importStatusPillClass, runStatusPillClass } from "../lib/format";
 
 const REVIEW_CLASS_FILTERS = ["CLEAN", "WARNING", "BLOCKED", "UNCHANGED"];
 const DECISION_FILTERS = ["PENDING", "APPROVED", "APPROVED_WARNING_ACK", "REJECTED"];
+
+/** Mirrors packages/shared/src/reports.ts's VENDOR_EXCEPTION_CATEGORIES keys/labels -- kept in sync by hand since the label text (plain language, not code names) belongs in the UI layer, not the shared row-shaping logic. */
+const VENDOR_EXCEPTION_CATEGORY_LABELS: Record<string, string> = {
+  DUPLICATE_IDENTIFIER: "Duplicate UPC/SKU in vendor file",
+  MISSING_OR_INVALID_IDENTIFIER: "Missing or invalid identifier",
+  MISSING_OR_INVALID_QUANTITY: "Missing or invalid quantity",
+  MISSING_FROM_VENDOR_FILE: "Missing from vendor file (NLA candidates)",
+  DATA_WARNINGS: "Data warnings (mismatched totals, date conflicts)",
+  UNMATCHED_IN_MIVA: "Unmatched -- UPC not found in Miva",
+};
+const VENDOR_EXCEPTION_DEFAULT_CATEGORIES = [
+  "DUPLICATE_IDENTIFIER",
+  "MISSING_OR_INVALID_IDENTIFIER",
+  "MISSING_OR_INVALID_QUANTITY",
+  "MISSING_FROM_VENDOR_FILE",
+  "DATA_WARNINGS",
+];
+
+/** ruleId is always "<vendorKey>-inventory-v1" (see runPipeline.ts's ruleIdFor) -- strips that fixed suffix to recover the vendorKey for a vendor label lookup. Duplicated from RunHistoryPage.tsx's identical helper since it's a one-liner and pulling in a shared module for it isn't worth the indirection. */
+function vendorKeyFromRuleId(ruleId: string): string {
+  return ruleId.replace(/-inventory-v1$/, "");
+}
 
 function pillClass(value: string): string {
   return value.toLowerCase().replace("approved_warning_ack", "approved");
@@ -59,9 +91,12 @@ export default function RunReviewPage() {
   const { runId } = useParams<{ runId: string }>();
   const [run, setRun] = useState<RunRecord | null>(null);
   const [summary, setSummary] = useState<RunSummary | null>(null);
+  const [runBatches, setRunBatches] = useState<BatchRecord[]>([]);
+  const [vendors, setVendors] = useState<VendorSummary[]>([]);
   const [rows, setRows] = useState<ReviewRowView[]>([]);
   const [reviewClassFilter, setReviewClassFilter] = useState<string[]>([]);
   const [decisionFilter, setDecisionFilter] = useState<string[]>([]);
+  const [matchOutcomeFilter, setMatchOutcomeFilter] = useState<string[]>([]);
   const [changedOnly, setChangedOnly] = useState(true);
   const [highlightDiff, setHighlightDiff] = useState(false);
   const [search, setSearch] = useState("");
@@ -73,6 +108,9 @@ export default function RunReviewPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [vendorReportMenuOpen, setVendorReportMenuOpen] = useState(false);
+  const [vendorReportCategories, setVendorReportCategories] = useState<string[]>(VENDOR_EXCEPTION_DEFAULT_CATEGORIES);
+  const [vendorReportFormat, setVendorReportFormat] = useState<"csv" | "xlsx">("xlsx");
 
   const columns = useMemo(() => {
     if (!highlightDiff) return BASE_COLUMNS;
@@ -88,16 +126,30 @@ export default function RunReviewPage() {
     setSummary(summary);
   }, [runId]);
 
+  const loadRunBatches = useCallback(async () => {
+    if (!runId) return;
+    setRunBatches(await api.listRunBatches(runId));
+  }, [runId]);
+
+  useEffect(() => {
+    loadRunBatches();
+  }, [loadRunBatches]);
+
+  useEffect(() => {
+    api.listVendorSummaries().then(setVendors);
+  }, []);
+
   const loadRows = useCallback(async () => {
     if (!runId) return;
     const params: Record<string, string> = {};
     if (reviewClassFilter.length) params.reviewClass = reviewClassFilter.join(",");
     if (decisionFilter.length) params.decisionStatus = decisionFilter.join(",");
+    if (matchOutcomeFilter.length) params.matchOutcome = matchOutcomeFilter.join(",");
     if (changedOnly) params.changed = "true";
     if (search) params.search = search;
     const data = await api.getRunRows(runId, params);
     setRows(data);
-  }, [runId, reviewClassFilter, decisionFilter, changedOnly, search]);
+  }, [runId, reviewClassFilter, decisionFilter, matchOutcomeFilter, changedOnly, search]);
 
   useEffect(() => {
     loadRun();
@@ -109,6 +161,11 @@ export default function RunReviewPage() {
 
   function toggleFilter(list: string[], setList: (v: string[]) => void, value: string) {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  }
+
+  function vendorLabelForRuleId(ruleId: string): string {
+    const vendorKey = vendorKeyFromRuleId(ruleId);
+    return vendors.find((v) => v.vendorKey === vendorKey)?.vendorLabel ?? vendorKey;
   }
 
   function toggleSelect(id: string) {
@@ -196,6 +253,16 @@ export default function RunReviewPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [openFilterColumn]);
 
+  useEffect(() => {
+    if (!vendorReportMenuOpen) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".vendor-report-menu-wrap")) setVendorReportMenuOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [vendorReportMenuOpen]);
+
   const displayedRows = useMemo(() => {
     let result = rows;
     for (const col of columns) {
@@ -278,6 +345,18 @@ export default function RunReviewPage() {
     });
   }
 
+  function toggleVendorReportCategory(key: string) {
+    setVendorReportCategories((prev) => (prev.includes(key) ? prev.filter((v) => v !== key) : [...prev, key]));
+  }
+
+  async function exportVendorExceptionReport() {
+    setVendorReportMenuOpen(false);
+    await withBusy(async () => {
+      const file = await api.generateVendorExceptionReport(runId!, vendorReportCategories, vendorReportFormat);
+      window.location.href = api.downloadFileUrl(file.id);
+    });
+  }
+
   if (!run) return <div>Loading...</div>;
 
   return (
@@ -293,9 +372,12 @@ export default function RunReviewPage() {
         ]}
       />
       <div className="card">
-        <div className="grid cols-4">
+        <div className="grid cols-5">
           <div>
-            <strong>Status:</strong> {run.status}
+            <strong>Status:</strong> <span className={`pill ${runStatusPillClass(run.status)}`}>{run.status}</span>
+          </div>
+          <div>
+            <strong>Vendor:</strong> {vendorLabelForRuleId(run.ruleId)}
           </div>
           <div>
             <strong>Rule:</strong> {run.ruleId}
@@ -310,15 +392,62 @@ export default function RunReviewPage() {
         {run.status === "failed" && <div className="error-banner">Run failed: {run.failureReason}</div>}
       </div>
 
+      {runBatches.length > 0 && (
+        <div className="card">
+          <h3>Batches</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Batch ID</th>
+                <th>Import status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runBatches.map((b) => (
+                <tr key={b.id}>
+                  <td>{new Date(b.createdAt).toLocaleString()}</td>
+                  <td title={b.id}>
+                    <Link to={`/batches/${b.id}`}>{b.id.slice(0, 8)}</Link>
+                  </td>
+                  <td>
+                    <span className={`pill ${importStatusPillClass(b.importStatus)}`}>{b.importStatus}</span>
+                    {b.rolledBackAt && (
+                      <span
+                        title={`Rolled back ${new Date(b.rolledBackAt).toLocaleString()}`}
+                        style={{ marginLeft: 6, fontSize: 12, color: "#64748b" }}
+                      >
+                        ↩ rolled back
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {error && <div className="error-banner">{error}</div>}
 
       {summary && (
         <div className="card">
           <h3>Summary</h3>
-          <div className="grid cols-8">
+          <div className="grid cols-10">
             <div className="stat">
               <div className="value">{summary.total}</div>
               <div className="label">Total rows</div>
+            </div>
+            <div className="stat" title="Vendor rows whose UPC/SKU resolved to exactly one Miva product (matchOutcome MATCHED) -- present in both the vendor file and Miva.">
+              <div className="value">{summary.byMatchOutcome.MATCHED ?? 0}</div>
+              <div className="label">Matched</div>
+            </div>
+            <div
+              className="stat"
+              title="Miva products not referenced by any vendor file row this run (matchOutcome MISSING - REVIEW REQUIRED) -- NLA candidates, not in the vendor file at all."
+            >
+              <div className="value">{summary.byMatchOutcome["MISSING - REVIEW REQUIRED"] ?? 0}</div>
+              <div className="label">NLA (Miva only)</div>
             </div>
             <div className="stat">
               <div className="value">{summary.changed}</div>
@@ -366,6 +495,70 @@ export default function RunReviewPage() {
           <button className="primary" onClick={generateBatch} disabled={busy}>
             Generate batch
           </button>
+          <div className="vendor-report-menu-wrap" style={{ position: "relative" }}>
+            <button onClick={() => setVendorReportMenuOpen((v) => !v)} disabled={busy}>
+              Export vendor exception report
+            </button>
+            {vendorReportMenuOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  background: "white",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+                  padding: 10,
+                  width: 300,
+                  zIndex: 20,
+                }}
+              >
+                <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 8px" }}>
+                  Categories to include -- unmatched-in-Miva is huge and usually not a vendor error, so it's off by
+                  default.
+                </p>
+                {Object.entries(VENDOR_EXCEPTION_CATEGORY_LABELS).map(([key, label]) => (
+                  <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "3px 0" }}>
+                    <input
+                      type="checkbox"
+                      checked={vendorReportCategories.includes(key)}
+                      onChange={() => toggleVendorReportCategory(key)}
+                    />
+                    {label}
+                  </label>
+                ))}
+                <div style={{ display: "flex", gap: 12, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="vendorReportFormat"
+                      checked={vendorReportFormat === "xlsx"}
+                      onChange={() => setVendorReportFormat("xlsx")}
+                    />
+                    Excel (.xlsx)
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="vendorReportFormat"
+                      checked={vendorReportFormat === "csv"}
+                      onChange={() => setVendorReportFormat("csv")}
+                    />
+                    CSV
+                  </label>
+                </div>
+                <button
+                  className="primary"
+                  style={{ marginTop: 8, width: "100%" }}
+                  onClick={exportVendorExceptionReport}
+                  disabled={busy || vendorReportCategories.length === 0}
+                >
+                  Export {vendorReportFormat === "xlsx" ? "Excel" : "CSV"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="filters">
@@ -393,6 +586,23 @@ export default function RunReviewPage() {
           ))}
           <label style={{ marginLeft: 16 }}>
             <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} /> Changed only
+          </label>
+          <span style={{ marginLeft: 16, fontWeight: 700 }}>Match:</span>
+          <label title="Rows whose UPC/SKU resolved to exactly one Miva product (matchOutcome MATCHED) -- present in both the vendor file and Miva.">
+            <input
+              type="checkbox"
+              checked={matchOutcomeFilter.includes("MATCHED")}
+              onChange={() => toggleFilter(matchOutcomeFilter, setMatchOutcomeFilter, "MATCHED")}
+            />{" "}
+            Matched
+          </label>
+          <label title="Miva products not referenced by any vendor file row this run (matchOutcome MISSING - REVIEW REQUIRED) -- NLA candidates, not in the vendor file at all.">
+            <input
+              type="checkbox"
+              checked={matchOutcomeFilter.includes("MISSING - REVIEW REQUIRED")}
+              onChange={() => toggleFilter(matchOutcomeFilter, setMatchOutcomeFilter, "MISSING - REVIEW REQUIRED")}
+            />{" "}
+            NLA (Miva only)
           </label>
           <label style={{ marginLeft: 16 }} title="Adds a 'Changed fields' column listing which of the six managed fields actually differ -- Current/Proposed status only shows one of them.">
             <input type="checkbox" checked={highlightDiff} onChange={(e) => setHighlightDiff(e.target.checked)} /> Highlight differences

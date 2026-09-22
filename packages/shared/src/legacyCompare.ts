@@ -22,16 +22,76 @@ export type LegacyComparisonClass =
   | "UNEXPLAINED_DIFFERENCE"
   | "NOT_COMPARABLE";
 
+/** Same six managed fields ReconciliationRow.current/proposed use, plus the expected date -- lets a legacy comparison row be reviewed the same way a reconciliation row is (side-by-side field values), not just as a bare pass/fail classification. */
+export interface LegacyComparisonValues {
+  simpleInventory: string | null;
+  availability: string | null;
+  restockMessage: string | null;
+  dataFeed: string | null;
+  shoppingFeed: string | null;
+  reportFlag: string | null;
+  expectedDate: string | null;
+}
+
 export interface LegacyComparisonResult {
   sourceRowNumber: number | null;
   productCode: string | null;
+  itemNo: string | null;
+  rawUpc: string | null;
+  /** Same provenance as itemNo/rawUpc: the vendor file's description column, null for a Miva-only row not present in the vendor file. */
+  itemName: string | null;
   comparisonClass: LegacyComparisonClass;
   deviationId: string | null;
   note: string;
+  /** What this app calculated -- null only when the row was never reconciled to a proposal (e.g. blocked before matching). Notably null for a Miva-only row not yet marked discontinued (row.proposed is never populated for it) -- mivaValues is the only real reference point for that case. */
+  ourValues: LegacyComparisonValues | null;
+  /** What the legacy workbook recorded -- null when no legacy counterpart row was found. */
+  legacyValues: LegacyComparisonValues | null;
+  /** What Miva already had before this run -- never itself compared for the pass/fail classification below, but useful context: was a difference introduced by this run's calculation, or did Miva already disagree with the legacy file? expectedDate has no Miva-current equivalent (a purely derived/proposed concept), so it's always null here. */
+  mivaValues: LegacyComparisonValues | null;
 }
 
 function norm(value: string | null | undefined): string {
   return (value ?? "").trim();
+}
+
+function ourValuesFrom(row: ReconciliationRow): LegacyComparisonValues | null {
+  if (Object.keys(row.proposed).length === 0) return null;
+  return {
+    simpleInventory: row.proposed.simpleInventory ?? null,
+    availability: row.proposed.availability ?? null,
+    restockMessage: row.proposed.restockMessage ?? null,
+    dataFeed: row.proposed.dataFeed ?? null,
+    shoppingFeed: row.proposed.shoppingFeed ?? null,
+    reportFlag: row.proposed.reportFlag ?? null,
+    expectedDate: row.expectedDate,
+  };
+}
+
+function mivaValuesFrom(row: ReconciliationRow): LegacyComparisonValues | null {
+  if (Object.keys(row.current).length === 0) return null;
+  return {
+    simpleInventory: row.current.simpleInventory ?? null,
+    availability: row.current.availability ?? null,
+    restockMessage: row.current.restockMessage ?? null,
+    dataFeed: row.current.dataFeed ?? null,
+    shoppingFeed: row.current.shoppingFeed ?? null,
+    reportFlag: row.current.reportFlag ?? null,
+    expectedDate: null,
+  };
+}
+
+function legacyValuesFrom(legacy: LegacyAuditRow | undefined): LegacyComparisonValues | null {
+  if (!legacy) return null;
+  return {
+    simpleInventory: legacy.simpleInventory,
+    availability: legacy.availability,
+    restockMessage: legacy.restockMessage,
+    dataFeed: legacy.dataFeed,
+    shoppingFeed: legacy.shoppingFeed,
+    reportFlag: legacy.reportFlag,
+    expectedDate: legacy.expectedDateRaw,
+  };
 }
 
 function buildLegacyIndex(legacyRows: LegacyAuditRow[]) {
@@ -82,9 +142,15 @@ export function compareWithLegacy(
       results.push({
         sourceRowNumber: row.sourceRowNumber,
         productCode: row.productCode,
+        itemNo: row.itemNo,
+        rawUpc: row.rawUpc,
+        itemName: row.description,
         comparisonClass: "APPROVED_DEVIATION",
         deviationId: "DEV-001",
         note: "Legacy immediate discontinuation is an approved MVP deviation",
+        ourValues: ourValuesFrom(row),
+        legacyValues: legacyValuesFrom(legacy),
+        mivaValues: mivaValuesFrom(row),
       });
       continue;
     }
@@ -93,9 +159,15 @@ export function compareWithLegacy(
       results.push({
         sourceRowNumber: row.sourceRowNumber,
         productCode: row.productCode,
+        itemNo: row.itemNo,
+        rawUpc: row.rawUpc,
+        itemName: row.description,
         comparisonClass: "NOT_COMPARABLE",
         deviationId: null,
         note: "",
+        ourValues: ourValuesFrom(row),
+        legacyValues: legacyValuesFrom(legacy),
+        mivaValues: mivaValuesFrom(row),
       });
       continue;
     }
@@ -104,9 +176,15 @@ export function compareWithLegacy(
       results.push({
         sourceRowNumber: row.sourceRowNumber,
         productCode: row.productCode,
+        itemNo: row.itemNo,
+        rawUpc: row.rawUpc,
+        itemName: row.description,
         comparisonClass: "UNEXPLAINED_DIFFERENCE",
         deviationId: null,
         note: "No legacy counterpart found for a comparable row",
+        ourValues: ourValuesFrom(row),
+        legacyValues: null,
+        mivaValues: mivaValuesFrom(row),
       });
       continue;
     }
@@ -138,9 +216,15 @@ export function compareWithLegacy(
     results.push({
       sourceRowNumber: row.sourceRowNumber,
       productCode: row.productCode,
+      itemNo: row.itemNo,
+      rawUpc: row.rawUpc,
+      itemName: row.description,
       comparisonClass: fieldsEqual ? "EXACT_MATCH" : "UNEXPLAINED_DIFFERENCE",
       deviationId: null,
       note: fieldsEqual ? "" : "Legacy managed values differ from the calculated result with no matching deviation register entry",
+      ourValues: ourValuesFrom(row),
+      legacyValues: legacyValuesFrom(legacy),
+      mivaValues: mivaValuesFrom(row),
     });
   }
 

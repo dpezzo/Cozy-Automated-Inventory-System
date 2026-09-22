@@ -2,6 +2,31 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-09-22 — Batch push status tracking, Run History/Run Review overhaul, Legacy comparison detail, and Vendor Exception Report
+
+### Added
+
+**Batch import status now tracks Miva API pushes automatically**
+- A batch's Import Status updates itself when pushed to Miva (`API_PUSH_SUCCEEDED` / `API_PUSH_FAILED` / `API_PUSH_PARTIAL_FAILURE`) instead of requiring a manual "Mark..." click afterward. A rollback push no longer changes Import Status at all — it's tracked separately via a new "rolled back" badge, since a rollback restores prior values rather than reporting on the batch's own import.
+- One-time backfill script (`backfillImportStatusFromPushHistory.ts`) to correct batches that were pushed before this shipped, using their existing Activity Log entries.
+
+**Run History and Run Review page overhaul**
+- Runs and Batches tables now cross-link both ways (a run shows its batch + batch status; a batch shows its run), with aligned, `Columns`-consistent formatting between the two tables (shared pixel widths via `table-layout: fixed`, matching pill styling for every status column).
+- Sidebar's "Run History" highlight now correctly stays active on a run's detail page and a batch's detail page, regardless of which page you navigated in from.
+- Run Review: added Vendor to the run info card; split the "Matched" stat into a true `matchOutcome: MATCHED` count and a separate "NLA (Miva only)" count (previously blended non-blocked rows together, which didn't line up with any real-world reference count); added a "Matched"/"NLA" filter toggle.
+
+**Legacy Comparison "Differences" report (Audits & Reviews)**
+- Full field-level review table (previously just pass/fail counts): grouped column headers + tooltips naming each value's true source (vendor file / Miva / calculated / legacy file), a per-row "Vendor + Miva" vs. "Miva only" origin badge, an expandable per-row detail panel comparing Miva's current value / our calculation / the legacy file side by side (with mismatches highlighted), and a `Columns` show/hide menu matching the Miva Catalog page's pattern.
+- Traced and fixed a real data gap surfaced while building this: a vendor UPC duplicated across two rows in the vendor file was silently "spending" the Miva lookup before being blocked, making that product invisible to both the Matched and NLA counts with no record anywhere it needed review.
+
+**Vendor Exception Report**
+- New exportable report (CSV or Excel) from Run Review, for sending back to a vendor to get exceptions clarified — separate from the existing internal batch exception CSV, which mixes every blocker/warning reason (including Miva-side-only issues that aren't the vendor's problem) and only exists after a batch is generated.
+- Checkbox-selectable categories (duplicate UPC/SKU, missing/invalid identifier, missing/invalid quantity, missing-from-vendor/NLA candidates, data warnings; "unmatched in Miva" available but off by default since it's usually not a vendor error). Duplicate-UPC rows list their sibling row(s) directly in a `DETAIL` column. Includes Miva's current status per row.
+- Minimal, dependency-free `.xlsx` writer (`writeXlsx.ts`, built on the same `jszip` already used to *read* `.xlsx` files) — no new library needed for Excel export.
+
+### Fixed
+- `getRunSummary` now also reports `byMatchOutcome`, needed for the Matched/NLA split above (previously only `byReviewClass`/`byDecisionStatus`).
+
 ## 2026-09-20 — Audits & Reviews page, storage cleanup + alerting, and page-wide UX pass
 
 ### Added

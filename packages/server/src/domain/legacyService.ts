@@ -27,9 +27,15 @@ export async function runLegacyComparison(runId: string, legacyFileId: string, u
     comparison.map((c) => ({
       sourceRowNumber: c.sourceRowNumber,
       productCode: c.productCode,
+      itemNo: c.itemNo,
+      rawUpc: c.rawUpc,
+      itemName: c.itemName,
       comparisonClass: c.comparisonClass,
       deviationId: c.deviationId,
       note: c.note,
+      ourValues: c.ourValues,
+      legacyValues: c.legacyValues,
+      mivaValues: c.mivaValues,
     })),
   );
 

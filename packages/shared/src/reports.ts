@@ -1,4 +1,4 @@
-import type { ReconciliationRow } from "./types";
+import type { BlockerCode, ReconciliationRow, WarningCode } from "./types";
 import { vendorConfigByRuleId } from "./vendorRegistry";
 
 const MATCH_METHOD_BY_STRATEGY = {
@@ -50,6 +50,110 @@ export function toExceptionRows(rows: ReconciliationRow[]): ExceptionRowView[] {
       };
     });
 }
+
+/**
+ * Vendor exception report categories -- a curated subset of BlockerCode/
+ * WarningCode grouped into plain-language buckets a vendor can act on.
+ * Deliberately excludes UNKNOWN_MIVA_BRAND and DUPLICATE_MIVA_GTIN/MPN: those
+ * are Miva-side catalog/config issues, not something the vendor's own file
+ * caused or can fix.
+ */
+export const VENDOR_EXCEPTION_CATEGORIES = {
+  DUPLICATE_IDENTIFIER: ["DUPLICATE_VENDOR_UPC", "DUPLICATE_VENDOR_SKU"],
+  MISSING_OR_INVALID_IDENTIFIER: ["BLANK_UPC", "NONNUMERIC_UPC", "BLANK_VENDOR_SKU"],
+  MISSING_OR_INVALID_QUANTITY: ["BLANK_TOTAL_QTY", "NEGATIVE_TOTAL_QTY", "INVALID_TOTAL_QTY"],
+  MISSING_FROM_VENDOR_FILE: ["MISSING_FROM_VENDOR", "MISSING_FROM_OLLIIX"],
+  DATA_WARNINGS: [
+    "WAREHOUSE_TOTAL_MISMATCH",
+    "EXPECTED_DATE_CONFLICT",
+    "DATE_WITH_NONPOSITIVE_INCOMING_QTY",
+    "INCOMING_QTY_WITHOUT_DATE",
+    "AMBIGUOUS_INCOMING_DATE",
+  ],
+  UNMATCHED_IN_MIVA: ["NO_MIVA_MATCH"],
+} as const satisfies Record<string, (BlockerCode | WarningCode)[]>;
+
+export type VendorExceptionCategory = keyof typeof VENDOR_EXCEPTION_CATEGORIES;
+
+export interface VendorExceptionRowView {
+  itemNo: string | null;
+  vendorUpc: string | null;
+  productCode: string | null;
+  description: string | null;
+  /** Miva's current inventory status (e.g. "IN STOCK", "SOLD OUT", "NO LONGER AVAILABLE") -- blank when the row was blocked before a Miva product was ever identified (e.g. blank/malformed identifier), since there's nothing to report a status for. */
+  mivaStatus: string | null;
+  totalQtyRaw: string | null;
+  reasonCodes: string;
+  detail: string;
+}
+
+/**
+ * Vendor-facing exception rows: a curated, richer alternative to
+ * toExceptionRows (which is internal-only and includes Miva-side reasons).
+ * `categories` selects which VENDOR_EXCEPTION_CATEGORIES buckets to include;
+ * an empty array yields no rows.
+ */
+export function toVendorExceptionRows(
+  rows: ReconciliationRow[],
+  categories: VendorExceptionCategory[],
+): VendorExceptionRowView[] {
+  const allowedCodes = new Set<string>(categories.flatMap((c) => VENDOR_EXCEPTION_CATEGORIES[c]));
+  if (allowedCodes.size === 0) return [];
+
+  const sorted = sortForReview(rows);
+  const matching = sorted.filter((r) => {
+    const codes = r.reviewClass === "WARNING" ? r.warningCodes : r.blockerCodes;
+    return codes.some((c) => allowedCodes.has(c));
+  });
+
+  // Groups rows sharing a raw vendor identifier so a DUPLICATE_VENDOR_UPC/SKU
+  // row's detail can name its sibling(s) directly -- the same real-world
+  // collision reconcile.ts already detects (via the normalized key), just
+  // surfaced here for the vendor to see both sides of, not only their own row.
+  const byRawIdentifier = new Map<string, ReconciliationRow[]>();
+  for (const r of matching) {
+    const key = (r.rawUpc ?? "").trim();
+    if (key === "") continue;
+    const bucket = byRawIdentifier.get(key);
+    if (bucket) bucket.push(r);
+    else byRawIdentifier.set(key, [r]);
+  }
+
+  return matching.map((r) => {
+    const codes = r.reviewClass === "WARNING" ? r.warningCodes : r.blockerCodes;
+    const isDuplicateIdentifier = codes.some(
+      (c) => (VENDOR_EXCEPTION_CATEGORIES.DUPLICATE_IDENTIFIER as readonly string[]).includes(c),
+    );
+    let detail = "";
+    if (isDuplicateIdentifier) {
+      const siblings = (byRawIdentifier.get((r.rawUpc ?? "").trim()) ?? []).filter((s) => s !== r);
+      if (siblings.length > 0) {
+        detail = `Also listed as ${siblings.map((s) => `${s.itemNo ?? "(no item no)"} (qty ${s.totalQtyRaw ?? "0"})`).join(", ")}`;
+      }
+    }
+    return {
+      itemNo: r.itemNo,
+      vendorUpc: r.rawUpc,
+      productCode: r.productCode,
+      description: r.description,
+      mivaStatus: r.current.simpleInventory ?? null,
+      totalQtyRaw: r.totalQtyRaw,
+      reasonCodes: codes.join(","),
+      detail,
+    };
+  });
+}
+
+export const VENDOR_EXCEPTION_HEADERS = [
+  "ITEM_NO",
+  "VENDOR_UPC",
+  "MIVA_PRODUCT_CODE",
+  "DESCRIPTION",
+  "STATUS",
+  "TOTAL_QTY",
+  "REASON",
+  "DETAIL",
+] as const;
 
 export const UPDATE_ROLLBACK_HEADERS = [
   "PRODUCT_CODE",

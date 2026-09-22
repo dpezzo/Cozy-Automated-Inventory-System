@@ -492,6 +492,7 @@ export class SqliteRepository implements Repository {
       reconciliationFileId: input.reconciliationFileId,
       importStatus: "GENERATED",
       createdAt,
+      rolledBackAt: null,
     };
   }
 
@@ -520,6 +521,12 @@ export class SqliteRepository implements Repository {
     this.conn().prepare("UPDATE batches SET import_status = ? WHERE id = ?").run(status, batchId);
   }
 
+  async markBatchRolledBack(batchId: string): Promise<void> {
+    this.conn()
+      .prepare("UPDATE batches SET rolled_back_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?")
+      .run(batchId);
+  }
+
   // ---------- Legacy comparison ----------
 
   async insertLegacyComparison(
@@ -539,11 +546,25 @@ export class SqliteRepository implements Repository {
         createdBy,
       );
       const insertRow = db.prepare(
-        `INSERT INTO legacy_comparison_rows (id, legacy_comparison_id, source_row_number, product_code, comparison_class, deviation_id, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO legacy_comparison_rows (id, legacy_comparison_id, source_row_number, product_code, item_no, raw_upc, item_name, comparison_class, deviation_id, note, our_values, legacy_values, miva_values)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const r of results) {
-        insertRow.run(randomUUID(), comparisonId, r.sourceRowNumber, r.productCode, r.comparisonClass, r.deviationId, r.note);
+        insertRow.run(
+          randomUUID(),
+          comparisonId,
+          r.sourceRowNumber,
+          r.productCode,
+          r.itemNo,
+          r.rawUpc,
+          r.itemName,
+          r.comparisonClass,
+          r.deviationId,
+          r.note,
+          r.ourValues ? JSON.stringify(r.ourValues) : null,
+          r.legacyValues ? JSON.stringify(r.legacyValues) : null,
+          r.mivaValues ? JSON.stringify(r.mivaValues) : null,
+        );
       }
       db.exec("COMMIT");
     } catch (err) {
@@ -554,11 +575,20 @@ export class SqliteRepository implements Repository {
   }
 
   async getLegacyComparisonRows(comparisonId: string): Promise<Record<string, unknown>[]> {
-    return this.conn()
+    const rows = this.conn()
       .prepare(
         "SELECT * FROM legacy_comparison_rows WHERE legacy_comparison_id = ? ORDER BY (source_row_number IS NULL), source_row_number, product_code",
       )
       .all(comparisonId) as Record<string, unknown>[];
+    // our_values/legacy_values are stored as JSON TEXT (SQLite has no jsonb) --
+    // parse them back to objects here so this matches what the Postgres
+    // driver already hands back automatically for its jsonb columns.
+    return rows.map((row) => ({
+      ...row,
+      our_values: row.our_values ? JSON.parse(row.our_values as string) : null,
+      legacy_values: row.legacy_values ? JSON.parse(row.legacy_values as string) : null,
+      miva_values: row.miva_values ? JSON.parse(row.miva_values as string) : null,
+    }));
   }
 
   async listLegacyComparisonsForRun(runId: string): Promise<Record<string, unknown>[]> {
@@ -996,6 +1026,7 @@ function mapBatchRow(row: Record<string, unknown>): BatchRecord {
     reconciliationFileId: (row.reconciliation_file_id as string) ?? null,
     importStatus: row.import_status as string,
     createdAt: row.created_at as string,
+    rolledBackAt: (row.rolled_back_at as string) ?? null,
   };
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiRequestError, type FileRecord, type MivaCatalogRow } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { loadFromStorage, saveToStorage } from "../lib/storage";
 
 interface ColumnDef {
   key: string;
@@ -31,23 +32,6 @@ const OVERSCAN = 8;
 // main table's row windowing, just capped instead of scrolled: show the
 // first N and tell the user to type to narrow down further.
 const MAX_FILTER_VALUES_SHOWN = 200;
-
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveToStorage(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // per-viewer convenience only -- fine to silently skip if storage is unavailable
-  }
-}
 
 function CopyableCode({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);

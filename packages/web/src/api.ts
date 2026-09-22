@@ -156,6 +156,11 @@ export const api = {
       body: JSON.stringify({ legacyFileId }),
     }),
   listLegacyComparisons: (runId: string) => request<{ id: string; created_at: string }[]>(`/runs/${runId}/legacy-comparisons`),
+  generateVendorExceptionReport: (runId: string, categories: string[], format: "csv" | "xlsx") =>
+    request<FileRecord>(`/runs/${runId}/vendor-exception-report`, {
+      method: "POST",
+      body: JSON.stringify({ categories, format }),
+    }),
 
   listBatches: () => request<BatchRecord[]>("/batches"),
   getBatch: (id: string) => request<BatchRecord>(`/batches/${id}`),
@@ -288,6 +293,7 @@ export interface RunSummary {
   total: number;
   byReviewClass: Record<string, number>;
   byDecisionStatus: Record<string, number>;
+  byMatchOutcome: Record<string, number>;
   changed: number;
   unchanged: number;
 }
@@ -348,6 +354,7 @@ export interface BatchRecord {
   reconciliationFileId: string | null;
   importStatus: string;
   createdAt: string;
+  rolledBackAt: string | null;
 }
 
 export interface DataSizeAlertThresholds {
@@ -387,12 +394,28 @@ export interface AuditLogRecord {
   createdAt: string;
 }
 
+export interface LegacyComparisonValues {
+  simpleInventory: string | null;
+  availability: string | null;
+  restockMessage: string | null;
+  dataFeed: string | null;
+  shoppingFeed: string | null;
+  reportFlag: string | null;
+  expectedDate: string | null;
+}
+
 export interface LegacyComparisonRow {
   source_row_number: number | null;
   product_code: string | null;
+  item_no: string | null;
+  raw_upc: string | null;
+  item_name: string | null;
   comparison_class: string;
   deviation_id: string | null;
   note: string;
+  our_values: LegacyComparisonValues | null;
+  legacy_values: LegacyComparisonValues | null;
+  miva_values: LegacyComparisonValues | null;
 }
 
 export interface VerificationRow {

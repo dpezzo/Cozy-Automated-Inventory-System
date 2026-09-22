@@ -102,9 +102,13 @@ a { color: var(--blue); }
 }
 .grid.cols-2 { grid-template-columns: 1fr 1fr; }
 .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.grid.cols-5 { grid-template-columns: repeat(5, 1fr); }
 .grid.cols-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.grid.cols-9 { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+.grid.cols-10 { grid-template-columns: repeat(10, minmax(0, 1fr)); }
 @media (max-width: 900px) {
-  .grid.cols-8 { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .grid.cols-5 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .grid.cols-8, .grid.cols-9, .grid.cols-10 { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
 }
 
 .stat {
@@ -134,6 +138,35 @@ th { background: #f1f5f9; position: sticky; top: 0; }
   max-height: 65vh;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+/* Used where two separate tables (e.g. Runs/Batches on RunHistoryPage) need
+   their shared columns to land at identical pixel widths -- plain "auto"
+   table layout sizes each table's columns from its own content/header mix,
+   so two tables with the same column meaning can still end up different
+   widths. Fixed layout + explicit <col> widths (set by the caller) makes
+   widths deterministic instead of content-driven, at the cost of needing
+   ellipsis for anything that doesn't fit. */
+/* Flags a single table cell as disagreeing with another cell it's being compared against (e.g. the Legacy Comparison detail panel's Our/Miva vs Legacy field table) -- lighter-weight than a full .pill since it's marking a value, not a status. */
+.cell-mismatch {
+  background: #fee2e2;
+}
+
+.aligned-table {
+  /* table-layout:fixed makes each <col>'s specified width literal instead
+     of content-driven, which is what lets two separate tables share exact
+     column widths. Each aligned-table must have exactly one <col> left
+     without a width (Runs: Rule/hash; Batches: a trailing spacer column) --
+     that's the one that absorbs the rest of the table's 100% width, so the
+     shared columns stay pixel-identical across tables instead of every
+     column being proportionally stretched to fill the card. */
+  table-layout: fixed;
+  width: 100%;
+}
+.aligned-table th,
+.aligned-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 button {

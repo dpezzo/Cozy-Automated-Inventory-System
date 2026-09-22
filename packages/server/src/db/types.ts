@@ -1,4 +1,4 @@
-import type { ReconciliationRow, BlockerCode } from "@cozywinters/shared";
+import type { ReconciliationRow, BlockerCode, LegacyComparisonValues } from "@cozywinters/shared";
 import type { GenericCsvColumnMapping } from "../vendor/genericCsvParser";
 
 // Shared record and filter shapes for both the SQLite (default, native
@@ -48,6 +48,7 @@ export type FileKind =
   | "batch_rollback"
   | "batch_exception"
   | "batch_reconciliation"
+  | "vendor_exception_report"
   /** A dynamically-configured vendor's file (file_shape 'simple_csv' or 'plugin'). Which vendor is recorded in FileRecord.vendorKey, not in this kind. */
   | "vendor_dynamic";
 
@@ -182,6 +183,7 @@ export interface BatchRecord {
   reconciliationFileId: string | null;
   importStatus: string;
   createdAt: string;
+  rolledBackAt: string | null;
 }
 
 export interface InsertBatchInput {
@@ -196,9 +198,15 @@ export interface InsertBatchInput {
 export interface LegacyComparisonRowInput {
   sourceRowNumber: number | null;
   productCode: string | null;
+  itemNo: string | null;
+  rawUpc: string | null;
+  itemName: string | null;
   comparisonClass: string;
   deviationId: string | null;
   note: string;
+  ourValues: LegacyComparisonValues | null;
+  legacyValues: LegacyComparisonValues | null;
+  mivaValues: LegacyComparisonValues | null;
 }
 
 export interface LegacyComparisonRowRecord extends LegacyComparisonRowInput {

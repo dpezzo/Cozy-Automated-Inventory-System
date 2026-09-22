@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, NavLink } from "react-router-dom";
+import { Routes, Route, Navigate, NavLink, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./AuthContext";
 import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
@@ -15,6 +15,15 @@ import { DataSizeAlert } from "./components/DataSizeAlert";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  // A run's review page (/runs/:runId) and a batch's detail page
+  // (/batches/:batchId) are both reached either from Home (start a new
+  // reconciliation) or from Run History (open an existing row) -- but
+  // either way they're drill-down views of a run or the batch it produced,
+  // so "Run History" is the section that owns them regardless of which
+  // page you clicked in from. NavLink's own prefix matching only covers
+  // /runs/*, not /batches/*, hence the explicit check here.
+  const runHistoryActive = location.pathname.startsWith("/runs") || location.pathname.startsWith("/batches");
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -28,7 +37,9 @@ function Shell({ children }: { children: React.ReactNode }) {
           <NavLink to="/" end>
             Home
           </NavLink>
-          <NavLink to="/runs">Run History</NavLink>
+          <NavLink to="/runs" className={() => (runHistoryActive ? "active" : "")}>
+            Run History
+          </NavLink>
           <NavLink to="/catalog">Miva Catalog</NavLink>
           <NavLink to="/audits">Audits &amp; Reviews</NavLink>
           {user?.role === "admin" && <NavLink to="/settings">Settings</NavLink>}

@@ -111,6 +111,8 @@ export interface RunSummary {
   total: number;
   byReviewClass: Record<string, number>;
   byDecisionStatus: Record<string, number>;
+  /** Keyed by MatchOutcome (MATCHED, MISSING - REVIEW REQUIRED, BLOCKED IDENTIFIER, etc.) -- a genuinely distinct dimension from reviewClass: e.g. a Miva-only orphan row (not in the vendor file) is MISSING - REVIEW REQUIRED regardless of whether it's CLEAN/BLOCKED/UNCHANGED. */
+  byMatchOutcome: Record<string, number>;
   changed: number;
   unchanged: number;
 }
@@ -119,13 +121,15 @@ export async function getRunSummary(runId: string): Promise<RunSummary> {
   const rows = await getRepository().listRunRows(runId);
   const byReviewClass: Record<string, number> = {};
   const byDecisionStatus: Record<string, number> = {};
+  const byMatchOutcome: Record<string, number> = {};
   let changed = 0;
   for (const { row, decision } of rows) {
     byReviewClass[row.reviewClass] = (byReviewClass[row.reviewClass] ?? 0) + 1;
     byDecisionStatus[decision.status] = (byDecisionStatus[decision.status] ?? 0) + 1;
+    byMatchOutcome[row.matchOutcome] = (byMatchOutcome[row.matchOutcome] ?? 0) + 1;
     if (row.changed) changed++;
   }
-  return { total: rows.length, byReviewClass, byDecisionStatus, changed, unchanged: rows.length - changed };
+  return { total: rows.length, byReviewClass, byDecisionStatus, byMatchOutcome, changed, unchanged: rows.length - changed };
 }
 
 /** Approve-all-clean: only eligible, changed, CLEAN, unlocked rows. Never touches warnings or blocked rows. */

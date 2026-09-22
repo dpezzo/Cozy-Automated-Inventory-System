@@ -210,14 +210,16 @@ export async function pushBatchToMiva(
   const pushed = results.filter((r) => r.success).length;
   const failed = results.length - pushed + (chunkError ? rows.length - results.length : 0);
 
+  const action =
+    chunkError !== undefined
+      ? "API_PUSH_PARTIAL_FAILURE"
+      : failed === 0 && verificationMismatches === 0
+        ? "API_PUSH_SUCCEEDED"
+        : "API_PUSH_FAILED";
+
   await repo.insertAuditLog({
     actorId: userId,
-    action:
-      chunkError !== undefined
-        ? "API_PUSH_PARTIAL_FAILURE"
-        : failed === 0 && verificationMismatches === 0
-          ? "API_PUSH_SUCCEEDED"
-          : "API_PUSH_FAILED",
+    action,
     entityType: "batch",
     entityId: batchId,
     details: {
@@ -230,6 +232,15 @@ export async function pushBatchToMiva(
       results: results.slice(0, MAX_RESULTS_IN_AUDIT_LOG),
     },
   });
+
+  // A rollback push restores pre-run values rather than reporting on the
+  // batch's own import, so it must never overwrite import_status -- Run
+  // History flags it separately via rolled_back_at instead.
+  if (target === "rollback") {
+    await repo.markBatchRolledBack(batchId);
+  } else {
+    await repo.updateBatchImportStatus(batchId, action);
+  }
 
   if (chunkError !== undefined) throw chunkError;
 

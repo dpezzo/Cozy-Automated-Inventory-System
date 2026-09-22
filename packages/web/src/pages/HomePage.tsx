@@ -374,8 +374,14 @@ export default function HomePage() {
           <div className="label">Batches awaiting import outcome</div>
         </div>
         <div className="stat">
-          <div className="value">{batches.filter((b) => b.importStatus === "VERIFICATION_FAILED").length}</div>
-          <div className="label">Batches with failed verification</div>
+          <div className="value">
+            {
+              batches.filter((b) =>
+                ["VERIFICATION_FAILED", "API_PUSH_FAILED", "API_PUSH_PARTIAL_FAILURE"].includes(b.importStatus),
+              ).length
+            }
+          </div>
+          <div className="label">Batches with failed verification or push</div>
         </div>
       </div>
 

@@ -3,9 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const findBatchById = vi.fn();
 const findFileById = vi.fn();
 const insertAuditLog = vi.fn();
+const updateBatchImportStatus = vi.fn();
+const markBatchRolledBack = vi.fn();
 
 vi.mock("../db", () => ({
-  getRepository: () => ({ findBatchById, findFileById, insertAuditLog }),
+  getRepository: () => ({ findBatchById, findFileById, insertAuditLog, updateBatchImportStatus, markBatchRolledBack }),
 }));
 
 describe("pushBatchToMiva production confirmation gate", () => {

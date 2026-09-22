@@ -81,6 +81,7 @@ export interface Repository {
   listBatchesForRun(runId: string): Promise<BatchRecord[]>;
   listAllBatches(): Promise<BatchRecord[]>;
   updateBatchImportStatus(batchId: string, status: string): Promise<void>;
+  markBatchRolledBack(batchId: string): Promise<void>;
 
   // Legacy comparison
   insertLegacyComparison(

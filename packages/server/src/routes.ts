@@ -19,6 +19,8 @@ import { parseMivaSnapshotCsv } from "./vendor/mivaCsv";
 import { createRun, getRunSummary, approveAllClean, setRowDecision, bulkDecision, getBatchableRows } from "./domain/runService";
 import { generateBatch } from "./domain/batchService";
 import { runLegacyComparison } from "./domain/legacyService";
+import { generateVendorExceptionReport } from "./domain/vendorExceptionReportService";
+import { VENDOR_EXCEPTION_CATEGORIES, type VendorExceptionCategory } from "@cozywinters/shared";
 import { runPostImportVerification } from "./domain/verificationService";
 import { pushBatchToMiva, resolveMivaPushEnvironment } from "./miva/mivaApiPush";
 import { listUsers, createUser, updateUser, deactivateUser } from "./domain/userService";
@@ -422,6 +424,25 @@ router.get(
   "/runs/:id/legacy-comparisons",
   asyncHandler(async (req, res) => {
     res.json(await getRepository().listLegacyComparisonsForRun(req.params.id!));
+  }),
+);
+
+router.post(
+  "/runs/:id/vendor-exception-report",
+  asyncHandler(async (req, res) => {
+    const { categories, format } = req.body as { categories?: string[]; format?: string };
+    const validKeys = new Set(Object.keys(VENDOR_EXCEPTION_CATEGORIES));
+    const selected = (categories ?? []).filter((c): c is VendorExceptionCategory => validKeys.has(c));
+    if ((categories ?? []).some((c) => !validKeys.has(c))) {
+      res.status(400).json({ error: "INVALID_REQUEST", message: "One or more categories are not recognized." });
+      return;
+    }
+    if (format !== undefined && format !== "csv" && format !== "xlsx") {
+      res.status(400).json({ error: "INVALID_REQUEST", message: "format must be 'csv' or 'xlsx'." });
+      return;
+    }
+    const file = await generateVendorExceptionReport(req.params.id!, req.session.userId!, selected, format);
+    res.status(201).json(file);
   }),
 );
 
