@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
+import { useTheme } from "../ThemeContext";
+import { ErrorBanner } from "../components/ErrorBanner";
 import { api, ApiRequestError } from "../api";
 
 declare global {
@@ -72,6 +74,7 @@ function GoogleSignInButton({ clientId, onError }: { clientId: string; onError: 
 
 export default function LoginPage() {
   const { user, login } = useAuth();
+  const { theme } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -105,16 +108,22 @@ export default function LoginPage() {
       <div className="card" style={{ width: 340 }}>
         <div className="brand" style={{ marginBottom: 16 }}>
           <div className="brand-logo">
-            <img src="/cozywinters-logo-light.png" alt="CozyWinters" />
+            <img
+              src={theme === "dark" ? "/cozywinters-logo-dark.png" : "/cozywinters-logo-light.png"}
+              alt="CozyWinters"
+            />
           </div>
           <div className="brand-subtitle">Automated Inventory System</div>
+          <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 8, marginBottom: 0 }}>
+            Reconcile vendor inventory files against your Miva store.
+          </p>
         </div>
-        {error && <div className="error-banner">{error}</div>}
+        {error && <ErrorBanner message={error} />}
 
         {googleClientId && (
           <>
             <GoogleSignInButton clientId={googleClientId} onError={setError} />
-            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "16px 0", color: "#94a3b8", fontSize: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "16px 0", color: "var(--muted-2)", fontSize: 12 }}>
               <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
               or
               <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
@@ -123,7 +132,7 @@ export default function LoginPage() {
         )}
 
         <form onSubmit={submit}>
-          <p style={{ color: "#64748b", fontSize: 13 }}>Sign in with your email and password.</p>
+          <p style={{ color: "var(--muted)", fontSize: 13 }}>Sign in with your email and password.</p>
           <div style={{ marginBottom: 12 }}>
             <label>
               Email

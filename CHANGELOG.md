@@ -2,6 +2,34 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-09-23 — CozyWinters brand restyle, dark mode, icon pass, and novice-usability UX pass
+
+### Added
+
+**Brand restyle + dark mode**
+- Full re-theme around the CozyWinters brand (colors pixel-sampled from the actual logo files), replacing the generic blue admin-tool palette. New CSS custom-property token set (`styles.css`) covers light and dark themes, including re-tokenized status colors, surfaces, and shadows.
+- Dark mode with a sidebar toggle: detects OS preference on first visit, persists an explicit user choice to `localStorage`, and applies before first paint (no flash-of-wrong-theme). Brand logo swaps to the dark variant automatically.
+- Adopted `lucide-react` as a real dependency (replacing an initial hand-drawn-SVG icon set) and added icons across the whole app: sidebar nav, Settings tiles (3-across grid with icon badges), section headings, primary action buttons, non-tabular status badges, and shared components (`UploadBox`, `InstructionsCard`, `DataSizeAlert`, new `ErrorBanner`). Deliberately left dense per-row table pills and config forms icon-free.
+- Zebra-striped table rows (`tbody tr:nth-child(even)`) app-wide for readability on large tables.
+- Temporary owner-decision switchers (Home page name: "Home" vs "Run Reconciliation"; Catalog Data layout: Tabs vs Side-by-side) — still live pending a final call, not yet removed.
+
+**Novice-usability pass** (informed by a full audit of every page for a first-time employee with no inventory-domain knowledge)
+- Centralized friendly error messages (`lib/errors.ts`) — removed raw `CODE: message` strings shown to users in several places.
+- Run Review: tooltips on the Class/Outcome columns and the "(frozen)" decision suffix explaining what they mean and why BLOCKED rows have no action buttons. Confirmation dialogs added to "Approve all clean," "Reject selected," and "Generate batch" (previously zero friction on actions affecting many rows at once).
+- Batch Detail: confirmation dialog before a live Miva push (states target and destination); tooltips on the four "Mark ..." import-outcome buttons.
+- Vendor/user deactivation now requires confirmation (vendor deactivation previously had none, despite being unreversible from the UI).
+- Humanized raw enum values shown in the UI (Audits & Reviews' class filters/pills and Activity Log actions/entities; previously showed constants like `UNEXPLAINED_DIFFERENCE` directly). Added GTIN/MPN column tooltips on the Catalog page.
+- New in-app Glossary (sidebar "?" button) defining the ten most-used domain terms in plain language; one-line orientation copy added to the Login page (previously had none); Home page instructions extended to describe the full workflow instead of stopping after "start reconciliation."
+- `InstructionsCard`'s collapsed/expanded state is now remembered per user instead of per browser, so one person collapsing it on a shared machine no longer hides it from the next person who signs in there.
+
+**Batch Detail page restructure**
+- Vendor added to the top summary strip (previously showed Run/Import status/Created only, with no indication of which vendor the batch belonged to).
+- "Push to Miva via API" and the CSV downloads are now tabs in one card instead of two separately stacked cards, defaulting to the API tab (the recommended path). "Import outcome" and "Post-import verification" moved under the CSV tab, since both are artifacts of the manual-import path — an API push already reports its own pushed/failed/verification-mismatch counts. "Immutable generated files" heading simplified to "Downloadable files."
+- Instructions/wording pass on Home, Run History, and Batch Detail to remove phrasing that implied one action (e.g. "generate a batch," "open a batch") automatically performed a separate one (e.g. "send to Miva," "push via API").
+
+### Fixed
+- **Crash on opening any run whose summary lacked `byMatchOutcome`** (`Cannot read properties of undefined`, blanking the whole page) — root cause was a stale compiled server build that predated the `byMatchOutcome` field already present in source; fixed by rebuilding `packages/server`. Added defensive optional-chaining around the run-summary stat grid regardless, so a similar mismatch degrades to showing `0` instead of crashing.
+
 ## 2026-09-22 — Batch push status tracking, Run History/Run Review overhaul, Legacy comparison detail, and Vendor Exception Report
 
 ### Added

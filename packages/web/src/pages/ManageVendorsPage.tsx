@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Truck, Plus, CheckCircle2, XCircle, Pencil, X, Ban, RefreshCw } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { api, ApiRequestError, type VendorConfig, type CreateVendorInput } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { ErrorBanner } from "../components/ErrorBanner";
 
 function parseAllowlist(text: string): string[] {
   return text
@@ -50,7 +52,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
 
   return (
     <form onSubmit={submit} style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
-      {error && <div className="error-banner">{error}</div>}
+      {error && <ErrorBanner message={error} />}
       <div className="grid cols-2">
         <label>
           Vendor label
@@ -200,7 +202,7 @@ function AddVendorForm({
 
   return (
     <form onSubmit={submit}>
-      {error && <div className="error-banner">{error}</div>}
+      {error && <ErrorBanner message={error} />}
 
       <div className="grid cols-2">
         <label>
@@ -305,7 +307,7 @@ function AddVendorForm({
             <div
               style={{
                 fontSize: 13,
-                background: "#f8fafc",
+                background: "var(--panel-2)",
                 border: "1px solid var(--border)",
                 borderRadius: 8,
                 padding: "10px 12px",
@@ -332,7 +334,7 @@ function AddVendorForm({
               </select>
             </label>
             <button type="button" onClick={onReloadPlugins} style={{ marginTop: 8 }}>
-              Reload plugin files
+              <RefreshCw size={14} /> Reload plugin files
             </button>
           </div>
         )}
@@ -389,6 +391,7 @@ export default function ManageVendorsPage() {
   // spec (a deactivated vendor is expected to be re-created or restored by a
   // developer, not casually flipped back on).
   async function deactivate(v: VendorConfig) {
+    if (!window.confirm(`Deactivate vendor "${v.vendorLabel}"? This cannot be undone from this screen.`)) return;
     setBusyKey(v.vendorKey);
     setError(null);
     try {
@@ -413,10 +416,12 @@ export default function ManageVendorsPage() {
         </Link>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2>Manage Vendors</h2>
+        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Truck size={20} /> Manage Vendors
+        </h2>
         {!showAddVendor && (
           <button className="primary" onClick={() => setShowAddVendor(true)}>
-            + Add vendor
+            <Plus size={16} /> Add vendor
           </button>
         )}
       </div>
@@ -428,7 +433,7 @@ export default function ManageVendorsPage() {
           "Edit or deactivate an existing vendor from the table below.",
         ]}
       />
-      {error && <div className="error-banner">{error}</div>}
+      {error && <ErrorBanner message={error} />}
 
       <div className="card">
         <h3>Vendors</h3>
@@ -466,23 +471,28 @@ export default function ManageVendorsPage() {
                   <td>
                     <span
                       style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
                         fontSize: 12,
                         padding: "2px 8px",
                         borderRadius: 999,
-                        background: v.isActive ? "#dcfce7" : "#f1f5f9",
-                        color: v.isActive ? "#166534" : "#64748b",
+                        background: v.isActive ? "var(--green-soft)" : "var(--panel-2)",
+                        color: v.isActive ? "var(--green)" : "var(--muted)",
                       }}
                     >
+                      {v.isActive ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
                       {v.isActive ? "Active" : "Inactive"}
                     </span>
                   </td>
                   <td>
                     <button onClick={() => setEditingKey(editingKey === v.vendorKey ? null : v.vendorKey)}>
+                      {editingKey === v.vendorKey ? <X size={14} /> : <Pencil size={14} />}
                       {editingKey === v.vendorKey ? "Close" : "Edit"}
                     </button>
                     {v.isActive && (
                       <button className="danger" disabled={busyKey === v.vendorKey} onClick={() => deactivate(v)} style={{ marginLeft: 8 }}>
-                        Deactivate
+                        <Ban size={14} /> Deactivate
                       </button>
                     )}
                   </td>

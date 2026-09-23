@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Download, Play, AlertTriangle } from "lucide-react";
 import {
   api,
   ApiRequestError,
@@ -11,8 +12,11 @@ import {
   type VendorSummary,
 } from "../api";
 import { useUploadControl, UploadControlView, WholeCardDropzone } from "../components/UploadBox";
+import { friendlyError } from "../lib/errors";
 import { StepBadge } from "../components/StepBadge";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { HOME_LABEL_OPTIONS, useHomeLabel } from "../HomeLabelContext";
+import { ErrorBanner } from "../components/ErrorBanner";
 
 /** Same shape as useUploadControl, but for the single vendor-file upload area -- the vendor is detected server-side from the file's content, never picked via a tab. */
 function useVendorAutoUploadControl(onUploaded: (file: FileRecord) => void) {
@@ -36,7 +40,7 @@ function useVendorAutoUploadControl(onUploaded: (file: FileRecord) => void) {
       }
       onUploaded(result.file);
     } catch (err) {
-      setMessage(err instanceof ApiRequestError ? `${err.body.error}: ${err.body.message}` : "Upload failed.");
+      setMessage(friendlyError(err, "Upload failed."));
     } finally {
       setBusy(false);
     }
@@ -60,7 +64,7 @@ function MivaApiPullControl({ onPulled }: { onPulled: (file: FileRecord) => void
       );
       onPulled(result.file);
     } catch (err) {
-      setMessage(err instanceof ApiRequestError ? `${err.body.error}: ${err.body.message}` : "Pull failed.");
+      setMessage(friendlyError(err, "Pull failed."));
     } finally {
       setBusy(false);
     }
@@ -69,11 +73,11 @@ function MivaApiPullControl({ onPulled }: { onPulled: (file: FileRecord) => void
   return (
     <div>
       <h4 style={{ marginTop: 0 }}>Pull Miva catalog snapshot via API</h4>
-      <p style={{ fontSize: 13, color: "#64748b", marginTop: -4 }}>
+      <p style={{ fontSize: 13, color: "var(--muted)", marginTop: -4 }}>
         Fetches the full current catalog directly from Miva instead of a manual CSV export.
       </p>
       <button className="charcoal" onClick={pull} disabled={busy}>
-        {busy ? "Pulling..." : "Pull from Miva API"}
+        <Download size={16} /> {busy ? "Pulling..." : "Pull from Miva API"}
       </button>
       {message && <p style={{ fontSize: 13, marginTop: 8 }}>{message}</p>}
     </div>
@@ -270,6 +274,7 @@ function MivaCatalogDataSection({
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { homeLabel, setHomeLabel } = useHomeLabel();
   const [vendorFiles, setVendorFiles] = useState<FileRecord[]>([]);
   const [mivaFiles, setMivaFiles] = useState<FileRecord[]>([]);
   const [selectedVendorFile, setSelectedVendorFile] = useState<string>("");
@@ -347,16 +352,26 @@ export default function HomePage() {
 
   return (
     <div>
-      <h2>Home</h2>
-      {error && <div className="error-banner">{error}</div>}
+      <h2>{homeLabel}</h2>
+      <div className="layout-switcher">
+        Page name:
+        {HOME_LABEL_OPTIONS.map((label) => (
+          <button key={label} className={homeLabel === label ? "active" : ""} onClick={() => setHomeLabel(label)}>
+            {label}
+          </button>
+        ))}
+        <span>(temporary -- tell me which name to keep)</span>
+      </div>
+      {error && <ErrorBanner message={error} />}
 
       <InstructionsCard
         pageKey="home"
         description="Run a reconciliation by working through the three steps below."
         steps={[
           "Upload the vendor's inventory file (or a file for any of the supported vendors).",
-          "Upload a Miva catalog snapshot, or pull one directly from the Miva API.",
+          "Upload a Miva catalog snapshot, pull one via API, or reuse one you already pulled earlier today (e.g. for another vendor) from the dropdown below.",
           "Select both files and start reconciliation to generate a review.",
+          "On the next page, review the proposed changes, approve or reject them, and generate a batch -- you'll push it to Miva from there.",
         ]}
       />
 
@@ -432,9 +447,12 @@ export default function HomePage() {
         {(!selectedVendorFile || !selectedMiva) && (
           <p
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
               fontSize: 13,
-              color: "#92400e",
-              background: "#fffbeb",
+              color: "var(--amber)",
+              background: "var(--amber-soft)",
               border: "1px dashed var(--amber)",
               borderRadius: 8,
               padding: "8px 12px",
@@ -442,6 +460,7 @@ export default function HomePage() {
               marginBottom: 0,
             }}
           >
+            <AlertTriangle size={16} style={{ flex: "none" }} />
             Still needed:{" "}
             {[!selectedVendorFile && "Vendor inventory data (Step 1)", !selectedMiva && "Miva catalog data (Step 2)"]
               .filter(Boolean)
@@ -455,7 +474,7 @@ export default function HomePage() {
           disabled={!selectedVendorFile || !selectedMiva || starting}
           onClick={() => startReconciliation()}
         >
-          {starting ? "Starting..." : "Start reconciliation"}
+          <Play size={16} /> {starting ? "Starting..." : "Start reconciliation"}
         </button>
       </div>
     </div>

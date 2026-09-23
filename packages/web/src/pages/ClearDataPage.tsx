@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { api, ApiRequestError, type ClearDataCounts, type ClearDataResult, type DataStats } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { ErrorBanner } from "../components/ErrorBanner";
 import { formatBytes } from "../lib/format";
 import { useAuth } from "../AuthContext";
 
@@ -108,12 +110,12 @@ function AlertThresholdEditor({ stats, onSaved }: { stats: DataStats | null; onS
   return (
     <div className="card">
       <h3>Storage alert threshold</h3>
-      <p style={{ fontSize: 13, color: "#64748b" }}>
+      <p style={{ fontSize: 13, color: "var(--muted)" }}>
         Every signed-in user sees a storage alert once either number below is reached. Currently:{" "}
         {stats ? `${stats.reconciliationRows.toLocaleString()} rows, ${formatBytes(stats.totalFileBytes)} of files` : "loading..."}
         . Lowering a value below the current count is a quick way to preview the alert.
       </p>
-      {error && <div className="error-banner">{error}</div>}
+      {error && <ErrorBanner message={error} />}
       <div className="toolbar">
         <label>
           Reconciliation rows:{" "}
@@ -129,7 +131,7 @@ function AlertThresholdEditor({ stats, onSaved }: { stats: DataStats | null; onS
         <button onClick={resetToDefault} disabled={saving || resetting} style={{ marginLeft: 8 }} title="Reset to 250,000 rows / 500 MB">
           {resetting ? "Resetting..." : "Reset to default"}
         </button>
-        {message && <span style={{ marginLeft: 12, fontSize: 13, color: "#64748b" }}>{message}</span>}
+        {message && <span style={{ marginLeft: 12, fontSize: 13, color: "var(--muted)" }}>{message}</span>}
       </div>
     </div>
   );
@@ -184,7 +186,9 @@ export default function ClearDataPage() {
 
   return (
     <div>
-      <h2>Clear Data</h2>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Trash2 size={20} /> Clear Data
+      </h2>
       <InstructionsCard
         pageKey="clear-data"
         description="Permanently deletes runs and everything generated from them -- reconciliation rows, decisions, batches, legacy comparisons, post-import verifications -- along with the uploaded and generated files that only those runs used. Users, vendor configuration, and the activity log are never touched. This cannot be undone."
@@ -219,18 +223,22 @@ export default function ClearDataPage() {
         </div>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <ErrorBanner message={error} />}
 
       {result && (
         <div className="card">
-          <h3>Cleared</h3>
+          <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <CheckCircle2 size={16} /> Cleared
+          </h3>
           <CountsSummary counts={result} />
         </div>
       )}
 
       {!result && preview && (
         <div className="card">
-          <h3>This will delete</h3>
+          <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <AlertTriangle size={16} /> This will delete
+          </h3>
           {preview.runs === 0 ? (
             <p>Nothing matches this scope -- there is nothing to clear.</p>
           ) : (
@@ -248,7 +256,7 @@ export default function ClearDataPage() {
                   style={{ width: 200 }}
                 />
                 <button className="danger" onClick={runClear} disabled={busy || confirmText !== CONFIRM_PHRASE}>
-                  {busy ? "Clearing..." : "Clear Data"}
+                  <Trash2 size={16} /> {busy ? "Clearing..." : "Clear Data"}
                 </button>
               </div>
             </>

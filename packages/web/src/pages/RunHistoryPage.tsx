@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { Search, Undo2 } from "lucide-react";
 import { api, type RunRecord, type BatchRecord, type VendorSummary } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { importStatusPillClass, runStatusPillClass } from "../lib/format";
@@ -91,17 +92,20 @@ export default function RunHistoryPage() {
         steps={[
           "Search by run ID, status, or rule to find a specific run.",
           "Open a run to review its rows, approve or reject changes, and generate a batch.",
-          "Open a batch to download its CSVs, push it to Miva, or record the import outcome.",
+          "Open a batch, then push it to Miva via API (the default method) or download its CSVs as a backup -- and record the import outcome from there.",
         ]}
       />
       <div className="filters">
-        <input
-          type="text"
-          placeholder="Search by run ID, status, or rule"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ width: 320 }}
-        />
+        <div className="search-input">
+          <Search size={14} />
+          <input
+            type="text"
+            placeholder="Search by run ID, status, or rule"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 320 }}
+          />
+        </div>
       </div>
       <div className="card" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         <h3>Runs</h3>
@@ -153,13 +157,13 @@ export default function RunHistoryPage() {
                         <>
                           <Link to={`/batches/${latestBatch.id}`}>{latestBatch.id.slice(0, 8)}</Link>
                           {runBatches.length > 1 && (
-                            <span style={{ marginLeft: 4, fontSize: 12, color: "#64748b" }}>
+                            <span style={{ marginLeft: 4, fontSize: 12, color: "var(--muted)" }}>
                               +{runBatches.length - 1}
                             </span>
                           )}
                         </>
                       ) : (
-                        <span style={{ color: "#94a3b8" }}>Not batched</span>
+                        <span style={{ color: "var(--muted-2)" }}>Not batched</span>
                       )}
                     </td>
                     <td>
@@ -169,9 +173,11 @@ export default function RunHistoryPage() {
                             {latestBatch.importStatus}
                           </span>
                           {latestBatch.rolledBackAt && (
-                            <span title={`Rolled back ${new Date(latestBatch.rolledBackAt).toLocaleString()}`}>
-                              {" "}
-                              ↩
+                            <span
+                              title={`Rolled back ${new Date(latestBatch.rolledBackAt).toLocaleString()}`}
+                              style={{ display: "inline-flex", verticalAlign: "middle", marginLeft: 4 }}
+                            >
+                              <Undo2 size={14} />
                             </span>
                           )}
                         </>
@@ -221,7 +227,12 @@ export default function RunHistoryPage() {
                     <td>
                       <span className={`pill ${importStatusPillClass(b.importStatus)}`}>{b.importStatus}</span>
                       {b.rolledBackAt && (
-                        <span title={`Rolled back ${new Date(b.rolledBackAt).toLocaleString()}`}> ↩</span>
+                        <span
+                          title={`Rolled back ${new Date(b.rolledBackAt).toLocaleString()}`}
+                          style={{ display: "inline-flex", verticalAlign: "middle", marginLeft: 4 }}
+                        >
+                          <Undo2 size={14} />
+                        </span>
                       )}
                     </td>
                     <td title={run ? vendorLabelForRuleId(run.ruleId) : undefined}>

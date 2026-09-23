@@ -1,20 +1,23 @@
 import { useState } from "react";
+import { Info, ChevronRight, ChevronUp } from "lucide-react";
+import { useAuth } from "../AuthContext";
 
-function storageKeyFor(pageKey: string): string {
-  return `cw-instructions-collapsed-${pageKey}`;
+/** Keyed per user (not just per page) so one person collapsing this on a shared/kiosk machine doesn't hide it from the next person who signs in there -- including a brand-new hire. */
+function storageKeyFor(pageKey: string, userId: string | undefined): string {
+  return `cw-instructions-collapsed-${pageKey}-${userId ?? "anon"}`;
 }
 
-function loadCollapsed(pageKey: string): boolean {
+function loadCollapsed(pageKey: string, userId: string | undefined): boolean {
   try {
-    return localStorage.getItem(storageKeyFor(pageKey)) === "1";
+    return localStorage.getItem(storageKeyFor(pageKey, userId)) === "1";
   } catch {
     return false;
   }
 }
 
-function saveCollapsed(pageKey: string, collapsed: boolean) {
+function saveCollapsed(pageKey: string, userId: string | undefined, collapsed: boolean) {
   try {
-    localStorage.setItem(storageKeyFor(pageKey), collapsed ? "1" : "0");
+    localStorage.setItem(storageKeyFor(pageKey, userId), collapsed ? "1" : "0");
   } catch {
     // per-viewer convenience only -- fine to silently skip if storage is unavailable
   }
@@ -27,12 +30,13 @@ function saveCollapsed(pageKey: string, collapsed: boolean) {
  * doesn't take up space once you already know how the page works.
  */
 export function InstructionsCard({ pageKey, description, steps }: { pageKey: string; description?: string; steps?: string[] }) {
-  const [collapsed, setCollapsed] = useState(() => loadCollapsed(pageKey));
+  const { user } = useAuth();
+  const [collapsed, setCollapsed] = useState(() => loadCollapsed(pageKey, user?.id));
 
   function toggle() {
     setCollapsed((prev) => {
       const next = !prev;
-      saveCollapsed(pageKey, next);
+      saveCollapsed(pageKey, user?.id, next);
       return next;
     });
   }
@@ -40,7 +44,7 @@ export function InstructionsCard({ pageKey, description, steps }: { pageKey: str
   if (collapsed) {
     return (
       <button type="button" className="card intro-card intro-collapsed" onClick={toggle}>
-        ▸ Instructions
+        <Info size={16} /> Instructions <ChevronRight size={14} />
       </button>
     );
   }
@@ -59,7 +63,7 @@ export function InstructionsCard({ pageKey, description, steps }: { pageKey: str
           )}
         </div>
         <button type="button" className="intro-toggle" onClick={toggle}>
-          ▾ Hide
+          <ChevronUp size={14} /> Hide
         </button>
       </div>
     </div>

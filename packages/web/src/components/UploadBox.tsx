@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { api, ApiRequestError, type FileRecord } from "../api";
+import { Upload } from "lucide-react";
+import { api, type FileRecord } from "../api";
+import { friendlyError } from "../lib/errors";
 
 /** Upload state + submit logic, shared between a field-level dropzone and a whole-card dropzone around it. */
 export function useUploadControl(kind: string, onUploaded: (file: FileRecord) => void) {
@@ -21,7 +23,7 @@ export function useUploadControl(kind: string, onUploaded: (file: FileRecord) =>
       }
       onUploaded(result.file);
     } catch (err) {
-      setMessage(err instanceof ApiRequestError ? `${err.body.error}: ${err.body.message}` : "Upload failed.");
+      setMessage(friendlyError(err, "Upload failed."));
     } finally {
       setBusy(false);
     }
@@ -49,7 +51,7 @@ export function UploadControlView({
   return (
     <div>
       <h4 style={{ marginTop: 0 }}>{label}</h4>
-      {hint && <p style={{ fontSize: 13, color: "#64748b", marginTop: -4 }}>{hint}</p>}
+      {hint && <p style={{ fontSize: 13, color: "var(--muted)", marginTop: -4 }}>{hint}</p>}
       <label
         htmlFor={inputId}
         className={`dropzone${dragging ? " dragging" : ""}${busy ? " busy" : ""}`}
@@ -77,6 +79,7 @@ export function UploadControlView({
             e.target.value = "";
           }}
         />
+        <Upload size={16} />
         <span>{busy ? "Uploading..." : "Drag a file here, or click to browse"}</span>
       </label>
       {pendingDuplicateFile && (

@@ -1,15 +1,30 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { ClipboardCheck, GitCompare, History, SearchX, Inbox, ChevronDown, ChevronRight } from "lucide-react";
 import { api, type AuditLogRecord, type FileRecord, type RunRecord, type LegacyComparisonRow, type LegacyComparisonValues } from "../api";
 import { UploadBox } from "../components/UploadBox";
 import { StepHeader } from "../components/StepBadge";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { ErrorBanner } from "../components/ErrorBanner";
 import { useAuth } from "../AuthContext";
 import { loadFromStorage, saveToStorage } from "../lib/storage";
+import { friendlyError } from "../lib/errors";
 
 const DIFF_HIDDEN_COLUMNS_KEY = "cw-legacydiff-hidden-columns-v1";
 
 const COMPARISON_CLASS_FILTERS = ["EXACT_MATCH", "APPROVED_DEVIATION", "UNEXPLAINED_DIFFERENCE", "NOT_COMPARABLE"];
+
+const COMPARISON_CLASS_LABELS: Record<string, string> = {
+  EXACT_MATCH: "Exact match",
+  APPROVED_DEVIATION: "Approved deviation",
+  UNEXPLAINED_DIFFERENCE: "Unexplained difference",
+  NOT_COMPARABLE: "Not comparable",
+};
+
+/** Turns a raw SNAKE_CASE constant (e.g. an activity-log action or entity type) into readable text -- "RUN_CREATED" -> "Run created". Not a curated per-value map since new action types get added on the server over time; this keeps every value at least readable without needing to keep a list in sync. */
+function humanize(value: string): string {
+  return value.toLowerCase().replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
 
 const COMPARISON_CLASS_PILL: Record<string, string> = {
   EXACT_MATCH: "clean",
@@ -120,7 +135,11 @@ const DIFF_COLUMNS: DiffColumnDef[] = [
     label: "Class",
     group: "",
     title: "Computed classification for this row.",
-    render: (r) => <span className={`pill ${COMPARISON_CLASS_PILL[r.comparison_class] ?? "pending"}`}>{r.comparison_class}</span>,
+    render: (r) => (
+      <span className={`pill ${COMPARISON_CLASS_PILL[r.comparison_class] ?? "pending"}`}>
+        {COMPARISON_CLASS_LABELS[r.comparison_class] ?? r.comparison_class}
+      </span>
+    ),
   },
   {
     key: "deviation",
@@ -221,8 +240,8 @@ function LegacyComparisonSection() {
     try {
       const result = await api.runLegacyComparison(selectedRun, selectedLegacy);
       setRows(result.rows);
-    } catch {
-      setError("Legacy comparison failed.");
+    } catch (err) {
+      setError(friendlyError(err, "Legacy comparison failed."));
     } finally {
       setBusy(false);
     }
@@ -348,7 +367,7 @@ function LegacyComparisonSection() {
         </div>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <ErrorBanner message={error} />}
 
       <div className="card">
         <StepHeader step={3} complete={Boolean(legacyResult)} title="Run legacy comparison" />
@@ -365,7 +384,7 @@ function LegacyComparisonSection() {
             Run legacy comparison
           </button>
         </div>
-        {!selectedRun && <p style={{ fontSize: 13, color: "#64748b" }}>Select a run above first.</p>}
+        {!selectedRun && <p style={{ fontSize: 13, color: "var(--muted)" }}>Select a run above first.</p>}
         {legacyResult && (
           <div className="grid cols-4">
             <div className="stat">
@@ -390,12 +409,15 @@ function LegacyComparisonSection() {
 
       {rows && (
         <div className="card">
-          <h3>Differences</h3>
+          <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <GitCompare size={16} /> Differences
+          </h3>
           <div className="filters">
             <span style={{ fontWeight: 700 }}>Class:</span>
             {COMPARISON_CLASS_FILTERS.map((c) => (
               <label key={c}>
-                <input type="checkbox" checked={classFilter.includes(c)} onChange={() => toggleClassFilter(c)} /> {c}
+                <input type="checkbox" checked={classFilter.includes(c)} onChange={() => toggleClassFilter(c)} />{" "}
+                {COMPARISON_CLASS_LABELS[c]}
               </label>
             ))}
             <input
@@ -437,14 +459,14 @@ function LegacyComparisonSection() {
                 </div>
               )}
             </div>
-            <span style={{ marginLeft: "auto", color: "#64748b", whiteSpace: "nowrap" }}>
+            <span style={{ marginLeft: "auto", color: "var(--muted)", whiteSpace: "nowrap" }}>
               Showing {filteredRows.length} of {rows.length} row{rows.length === 1 ? "" : "s"}
             </span>
           </div>
           <div className="table-scroll" style={{ maxHeight: 500 }}>
             <table>
               <thead>
-                <tr style={{ fontSize: 11, color: "#64748b" }}>
+                <tr style={{ fontSize: 11, color: "var(--muted)" }}>
                   <th></th>
                   {diffHeaderRuns.map((run, i) => (
                     <th key={i} colSpan={run.span}>
@@ -474,7 +496,7 @@ function LegacyComparisonSection() {
                             style={{ border: "none", background: "none", cursor: "pointer", padding: 0, fontSize: 12 }}
                             aria-label={expanded ? "Collapse row detail" : "Expand row detail"}
                           >
-                            {expanded ? "▾" : "▸"}
+                            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                           </button>
                         </td>
                         {visibleDiffColumns.map((col) => (
@@ -523,8 +545,10 @@ function LegacyComparisonSection() {
                 })}
                 {filteredRows.length === 0 && (
                   <tr>
-                    <td colSpan={visibleDiffColumns.length + 1} style={{ color: "#64748b" }}>
-                      No rows match the current filters.
+                    <td colSpan={visibleDiffColumns.length + 1} style={{ color: "var(--muted)" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <SearchX size={16} /> No rows match the current filters.
+                      </span>
                     </td>
                   </tr>
                 )}
@@ -589,7 +613,9 @@ function ActivityLogSection() {
 
   return (
     <div className="card">
-      <h3>Activity log</h3>
+      <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <History size={16} /> Activity log
+      </h3>
       <div className="filters">
         <input
           type="text"
@@ -598,7 +624,7 @@ function ActivityLogSection() {
           onChange={(e) => setSearch(e.target.value)}
           style={{ width: 320 }}
         />
-        <span style={{ marginLeft: "auto", color: "#64748b" }}>
+        <span style={{ marginLeft: "auto", color: "var(--muted)" }}>
           Showing {filtered.length} of {entries.length} most recent event{entries.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -618,17 +644,19 @@ function ActivityLogSection() {
               <tr key={e.id}>
                 <td>{new Date(e.createdAt).toLocaleString()}</td>
                 <td>{e.actorEmail ?? "—"}</td>
-                <td>{e.action}</td>
-                <td title={e.entityId ?? ""}>{e.entityType}</td>
-                <td style={{ fontSize: 12, color: "#64748b" }}>
+                <td title={e.action}>{humanize(e.action)}</td>
+                <td title={e.entityId ?? e.entityType}>{humanize(e.entityType)}</td>
+                <td style={{ fontSize: 12, color: "var(--muted)" }}>
                   {Object.keys(e.details).length > 0 ? JSON.stringify(e.details) : "-"}
                 </td>
               </tr>
             ))}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ color: "#64748b" }}>
-                  No activity recorded yet.
+                <td colSpan={5} style={{ color: "var(--muted)" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Inbox size={16} /> No activity recorded yet.
+                  </span>
                 </td>
               </tr>
             )}
@@ -648,7 +676,9 @@ export default function AuditsReviewsPage() {
 
   return (
     <div>
-      <h2>Audits &amp; Reviews</h2>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <ClipboardCheck size={20} /> Audits &amp; Reviews
+      </h2>
       <InstructionsCard
         pageKey="audits"
         description="A dedicated home for one-time or periodic checks that fall outside the regular reconciliation workflow."

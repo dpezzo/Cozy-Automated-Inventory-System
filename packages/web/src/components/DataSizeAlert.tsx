@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { AlertTriangle, ChevronRight, ChevronUp } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { api, type DataStats } from "../api";
 import { formatBytes } from "../lib/format";
@@ -28,7 +29,7 @@ export function DataSizeAlert() {
   if (collapsed) {
     return (
       <button type="button" className="card size-alert-card size-alert-collapsed" onClick={() => setCollapsed(false)}>
-        ▸ Storage alert
+        <AlertTriangle size={16} /> Storage alert <ChevronRight size={14} />
       </button>
     );
   }
@@ -39,18 +40,21 @@ export function DataSizeAlert() {
     <div className="card size-alert-card">
       <div className="intro-header">
         <div>
-          <p className="intro-description">
-            This deployment's stored data is getting large -- {stats.reconciliationRows.toLocaleString()} reconciliation rows,{" "}
+          <p className="intro-description" style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <AlertTriangle size={16} style={{ flex: "none", marginTop: 2 }} />
+            <span>
+              This deployment's stored data is getting large -- {stats.reconciliationRows.toLocaleString()} reconciliation rows,{" "}
             {formatBytes(stats.totalFileBytes)} of files.{" "}
             {isAdmin ? (
               <Link to="/settings/clear-data">Clear old data in Settings →</Link>
             ) : (
               "Ask an admin to clear old data from Settings."
             )}
+            </span>
           </p>
         </div>
         <button type="button" className="intro-toggle" onClick={() => setCollapsed(true)}>
-          ▾ Hide
+          <ChevronUp size={14} /> Hide
         </button>
       </div>
     </div>

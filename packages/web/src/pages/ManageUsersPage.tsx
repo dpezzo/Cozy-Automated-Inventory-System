@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Users, UserPlus, CheckCircle2, XCircle, Pencil, UserX, UserCheck } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { api, ApiRequestError, type UserAccount } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { ErrorBanner } from "../components/ErrorBanner";
 
 export default function ManageUsersPage() {
   const { user: currentUser } = useAuth();
@@ -60,6 +62,7 @@ export default function ManageUsersPage() {
   }
 
   async function toggleActive(u: UserAccount) {
+    if (u.isActive && !window.confirm(`Deactivate ${u.email}? They will immediately lose access.`)) return;
     setBusyId(u.id);
     setError(null);
     try {
@@ -127,10 +130,12 @@ export default function ManageUsersPage() {
         </Link>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2>Manage Users</h2>
+        <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Users size={20} /> Manage Users
+        </h2>
         {!showAddUser && (
           <button className="primary" onClick={() => setShowAddUser(true)}>
-            + Add user
+            <UserPlus size={16} /> Add user
           </button>
         )}
       </div>
@@ -143,7 +148,7 @@ export default function ManageUsersPage() {
           "Change a user's role or deactivate their account from the table below.",
         ]}
       />
-      {error && <div className="error-banner">{error}</div>}
+      {error && <ErrorBanner message={error} />}
 
       <div className="card">
         <h3>Users</h3>
@@ -187,13 +192,17 @@ export default function ManageUsersPage() {
                   <td>
                     <span
                       style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
                         fontSize: 12,
                         padding: "2px 8px",
                         borderRadius: 999,
-                        background: u.isActive ? "#dcfce7" : "#f1f5f9",
-                        color: u.isActive ? "#166534" : "#64748b",
+                        background: u.isActive ? "var(--green-soft)" : "var(--panel-2)",
+                        color: u.isActive ? "var(--green)" : "var(--muted)",
                       }}
                     >
+                      {u.isActive ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
                       {u.isActive ? "Active" : "Inactive"}
                     </span>
                   </td>
@@ -202,7 +211,7 @@ export default function ManageUsersPage() {
                       disabled={busyId === u.id || editingId === u.id}
                       onClick={() => startEdit(u)}
                     >
-                      Edit
+                      <Pencil size={14} /> Edit
                     </button>{" "}
                     <button
                       className={u.isActive ? "danger" : ""}
@@ -210,6 +219,7 @@ export default function ManageUsersPage() {
                       onClick={() => toggleActive(u)}
                       title={isSelf ? "You cannot deactivate your own account" : undefined}
                     >
+                      {u.isActive ? <UserX size={14} /> : <UserCheck size={14} />}
                       {u.isActive ? "Deactivate" : "Reactivate"}
                     </button>
                   </td>

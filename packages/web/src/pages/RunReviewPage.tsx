@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { CheckCheck, Check, X, FileOutput, Download, Search, Undo2, ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   api,
-  ApiRequestError,
   type RunRecord,
   type RunSummary,
   type ReviewRowView,
@@ -11,7 +11,9 @@ import {
   type VendorSummary,
 } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { ErrorBanner } from "../components/ErrorBanner";
 import { importStatusPillClass, runStatusPillClass } from "../lib/format";
+import { friendlyError } from "../lib/errors";
 
 const REVIEW_CLASS_FILTERS = ["CLEAN", "WARNING", "BLOCKED", "UNCHANGED"];
 const DECISION_FILTERS = ["PENDING", "APPROVED", "APPROVED_WARNING_ACK", "REJECTED"];
@@ -46,14 +48,24 @@ interface ColumnDef {
   key: string;
   label: string;
   get: (v: ReviewRowView) => string;
+  title?: string;
 }
+
+const CLASS_TOOLTIP =
+  "CLEAN: no issues, can be approved directly. WARNING: unusual data -- review before approving. BLOCKED: has a data problem and can't be approved (see Warnings/Blockers) -- contact an admin. UNCHANGED: nothing to update, no action needed.";
 
 const BASE_COLUMNS: ColumnDef[] = [
   { key: "productCode", label: "Product code", get: (v) => v.row.productCode ?? "" },
   { key: "itemNo", label: "Item No", get: (v) => v.row.itemNo ?? "" },
   { key: "upc", label: "UPC / SKU", get: (v) => v.row.rawUpc ?? "" },
-  { key: "outcome", label: "Outcome", get: (v) => v.row.matchOutcome },
-  { key: "class", label: "Class", get: (v) => v.row.reviewClass },
+  {
+    key: "outcome",
+    label: "Outcome",
+    get: (v) => v.row.matchOutcome,
+    title:
+      "MATCHED: present in both the vendor file and Miva. MISSING - REVIEW REQUIRED: a Miva product not referenced by any vendor file row this run (NLA candidate).",
+  },
+  { key: "class", label: "Class", get: (v) => v.row.reviewClass, title: CLASS_TOOLTIP },
   { key: "warnings", label: "Warnings/Blockers", get: (v) => [...v.row.warningCodes, ...v.row.blockerCodes].join(", ") },
   { key: "qty", label: "Qty", get: (v) => v.row.totalQtyRaw ?? "" },
   { key: "currentStatus", label: "Current status", get: (v) => v.row.current.simpleInventory ?? "" },
@@ -310,13 +322,14 @@ export default function RunReviewPage() {
     try {
       await fn();
     } catch (err) {
-      setError(err instanceof ApiRequestError ? `${err.body.error}: ${err.body.message}` : "Action failed.");
+      setError(friendlyError(err, "Action failed."));
     } finally {
       setBusy(false);
     }
   }
 
   async function approveAllClean() {
+    if (!window.confirm("Approve every clean, changed row in this run? This can be undone per-row until you generate a batch.")) return;
     await withBusy(async () => {
       await api.approveAllClean(runId!);
       await Promise.all([loadRun(), loadRows()]);
@@ -324,6 +337,8 @@ export default function RunReviewPage() {
   }
 
   async function bulkAction(decision: "APPROVED" | "REJECTED") {
+    const verb = decision === "APPROVED" ? "Approve" : "Reject";
+    if (!window.confirm(`${verb} the ${selected.size} selected row${selected.size === 1 ? "" : "s"}? This can be undone per-row until you generate a batch.`)) return;
     await withBusy(async () => {
       await api.bulkDecision(runId!, [...selected], decision);
       setSelected(new Set());
@@ -339,6 +354,12 @@ export default function RunReviewPage() {
   }
 
   async function generateBatch() {
+    if (
+      !window.confirm(
+        "Generate a batch from all currently-approved rows? Once generated, those rows' decisions can't be changed. Rows still pending won't be included.",
+      )
+    )
+      return;
     await withBusy(async () => {
       const batch = await api.generateBatch(runId!);
       window.location.href = `/batches/${batch.id}`;
@@ -389,7 +410,7 @@ export default function RunReviewPage() {
             <strong>Run date:</strong> {run.runDate}
           </div>
         </div>
-        {run.status === "failed" && <div className="error-banner">Run failed: {run.failureReason}</div>}
+        {run.status === "failed" && <ErrorBanner message={`Run failed: ${run.failureReason}`} />}
       </div>
 
       {runBatches.length > 0 && (
@@ -415,9 +436,16 @@ export default function RunReviewPage() {
                     {b.rolledBackAt && (
                       <span
                         title={`Rolled back ${new Date(b.rolledBackAt).toLocaleString()}`}
-                        style={{ marginLeft: 6, fontSize: 12, color: "#64748b" }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          marginLeft: 6,
+                          fontSize: 12,
+                          color: "var(--muted)",
+                        }}
                       >
-                        ↩ rolled back
+                        <Undo2 size={12} /> rolled back
                       </span>
                     )}
                   </td>
@@ -428,7 +456,7 @@ export default function RunReviewPage() {
         </div>
       )}
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <ErrorBanner message={error} />}
 
       {summary && (
         <div className="card">
@@ -439,14 +467,14 @@ export default function RunReviewPage() {
               <div className="label">Total rows</div>
             </div>
             <div className="stat" title="Vendor rows whose UPC/SKU resolved to exactly one Miva product (matchOutcome MATCHED) -- present in both the vendor file and Miva.">
-              <div className="value">{summary.byMatchOutcome.MATCHED ?? 0}</div>
+              <div className="value">{summary.byMatchOutcome?.MATCHED ?? 0}</div>
               <div className="label">Matched</div>
             </div>
             <div
               className="stat"
               title="Miva products not referenced by any vendor file row this run (matchOutcome MISSING - REVIEW REQUIRED) -- NLA candidates, not in the vendor file at all."
             >
-              <div className="value">{summary.byMatchOutcome["MISSING - REVIEW REQUIRED"] ?? 0}</div>
+              <div className="value">{summary.byMatchOutcome?.["MISSING - REVIEW REQUIRED"] ?? 0}</div>
               <div className="label">NLA (Miva only)</div>
             </div>
             <div className="stat">
@@ -454,27 +482,27 @@ export default function RunReviewPage() {
               <div className="label">Changed</div>
             </div>
             <div className="stat">
-              <div className="value">{summary.byReviewClass.CLEAN ?? 0}</div>
+              <div className="value">{summary.byReviewClass?.CLEAN ?? 0}</div>
               <div className="label">Clean</div>
             </div>
             <div className="stat">
-              <div className="value">{summary.byReviewClass.WARNING ?? 0}</div>
+              <div className="value">{summary.byReviewClass?.WARNING ?? 0}</div>
               <div className="label">Warning</div>
             </div>
             <div className="stat">
-              <div className="value">{summary.byReviewClass.BLOCKED ?? 0}</div>
+              <div className="value">{summary.byReviewClass?.BLOCKED ?? 0}</div>
               <div className="label">Blocked</div>
             </div>
             <div className="stat">
-              <div className="value">{summary.byReviewClass.UNCHANGED ?? 0}</div>
+              <div className="value">{summary.byReviewClass?.UNCHANGED ?? 0}</div>
               <div className="label">Unchanged</div>
             </div>
             <div className="stat">
-              <div className="value">{summary.byDecisionStatus.APPROVED ?? 0}</div>
+              <div className="value">{summary.byDecisionStatus?.APPROVED ?? 0}</div>
               <div className="label">Approved</div>
             </div>
             <div className="stat">
-              <div className="value">{(summary.byDecisionStatus.APPROVED_WARNING_ACK ?? 0)}</div>
+              <div className="value">{summary.byDecisionStatus?.APPROVED_WARNING_ACK ?? 0}</div>
               <div className="label">Approved (ack)</div>
             </div>
           </div>
@@ -484,20 +512,20 @@ export default function RunReviewPage() {
       <div className="card">
         <div className="toolbar">
           <button className="primary" onClick={approveAllClean} disabled={busy}>
-            Approve all clean
+            <CheckCheck size={16} /> Approve all clean
           </button>
           <button className="success" onClick={() => bulkAction("APPROVED")} disabled={busy || selected.size === 0}>
-            Approve selected clean rows
+            <Check size={16} /> Approve selected clean rows
           </button>
           <button className="danger" onClick={() => bulkAction("REJECTED")} disabled={busy || selected.size === 0}>
-            Reject selected
+            <X size={16} /> Reject selected
           </button>
           <button className="primary" onClick={generateBatch} disabled={busy}>
-            Generate batch
+            <FileOutput size={16} /> Generate batch
           </button>
           <div className="vendor-report-menu-wrap" style={{ position: "relative" }}>
             <button onClick={() => setVendorReportMenuOpen((v) => !v)} disabled={busy}>
-              Export vendor exception report
+              <Download size={16} /> Export vendor exception report
             </button>
             {vendorReportMenuOpen && (
               <div
@@ -514,7 +542,7 @@ export default function RunReviewPage() {
                   zIndex: 20,
                 }}
               >
-                <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 8px" }}>
+                <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 8px" }}>
                   Categories to include -- unmatched-in-Miva is huge and usually not a vendor error, so it's off by
                   default.
                 </p>
@@ -607,14 +635,16 @@ export default function RunReviewPage() {
           <label style={{ marginLeft: 16 }} title="Adds a 'Changed fields' column listing which of the six managed fields actually differ -- Current/Proposed status only shows one of them.">
             <input type="checkbox" checked={highlightDiff} onChange={(e) => setHighlightDiff(e.target.checked)} /> Highlight differences
           </label>
-          <input
-            type="text"
-            placeholder="Search item / UPC / product code"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ marginLeft: 16 }}
-          />
-          <span style={{ marginLeft: "auto", color: "#64748b", whiteSpace: "nowrap" }}>
+          <div className="search-input" style={{ marginLeft: 16 }}>
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Search item / UPC / product code"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <span style={{ marginLeft: "auto", color: "var(--muted)", whiteSpace: "nowrap" }}>
             Showing {displayedRows.length} of {rows.length} row{rows.length === 1 ? "" : "s"}
             {selected.size > 0 && ` · ${selected.size} selected`}
             {(hasColumnFilters || sortKey) && (
@@ -652,9 +682,13 @@ export default function RunReviewPage() {
                   return (
                     <th key={col.key} style={{ zIndex: 2 }}>
                       <div className="col-filter-wrap" style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
-                        <span onClick={() => toggleSort(col.key)} style={{ cursor: "pointer", userSelect: "none" }}>
+                        <span
+                          onClick={() => toggleSort(col.key)}
+                          title={col.title}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none" }}
+                        >
                           {col.label}
-                          {sortKey === col.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                          {sortKey === col.key && (sortDir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                         </span>
                         <button
                           onClick={() => {
@@ -667,11 +701,11 @@ export default function RunReviewPage() {
                             padding: "0 4px",
                             fontSize: 11,
                             fontWeight: "normal",
-                            background: active ? "#dbeafe" : "transparent",
+                            background: active ? "var(--brand-soft)" : "transparent",
                             borderColor: active ? "var(--blue)" : undefined,
                           }}
                         >
-                          {"▾"}
+                          <ChevronDown size={12} />
                         </button>
                         {openFilterColumn === col.key && (
                           <div
@@ -708,7 +742,7 @@ export default function RunReviewPage() {
                             </div>
                             <div style={{ maxHeight: 200, overflow: "auto", borderTop: "1px solid var(--border)", paddingTop: 4 }}>
                               {visibleValues.length === 0 && (
-                                <div style={{ fontSize: 12, color: "#94a3b8", padding: "4px 0" }}>No values</div>
+                                <div style={{ fontSize: 12, color: "var(--muted-2)", padding: "4px 0" }}>No values</div>
                               )}
                               {visibleValues.map((val) => (
                                 <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "2px 0" }}>
@@ -733,7 +767,7 @@ export default function RunReviewPage() {
             <tbody>
               {displayedRows.map(({ row, decision }) => {
                 const changedFieldsForRow = highlightDiff ? diffFields(row.current, row.proposed) : [];
-                const highlightStyle = { background: "#fef3c7" };
+                const highlightStyle = { background: "var(--amber-soft)" };
                 return (
                 <tr key={row.id}>
                   <td>
@@ -746,7 +780,9 @@ export default function RunReviewPage() {
                   <td>{row.rawUpc ?? "-"}</td>
                   <td>{row.matchOutcome}</td>
                   <td>
-                    <span className={`pill ${pillClass(row.reviewClass)}`}>{row.reviewClass}</span>
+                    <span className={`pill ${pillClass(row.reviewClass)}`} title={CLASS_TOOLTIP}>
+                      {row.reviewClass}
+                    </span>
                   </td>
                   <td>{[...row.warningCodes, ...row.blockerCodes].join(", ") || "-"}</td>
                   <td>{row.totalQtyRaw ?? "-"}</td>
@@ -762,7 +798,9 @@ export default function RunReviewPage() {
                   )}
                   <td>
                     <span className={`pill ${pillClass(decision.status)}`}>{decision.status}</span>
-                    {decision.locked && " (frozen)"}
+                    {decision.locked && (
+                      <span title="Locked because this row is already part of a generated batch and can no longer be changed."> (frozen)</span>
+                    )}
                   </td>
                   <td>
                     {!decision.locked && row.reviewClass === "CLEAN" && (

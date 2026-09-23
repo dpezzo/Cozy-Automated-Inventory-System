@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Layers,
+  Download,
+  Search,
+  Columns,
+  ChevronDown,
+  ArrowUp,
+  ArrowDown,
+  ExternalLink,
+} from "lucide-react";
 import { api, ApiRequestError, type FileRecord, type MivaCatalogRow } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { ErrorBanner } from "../components/ErrorBanner";
 import { loadFromStorage, saveToStorage } from "../lib/storage";
 
 interface ColumnDef {
@@ -11,6 +22,7 @@ interface ColumnDef {
   /** false for columns that aren't plain text (image, link) -- skips the per-column filter dropdown. */
   filterable?: boolean;
   render?: (r: MivaCatalogRow) => React.ReactNode;
+  title?: string;
 }
 
 const HIDDEN_COLUMNS_KEY = "cw-catalog-hidden-columns-v1";
@@ -105,8 +117,14 @@ const COLUMNS: ColumnDef[] = [
     filterable: false,
     render: (r) =>
       r.productUrl ? (
-        <a href={r.productUrl} target="_blank" rel="noopener noreferrer" title={r.productUrl}>
-          Open ↗
+        <a
+          href={r.productUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={r.productUrl}
+          style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+        >
+          Open <ExternalLink size={12} />
         </a>
       ) : (
         "-"
@@ -114,8 +132,8 @@ const COLUMNS: ColumnDef[] = [
   },
   { key: "productName", label: "Product name", get: (r) => r.productName ?? "", defaultWidth: 260 },
   { key: "productType", label: "Product type", get: (r) => r.productType ?? "", defaultWidth: 110 },
-  { key: "gtin", label: "GTIN", get: (r) => r.gtinRaw ?? "", defaultWidth: 130 },
-  { key: "mpn", label: "MPN", get: (r) => r.mpnRaw ?? "", defaultWidth: 110 },
+  { key: "gtin", label: "GTIN", get: (r) => r.gtinRaw ?? "", defaultWidth: 130, title: "Global Trade Item Number (barcode)" },
+  { key: "mpn", label: "MPN", get: (r) => r.mpnRaw ?? "", defaultWidth: 110, title: "Manufacturer Part Number" },
   { key: "brand", label: "Brand", get: (r) => r.brandRaw ?? "", defaultWidth: 130 },
   { key: "simpleInventory", label: "Simple inventory", get: (r) => r.currentSimpleInventory ?? "", defaultWidth: 140 },
   { key: "availability", label: "Availability", get: (r) => r.currentAvailability ?? "", defaultWidth: 120 },
@@ -385,7 +403,9 @@ export default function CatalogPage() {
 
   return (
     <div>
-      <h2>Miva Catalog</h2>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Layers size={20} /> Miva Catalog
+      </h2>
       <InstructionsCard
         pageKey="catalog"
         description="A read-only browser for a Miva catalog snapshot -- the same kind of file used as the 'Miva Catalog Data' input on Home, but here purely for inspecting what's currently in Miva. Each snapshot is a point-in-time export; pull a fresh one below instead of trusting an old one if you need the current state."
@@ -395,8 +415,8 @@ export default function CatalogPage() {
           "Click a column header to sort, drag its right edge to resize, and use Columns to show or hide any of them.",
         ]}
       />
-      {error && <div className="error-banner">{error}</div>}
-      {pullMessage && <p style={{ fontSize: 13, color: "#64748b" }}>{pullMessage}</p>}
+      {error && <ErrorBanner message={error} />}
+      {pullMessage && <p style={{ fontSize: 13, color: "var(--muted)" }}>{pullMessage}</p>}
 
       <div className="card">
         <div className="toolbar" style={{ flexWrap: "wrap" }}>
@@ -418,18 +438,22 @@ export default function CatalogPage() {
               disabled={pulling}
               style={{ marginLeft: 16, whiteSpace: "nowrap", flex: "none" }}
             >
-              {pulling ? "Pulling..." : "Pull latest catalog"}
+              <Download size={16} /> {pulling ? "Pulling..." : "Pull latest catalog"}
             </button>
           )}
-          <input
-            type="text"
-            placeholder="Search product code / name / GTIN / MPN"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ marginLeft: 16 }}
-          />
+          <div className="search-input" style={{ marginLeft: 16 }}>
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Search product code / name / GTIN / MPN"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
           <div className="columns-menu-wrap" style={{ position: "relative", marginLeft: 16 }}>
-            <button onClick={() => setColumnsMenuOpen((v) => !v)}>Columns</button>
+            <button onClick={() => setColumnsMenuOpen((v) => !v)}>
+              <Columns size={16} /> Columns
+            </button>
             {columnsMenuOpen && (
               <div
                 style={{
@@ -460,7 +484,7 @@ export default function CatalogPage() {
               </div>
             )}
           </div>
-          <span style={{ marginLeft: "auto", color: "#64748b", whiteSpace: "nowrap" }}>
+          <span style={{ marginLeft: "auto", color: "var(--muted)", whiteSpace: "nowrap" }}>
             {loading ? "Loading..." : `Showing ${displayedRows.length} of ${rows.length} product${rows.length === 1 ? "" : "s"}`}
             {hasColumnFilters && (
               <>
@@ -516,10 +540,20 @@ export default function CatalogPage() {
                       <div className="col-filter-wrap" style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
                         <span
                           onClick={() => toggleSort(col.key)}
-                          style={{ cursor: "pointer", userSelect: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          title={col.title}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            cursor: "pointer",
+                            userSelect: "none",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
                         >
                           {col.label}
-                          {sortKey === col.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                          {sortKey === col.key && (sortDir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                         </span>
                         {col.filterable !== false && (
                           <button
@@ -533,11 +567,11 @@ export default function CatalogPage() {
                               padding: "0 4px",
                               fontSize: 11,
                               fontWeight: "normal",
-                              background: active ? "#dbeafe" : "transparent",
+                              background: active ? "var(--brand-soft)" : "transparent",
                               borderColor: active ? "var(--blue)" : undefined,
                             }}
                           >
-                            {"▾"}
+                            <ChevronDown size={12} />
                           </button>
                         )}
                         {openFilterColumn === col.key && (
@@ -575,7 +609,7 @@ export default function CatalogPage() {
                             </div>
                             <div style={{ maxHeight: 200, overflow: "auto", borderTop: "1px solid var(--border)", paddingTop: 4 }}>
                               {visibleValues.length === 0 && (
-                                <div style={{ fontSize: 12, color: "#94a3b8", padding: "4px 0" }}>No values</div>
+                                <div style={{ fontSize: 12, color: "var(--muted-2)", padding: "4px 0" }}>No values</div>
                               )}
                               {shownValues.map((val) => (
                                 <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "2px 0" }}>
@@ -584,7 +618,7 @@ export default function CatalogPage() {
                                 </label>
                               ))}
                               {truncatedCount > 0 && (
-                                <div style={{ fontSize: 11, color: "#94a3b8", padding: "4px 0 0", fontStyle: "italic" }}>
+                                <div style={{ fontSize: 11, color: "var(--muted-2)", padding: "4px 0 0", fontStyle: "italic" }}>
                                   +{truncatedCount} more -- type above to narrow down
                                 </div>
                               )}
