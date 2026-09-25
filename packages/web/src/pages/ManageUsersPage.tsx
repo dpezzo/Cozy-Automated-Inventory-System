@@ -6,6 +6,9 @@ import { api, ApiRequestError, type UserAccount } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
 
+const ROLE_HINT =
+  "Admins can manage users and vendors, clear data, and configure storage alerts, in addition to running reconciliations. Members can only run reconciliations and reviews.";
+
 export default function ManageUsersPage() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserAccount[]>([]);
@@ -131,7 +134,7 @@ export default function ManageUsersPage() {
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Users size={20} /> Manage Users
+          <Users size={24} strokeWidth={2.25} /> Manage Users
         </h2>
         {!showAddUser && (
           <button className="primary" onClick={() => setShowAddUser(true)}>
@@ -184,6 +187,7 @@ export default function ManageUsersPage() {
                       value={u.role}
                       disabled={isSelf || busyId === u.id}
                       onChange={(e) => changeRole(u, e.target.value as "admin" | "member")}
+                      title={ROLE_HINT}
                     >
                       <option value="admin">Admin</option>
                       <option value="member">Member</option>
@@ -316,6 +320,7 @@ export default function ManageUsersPage() {
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
               </select>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{ROLE_HINT}</div>
             </label>
             <label>
               Initial password (optional)

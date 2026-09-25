@@ -111,9 +111,10 @@ function AlertThresholdEditor({ stats, onSaved }: { stats: DataStats | null; onS
     <div className="card">
       <h3>Storage alert threshold</h3>
       <p style={{ fontSize: 13, color: "var(--muted)" }}>
-        Every signed-in user sees a storage alert once either number below is reached. Currently:{" "}
+        Once either number below is reached, every signed-in user sees a dismissible-per-visit warning banner at the
+        top of every page, pointing admins here to clear old data. Currently:{" "}
         {stats ? `${stats.reconciliationRows.toLocaleString()} rows, ${formatBytes(stats.totalFileBytes)} of files` : "loading..."}
-        . Lowering a value below the current count is a quick way to preview the alert.
+        . Lowering a value below the current count is a quick way to preview that banner.
       </p>
       {error && <ErrorBanner message={error} />}
       <div className="toolbar">
@@ -187,7 +188,7 @@ export default function ClearDataPage() {
   return (
     <div>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Trash2 size={20} /> Clear Data
+        <Trash2 size={24} strokeWidth={2.25} /> Clear Data
       </h2>
       <InstructionsCard
         pageKey="clear-data"
@@ -217,8 +218,8 @@ export default function ClearDataPage() {
         </div>
         <div className="filters" style={{ marginTop: 8 }}>
           <label>
-            <input type="radio" checked={mode === "all"} onChange={() => setMode("all")} /> Everything (fresh-install
-            reset)
+            <input type="radio" checked={mode === "all"} onChange={() => setMode("all")} />{" "}
+            <span style={{ color: "var(--red)", fontWeight: 600 }}>Delete everything</span> (start over as if newly installed)
           </label>
         </div>
       </div>

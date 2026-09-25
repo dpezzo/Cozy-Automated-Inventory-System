@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom";
 import { InstructionsCard } from "../components/InstructionsCard";
-import { Users, Truck, Trash2 } from "lucide-react";
+import { Users, Truck, Trash2, Settings } from "lucide-react";
 
 export default function SettingsPage() {
   return (
     <div>
-      <h2>Settings</h2>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Settings size={24} strokeWidth={2.25} /> Settings
+      </h2>
       <InstructionsCard pageKey="settings" description="Admin-only tools for managing users, vendors, and stored data." />
       <div className="grid cols-3">
         <Link to="/settings/users" className="card settings-tile">
@@ -27,7 +29,10 @@ export default function SettingsPage() {
             <Trash2 size={24} />
           </div>
           <h3>Clear Data</h3>
-          <p>Permanently delete old runs, batches, and their files to free up space, or reset for a fresh install.</p>
+          <p>
+            <strong>Permanently</strong> delete old runs, batches, and their files to free up space, or reset for a
+            fresh install.
+          </p>
         </Link>
       </div>
     </div>

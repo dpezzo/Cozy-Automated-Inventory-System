@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Info, ChevronRight, ChevronUp } from "lucide-react";
 import { useAuth } from "../AuthContext";
 
@@ -32,6 +32,17 @@ function saveCollapsed(pageKey: string, userId: string | undefined, collapsed: b
 export function InstructionsCard({ pageKey, description, steps }: { pageKey: string; description?: string; steps?: string[] }) {
   const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(() => loadCollapsed(pageKey, user?.id));
+
+  // Several pages (Catalog, Audits, Run History, Run Review) size a table to
+  // fill the rest of the viewport below whatever's above it, recomputed on a
+  // "resize" listener -- but toggling this card changes that layout without
+  // resizing the window, and .app-shell's own min-height: 100vh usually keeps
+  // document.body from visibly resizing either. Dispatching a synthetic
+  // resize event lets those pages' existing listeners pick up the change for
+  // free, with no per-page wiring needed.
+  useEffect(() => {
+    window.dispatchEvent(new Event("resize"));
+  }, [collapsed]);
 
   function toggle() {
     setCollapsed((prev) => {

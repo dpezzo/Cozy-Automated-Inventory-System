@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Undo2 } from "lucide-react";
+import { Search, Undo2, History } from "lucide-react";
 import { api, type RunRecord, type BatchRecord, type VendorSummary } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
-import { importStatusPillClass, runStatusPillClass } from "../lib/format";
+import { importStatusPillClass, runStatusPillClass, IMPORT_STATUS_TOOLTIPS, RUN_STATUS_TOOLTIPS } from "../lib/format";
 
 /** ruleId is always "<vendorKey>-inventory-v1" (see runPipeline.ts's ruleIdFor) -- strips that fixed suffix to recover the vendorKey for a vendor label lookup. */
 function vendorKeyFromRuleId(ruleId: string): string {
@@ -85,7 +85,9 @@ export default function RunHistoryPage() {
 
   return (
     <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: pageHeight }}>
-      <h2>Run History</h2>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <History size={24} strokeWidth={2.25} /> Run History
+      </h2>
       <InstructionsCard
         pageKey="run-history"
         description="A run compares one vendor inventory file against one Miva catalog snapshot and produces rows to review, approve, or reject. A batch is the set of approved, changed rows from a run turned into ready-to-import Miva CSV files -- a single run can produce more than one batch over time, since each time you approve more rows and generate a batch, that becomes a new one. The Runs table below is where reconciliation happens; the Batches table is where you track what's actually been generated and imported."
@@ -126,12 +128,21 @@ export default function RunHistoryPage() {
                 <th>Run ID</th>
                 <th>Status</th>
                 <th>Vendor</th>
-                <th>Rule / hash</th>
+                <th title="Internal identifiers for the exact rule/config version used -- only relevant for debugging, safe to ignore day to day.">
+                  Rule / hash
+                </th>
                 <th>Batch</th>
                 <th>Batch status</th>
               </tr>
             </thead>
             <tbody>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ color: "var(--muted)" }}>
+                    {runs.length === 0 ? "No runs yet -- start one from the Home page." : "No runs match your search."}
+                  </td>
+                </tr>
+              )}
               {filtered.map((r) => {
                 const runBatches = batchesByRun.get(r.id) ?? [];
                 const latestBatch = runBatches[0];
@@ -146,7 +157,9 @@ export default function RunHistoryPage() {
                       <Link to={`/runs/${r.id}`}>{r.id.slice(0, 8)}</Link>
                     </td>
                     <td>
-                      <span className={`pill ${runStatusPillClass(r.status)}`}>{r.status}</span>
+                      <span className={`pill ${runStatusPillClass(r.status)}`} title={RUN_STATUS_TOOLTIPS[r.status]}>
+                        {r.status}
+                      </span>
                     </td>
                     <td title={vendorLabelForRuleId(r.ruleId)}>{vendorLabelForRuleId(r.ruleId)}</td>
                     <td title={r.ruleConfigHash}>
@@ -169,7 +182,10 @@ export default function RunHistoryPage() {
                     <td>
                       {latestBatch && (
                         <>
-                          <span className={`pill ${importStatusPillClass(latestBatch.importStatus)}`}>
+                          <span
+                            className={`pill ${importStatusPillClass(latestBatch.importStatus)}`}
+                            title={IMPORT_STATUS_TOOLTIPS[latestBatch.importStatus]}
+                          >
                             {latestBatch.importStatus}
                           </span>
                           {latestBatch.rolledBackAt && (
@@ -216,6 +232,13 @@ export default function RunHistoryPage() {
               </tr>
             </thead>
             <tbody>
+              {batches.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ color: "var(--muted)" }}>
+                    No batches yet -- generate one from a run's review page once you've approved changes.
+                  </td>
+                </tr>
+              )}
               {batches.map((b) => {
                 const run = runsById.get(b.runId);
                 return (
@@ -225,7 +248,9 @@ export default function RunHistoryPage() {
                       <Link to={`/batches/${b.id}`}>{b.id.slice(0, 8)}</Link>
                     </td>
                     <td>
-                      <span className={`pill ${importStatusPillClass(b.importStatus)}`}>{b.importStatus}</span>
+                      <span className={`pill ${importStatusPillClass(b.importStatus)}`} title={IMPORT_STATUS_TOOLTIPS[b.importStatus]}>
+                        {b.importStatus}
+                      </span>
                       {b.rolledBackAt && (
                         <span
                           title={`Rolled back ${new Date(b.rolledBackAt).toLocaleString()}`}
@@ -242,7 +267,11 @@ export default function RunHistoryPage() {
                       <Link to={`/runs/${b.runId}`}>{b.runId.slice(0, 8)}</Link>
                     </td>
                     <td>
-                      {run && <span className={`pill ${runStatusPillClass(run.status)}`}>{run.status}</span>}
+                      {run && (
+                        <span className={`pill ${runStatusPillClass(run.status)}`} title={RUN_STATUS_TOOLTIPS[run.status]}>
+                          {run.status}
+                        </span>
+                      )}
                     </td>
                     <td></td>
                   </tr>

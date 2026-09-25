@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { CheckCheck, Check, X, FileOutput, Download, Search, Undo2, ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
@@ -12,7 +12,7 @@ import {
 } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { importStatusPillClass, runStatusPillClass } from "../lib/format";
+import { importStatusPillClass, runStatusPillClass, IMPORT_STATUS_TOOLTIPS, RUN_STATUS_TOOLTIPS } from "../lib/format";
 import { friendlyError } from "../lib/errors";
 
 const REVIEW_CLASS_FILTERS = ["CLEAN", "WARNING", "BLOCKED", "UNCHANGED"];
@@ -54,6 +54,12 @@ interface ColumnDef {
 const CLASS_TOOLTIP =
   "CLEAN: no issues, can be approved directly. WARNING: unusual data -- review before approving. BLOCKED: has a data problem and can't be approved (see Warnings/Blockers) -- contact an admin. UNCHANGED: nothing to update, no action needed.";
 
+/** Friendly label for a row's matchOutcome, matching the wording already used by the filter checkboxes/stat tiles above the table -- the raw "MISSING - REVIEW REQUIRED" enum string never appears to the user. */
+const MATCH_OUTCOME_LABELS: Record<string, string> = {
+  MATCHED: "Matched",
+  "MISSING - REVIEW REQUIRED": "NLA (Miva only)",
+};
+
 const BASE_COLUMNS: ColumnDef[] = [
   { key: "productCode", label: "Product code", get: (v) => v.row.productCode ?? "" },
   { key: "itemNo", label: "Item No", get: (v) => v.row.itemNo ?? "" },
@@ -61,9 +67,9 @@ const BASE_COLUMNS: ColumnDef[] = [
   {
     key: "outcome",
     label: "Outcome",
-    get: (v) => v.row.matchOutcome,
+    get: (v) => MATCH_OUTCOME_LABELS[v.row.matchOutcome] ?? v.row.matchOutcome,
     title:
-      "MATCHED: present in both the vendor file and Miva. MISSING - REVIEW REQUIRED: a Miva product not referenced by any vendor file row this run (NLA candidate).",
+      "Matched: present in both the vendor file and Miva. NLA (Miva only): a Miva product not referenced by any vendor file row this run (NLA candidate).",
   },
   { key: "class", label: "Class", get: (v) => v.row.reviewClass, title: CLASS_TOOLTIP },
   { key: "warnings", label: "Warnings/Blockers", get: (v) => [...v.row.warningCodes, ...v.row.blockerCodes].join(", ") },
@@ -84,6 +90,9 @@ const MANAGED_FIELD_LABELS: Record<string, string> = {
   reportFlag: "Report flag",
 };
 
+const CHANGED_FIELDS_TOOLTIP =
+  "Miva product fields this rule manages, beyond Status/Restock (shown as their own columns above): Availability, Datafeed, Shopping feed, and Report flag. See Miva's own product settings for what each controls.";
+
 function diffFields(current: ManagedValuesView, proposed: ManagedValuesView): string[] {
   return Object.keys(MANAGED_FIELD_LABELS).filter((field) => {
     const key = field as keyof ManagedValuesView;
@@ -94,6 +103,7 @@ function diffFields(current: ManagedValuesView, proposed: ManagedValuesView): st
 const CHANGED_FIELDS_COLUMN: ColumnDef = {
   key: "changedFields",
   label: "Changed fields",
+  title: CHANGED_FIELDS_TOOLTIP,
   get: (v) => diffFields(v.row.current, v.row.proposed)
     .map((f) => MANAGED_FIELD_LABELS[f])
     .join(", "),
@@ -123,6 +133,38 @@ export default function RunReviewPage() {
   const [vendorReportMenuOpen, setVendorReportMenuOpen] = useState(false);
   const [vendorReportCategories, setVendorReportCategories] = useState<string[]>(VENDOR_EXCEPTION_DEFAULT_CATEGORIES);
   const [vendorReportFormat, setVendorReportFormat] = useState<"csv" | "xlsx">("xlsx");
+
+  // Fills the rest of the viewport below the table instead of a fixed
+  // maxHeight, so it adapts to the monitor size and to whatever's above it
+  // changing height -- same technique as Run History's tables, the Miva
+  // Catalog table, and the Activity Log table.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [tableHeight, setTableHeight] = useState(400);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    // Before `run` loads, the component returns its "Loading..." fallback
+    // below, so `el` isn't attached yet on that first pass -- re-running
+    // this effect once run/summary/runBatches arrive (any of which change
+    // the content above the table) re-attaches it and recomputes against
+    // the real layout, instead of leaving tableHeight stuck at its initial
+    // default forever.
+    if (!el) return;
+    function recompute() {
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      // 64px = the enclosing .card's own bottom padding + margin (20 + 20) plus .main's bottom padding (24).
+      setTableHeight(Math.max(200, window.innerHeight - top - 64));
+    }
+    recompute();
+    const observer = new ResizeObserver(recompute);
+    observer.observe(document.body);
+    window.addEventListener("resize", recompute);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", recompute);
+    };
+  }, [run, summary, runBatches, highlightDiff]);
 
   const columns = useMemo(() => {
     if (!highlightDiff) return BASE_COLUMNS;
@@ -382,6 +424,16 @@ export default function RunReviewPage() {
 
   return (
     <div>
+      <div style={{ marginBottom: 4, fontSize: 13 }}>
+        <Link to="/runs">← Back to run history</Link>
+        {" · "}
+        <Link
+          to={`/audits?runId=${run.id}`}
+          title="Read-only sanity check comparing this run's results against the previous manual process. Doesn't change any data."
+        >
+          Legacy comparison for this run
+        </Link>
+      </div>
       <h2>Run {run.id.slice(0, 8)}</h2>
       <InstructionsCard
         pageKey="run-review"
@@ -395,15 +447,18 @@ export default function RunReviewPage() {
       <div className="card">
         <div className="grid cols-5">
           <div>
-            <strong>Status:</strong> <span className={`pill ${runStatusPillClass(run.status)}`}>{run.status}</span>
+            <strong>Status:</strong>{" "}
+            <span className={`pill ${runStatusPillClass(run.status)}`} title={RUN_STATUS_TOOLTIPS[run.status]}>
+              {run.status}
+            </span>
           </div>
           <div>
             <strong>Vendor:</strong> {vendorLabelForRuleId(run.ruleId)}
           </div>
-          <div>
+          <div title="Internal identifier for the exact rule version used to produce this run -- only relevant for debugging, safe to ignore day to day.">
             <strong>Rule:</strong> {run.ruleId}
           </div>
-          <div title={run.ruleConfigHash}>
+          <div title={`Internal config version identifier -- only relevant for debugging, safe to ignore day to day. Full hash: ${run.ruleConfigHash}`}>
             <strong>Config hash:</strong> {run.ruleConfigHash.slice(0, 12)}...
           </div>
           <div>
@@ -432,7 +487,9 @@ export default function RunReviewPage() {
                     <Link to={`/batches/${b.id}`}>{b.id.slice(0, 8)}</Link>
                   </td>
                   <td>
-                    <span className={`pill ${importStatusPillClass(b.importStatus)}`}>{b.importStatus}</span>
+                    <span className={`pill ${importStatusPillClass(b.importStatus)}`} title={IMPORT_STATUS_TOOLTIPS[b.importStatus]}>
+                      {b.importStatus}
+                    </span>
                     {b.rolledBackAt && (
                       <span
                         title={`Rolled back ${new Date(b.rolledBackAt).toLocaleString()}`}
@@ -524,7 +581,11 @@ export default function RunReviewPage() {
             <FileOutput size={16} /> Generate batch
           </button>
           <div className="vendor-report-menu-wrap" style={{ position: "relative" }}>
-            <button onClick={() => setVendorReportMenuOpen((v) => !v)} disabled={busy}>
+            <button
+              onClick={() => setVendorReportMenuOpen((v) => !v)}
+              disabled={busy}
+              title="Generates a file listing problems found in the vendor's file (duplicates, missing data, etc.) that you can send back to the vendor so they can fix it."
+            >
               <Download size={16} /> Export vendor exception report
             </button>
             {vendorReportMenuOpen && (
@@ -543,8 +604,9 @@ export default function RunReviewPage() {
                 }}
               >
                 <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 8px" }}>
-                  Categories to include -- unmatched-in-Miva is huge and usually not a vendor error, so it's off by
-                  default.
+                  A report for the vendor, listing problems in their file so they can fix it for next time. Choose
+                  which categories to include -- unmatched-in-Miva is huge and usually not a vendor error, so it's
+                  off by default.
                 </p>
                 {Object.entries(VENDOR_EXCEPTION_CATEGORY_LABELS).map(([key, label]) => (
                   <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "3px 0" }}>
@@ -659,7 +721,7 @@ export default function RunReviewPage() {
           </span>
         </div>
 
-        <div className="table-scroll">
+        <div className="table-scroll" ref={scrollRef} style={{ height: tableHeight, maxHeight: tableHeight }}>
           <table>
             <thead>
               <tr>
@@ -778,7 +840,9 @@ export default function RunReviewPage() {
                   <td>{row.productCode ?? "-"}</td>
                   <td>{row.itemNo ?? "-"}</td>
                   <td>{row.rawUpc ?? "-"}</td>
-                  <td>{row.matchOutcome}</td>
+                  <td title="Matched: present in both the vendor file and Miva. NLA (Miva only): a Miva product not referenced by any vendor file row this run.">
+                    {MATCH_OUTCOME_LABELS[row.matchOutcome] ?? row.matchOutcome}
+                  </td>
                   <td>
                     <span className={`pill ${pillClass(row.reviewClass)}`} title={CLASS_TOOLTIP}>
                       {row.reviewClass}
@@ -794,7 +858,7 @@ export default function RunReviewPage() {
                     {row.proposed.restockMessage ?? "-"}
                   </td>
                   {highlightDiff && (
-                    <td>{changedFieldsForRow.map((f) => MANAGED_FIELD_LABELS[f]).join(", ") || "-"}</td>
+                    <td title={CHANGED_FIELDS_TOOLTIP}>{changedFieldsForRow.map((f) => MANAGED_FIELD_LABELS[f]).join(", ") || "-"}</td>
                   )}
                   <td>
                     <span className={`pill ${pillClass(decision.status)}`}>{decision.status}</span>
@@ -838,12 +902,6 @@ export default function RunReviewPage() {
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="card">
-        <Link to="/runs">Back to run history</Link>
-        {" · "}
-        <Link to={`/audits?runId=${run.id}`}>Legacy comparison for this run</Link>
       </div>
     </div>
   );

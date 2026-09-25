@@ -115,7 +115,7 @@ export default function LoginPage() {
           </div>
           <div className="brand-subtitle">Automated Inventory System</div>
           <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 8, marginBottom: 0 }}>
-            Reconcile vendor inventory files against your Miva store.
+            Update your Miva store's inventory using vendor stock files.
           </p>
         </div>
         {error && <ErrorBanner message={error} />}
@@ -157,6 +157,9 @@ export default function LoginPage() {
             {busy ? "Signing in..." : "Sign in"}
           </button>
         </form>
+        <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 16, marginBottom: 0, textAlign: "center" }}>
+          New here? Ask an admin to create your account.
+        </p>
       </div>
     </div>
   );

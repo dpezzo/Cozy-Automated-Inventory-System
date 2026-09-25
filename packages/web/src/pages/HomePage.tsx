@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, Play, AlertTriangle } from "lucide-react";
+import { Download, Play, AlertTriangle, Home, RefreshCcw } from "lucide-react";
 import {
   api,
   ApiRequestError,
@@ -243,7 +243,7 @@ function MivaCatalogDataSection({
       <UploadControlView
         kind="miva_snapshot"
         label="Upload Miva catalog snapshot (.csv)"
-        hint="A full current Miva catalog export. Required for every reconciliation run."
+        hint="A full current Miva catalog snapshot. Required for every reconciliation run."
         state={mivaCsv}
       />
     ),
@@ -260,7 +260,7 @@ function MivaCatalogDataSection({
           <button className={layout === "sidebyside" ? "active" : ""} onClick={() => setLayout("sidebyside")}>
             Side-by-side
           </button>
-          <span>(temporary preview switcher -- tell me which one to keep)</span>
+          <span>(preview -- pending final decision)</span>
         </div>
       )}
       {layout === "sidebyside" && items.length > 1 ? (
@@ -352,7 +352,14 @@ export default function HomePage() {
 
   return (
     <div>
-      <h2>{homeLabel}</h2>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {homeLabel === "Run Reconciliation" ? (
+          <RefreshCcw size={24} strokeWidth={2.25} />
+        ) : (
+          <Home size={24} strokeWidth={2.25} />
+        )}{" "}
+        {homeLabel}
+      </h2>
       <div className="layout-switcher">
         Page name:
         {HOME_LABEL_OPTIONS.map((label) => (
@@ -360,7 +367,7 @@ export default function HomePage() {
             {label}
           </button>
         ))}
-        <span>(temporary -- tell me which name to keep)</span>
+        <span>(preview -- pending final decision)</span>
       </div>
       {error && <ErrorBanner message={error} />}
 
@@ -386,7 +393,12 @@ export default function HomePage() {
         </div>
         <div className="stat">
           <div className="value">{awaitingOutcome}</div>
-          <div className="label">Batches awaiting import outcome</div>
+          <div
+            className="label"
+            title="Batches whose CSVs were generated/downloaded, but you haven't yet recorded whether the manual Miva import succeeded on the batch's page."
+          >
+            Batches awaiting import outcome
+          </div>
         </div>
         <div className="stat">
           <div className="value">
@@ -396,7 +408,12 @@ export default function HomePage() {
               ).length
             }
           </div>
-          <div className="label">Batches with failed verification or push</div>
+          <div
+            className="label"
+            title="Batches where the API push to Miva failed (partly or fully), or where post-import verification found mismatches -- open the batch to investigate."
+          >
+            Batches with failed verification or push
+          </div>
         </div>
       </div>
 

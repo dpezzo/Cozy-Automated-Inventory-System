@@ -23,6 +23,7 @@ import {
 import { UploadBox } from "../components/UploadBox";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { importStatusPillClass, IMPORT_STATUS_TOOLTIPS } from "../lib/format";
 
 const IMPORT_STATUSES = ["GENERATED", "DOWNLOADED", "IMPORT_REPORTED", "IMPORT_FAILED"];
 const IMPORT_STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -30,12 +31,6 @@ const IMPORT_STATUS_ICONS: Record<string, React.ReactNode> = {
   DOWNLOADED: <Download size={16} />,
   IMPORT_REPORTED: <CheckCircle2 size={16} />,
   IMPORT_FAILED: <XCircle size={16} />,
-};
-const IMPORT_STATUS_TOOLTIPS: Record<string, string> = {
-  GENERATED: "The default starting state -- the batch's files exist but nothing has been downloaded or imported yet.",
-  DOWNLOADED: "Click this after you've downloaded the CSV files, before you've imported them into Miva.",
-  IMPORT_REPORTED: "Click this after you've manually imported the CSV into Miva and confirmed it succeeded.",
-  IMPORT_FAILED: "Click this if the manual import into Miva failed or was abandoned.",
 };
 
 /** ruleId is always "<vendorKey>-inventory-v1" (see runPipeline.ts's ruleIdFor) -- strips that fixed suffix to recover the vendorKey for a vendor label lookup. Duplicated from RunHistoryPage.tsx/RunReviewPage.tsx's identical helper since it's a one-liner and pulling in a shared module for it isn't worth the indirection. */
@@ -154,7 +149,10 @@ export default function BatchDetailPage() {
             <strong>Run:</strong> <Link to={`/runs/${batch.runId}`}>{batch.runId.slice(0, 8)}</Link>
           </div>
           <div>
-            <strong>Import status:</strong> {batch.importStatus}
+            <strong>Import status:</strong>{" "}
+            <span className={`pill ${importStatusPillClass(batch.importStatus)}`} title={IMPORT_STATUS_TOOLTIPS[batch.importStatus]}>
+              {batch.importStatus}
+            </span>
           </div>
           <div>
             <strong>Created:</strong> {new Date(batch.createdAt).toLocaleString()}
@@ -166,10 +164,10 @@ export default function BatchDetailPage() {
         {mivaApi.configured && (
           <div className="tab-strip" role="tablist">
             <button role="tab" aria-selected={importTab === "api"} className={importTab === "api" ? "active" : ""} onClick={() => setImportTab("api")}>
-              Push via API
+              Push via API (recommended)
             </button>
             <button role="tab" aria-selected={importTab === "csv"} className={importTab === "csv" ? "active" : ""} onClick={() => setImportTab("csv")}>
-              Download CSVs
+              Download CSVs (backup method)
             </button>
           </div>
         )}
@@ -191,7 +189,10 @@ export default function BatchDetailPage() {
               </select>
             </label>
             {mivaApi.environment === "production" && (
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 8, color: "var(--amber)" }}>
+              <label
+                style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 8, color: "var(--amber)" }}
+                title="Production changes are visible to real customers immediately. Development is a safe test store -- nothing here affects customers."
+              >
                 <input type="checkbox" checked={confirmProduction} onChange={(e) => setConfirmProduction(e.target.checked)} />
                 <AlertTriangle size={14} /> I confirm this is a production write to the live Miva store.
               </label>
@@ -293,12 +294,12 @@ export default function BatchDetailPage() {
               <CheckCircle2 size={16} /> Post-import verification
             </h3>
             <p style={{ fontSize: 13, color: "var(--muted)" }}>
-              Upload a fresh Miva export taken after the import to verify approved changes landed and nothing else moved.
+              Upload a fresh Miva snapshot taken after the import to verify approved changes landed and nothing else moved.
             </p>
             <UploadBox
               kind="post_import_snapshot"
-              label="Upload a post-import Miva export"
-              hint="A full Miva catalog export taken after you manually import a generated Update CSV, used to verify the import landed correctly."
+              label="Upload a post-import Miva snapshot"
+              hint="A full Miva catalog snapshot taken after you manually import a generated Update CSV, used to verify the import landed correctly."
               onUploaded={loadPostImportFiles}
             />
             <div className="toolbar" style={{ marginTop: 12 }}>

@@ -15,7 +15,10 @@ export function useUploadControl(kind: string, onUploaded: (file: FileRecord) =>
     try {
       const result = await api.uploadFile(file, kind, confirmDuplicate);
       if (result.duplicateWarning && !confirmDuplicate) {
-        setMessage(result.duplicateWarning + " Click Upload again to store it as a new copy, or reuse the existing file below.");
+        setMessage(
+          result.duplicateWarning +
+            " Uploading it again would create a separate copy and could result in two runs for the same data. Click Upload again to store it as a new copy anyway, or select the existing file from the dropdown below instead.",
+        );
         setPendingDuplicateFile(file);
       } else {
         setMessage(`Uploaded: ${result.file.originalFilename} (${result.file.rowCount ?? "?"} rows)`);

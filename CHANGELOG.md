@@ -2,6 +2,33 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-09-24 — Full UX audit pass, Run Review layout fixes, and deployment prep
+
+### Added
+
+**Full UI/UX audit pass** (completing the deferred findings from the prior session's focused pass)
+- Import-status pills (`GENERATED`/`DOWNLOADED`/`API_PUSH_SUCCEEDED`/etc.) now have plain-language tooltips everywhere they're shown (Run History, Run Review, Batch Detail), consolidated into a shared `IMPORT_STATUS_TOOLTIPS` map (`lib/format.ts`). Batch Detail's import status is now a color-coded pill matching the other pages instead of plain text. Run-status pills (`validating`/`normalizing`/etc.) similarly tooltipped.
+- Manage Vendors: inline explanations added for Match strategy, In-stock threshold, and Timezone fields (previously unexplained settings with real reconciliation-logic consequences); vendor key immutability now a bold warning instead of easy-to-miss inline text; vendor table shows humanized labels and actual brand names instead of raw enums/counts; deactivate confirmation now states the actual consequence.
+- Run Review: Outcome column/cell now shows "Matched"/"NLA (Miva only)" consistently instead of a raw enum in the table body; tooltips added for the rule/config hash, the vendor exception report's purpose, the Legacy Comparison link, and the "Changed fields" column.
+- Terminology unified on "snapshot" (was a mix of "snapshot"/"export" for the same Miva catalog file across pages). Duplicate-file upload warning now explains why it matters and names the dropdown to use instead.
+- Clear Data's storage-alert section now says where the resulting banner appears; "Everything" option relabeled and visually flagged. Manage Users: Admin vs. Member permissions now explained. Catalog's remaining column headers tooltipped. Run History shows empty-state copy instead of a blank grid. Login page tells a new hire to ask an admin for an account.
+- The two temporary owner-decision switchers' on-page copy reworded from "(tell me which one to keep)" to "(preview -- pending final decision)" since the original phrasing read like an internal note left in the shipped UI; the switchers themselves are unchanged, still pending Cale's review.
+
+**Run Reconciliation icon + sidebar polish**
+- Wired an icon (`RefreshCcw`) to the "Run Reconciliation" preview label, switching automatically with the Home/Run Reconciliation toggle, in both the sidebar nav and the page heading.
+- Sidebar nav and all page-heading icons made bolder and larger; sidebar widened so "Run Reconciliation" and "Audits & Reviews" no longer wrap; brand subtitle resized to match the logo's width exactly.
+- Run History and Settings page headings were missing their icon (inconsistent with every other page) — added, matching their sidebar entries.
+- Dark mode toggle moved from the sidebar footer to a fixed icon button in the top-right corner of every page.
+- Login page tagline reworded to lead with updating inventory ("Update your Miva store's inventory using vendor stock files") rather than reconciliation, since that's the app's actual point from a user's perspective.
+
+### Fixed
+- **Run Review page's row table stuck at a fixed 400px height regardless of screen size** — root cause: the fill-the-viewport height calculation ran once before the run/summary data finished loading (the page shows a "Loading..." fallback first, so the table wasn't in the DOM yet), then never recomputed afterward. Now recomputes whenever the run/summary/batches data changes.
+- **The same fill-the-viewport technique (also used by Run History, Miva Catalog, and Activity Log) didn't react to the Instructions card being collapsed/expanded**, since that changes page layout without resizing the window or visibly resizing `document.body` (pinned to `min-height: 100vh`). `InstructionsCard` now dispatches a synthetic `resize` event on toggle, fixing this for all four pages at the source.
+- Run Review's trailing "Back to run history / Legacy comparison" links were forcing an extra scroll below the now-taller table; moved above the table as a breadcrumb (matching the pattern already used on Manage Vendors/Users) so nothing sits below the auto-fitting table anymore.
+
+### Deployment
+- Restored `Dockerfile` (deleted during troubleshooting) with its one Railway-incompatible line removed -- Railway rejects the Docker `VOLUME` instruction and expects a Railway Volume configured separately in its dashboard instead. Deploy is otherwise blocked on Railway usage credits resetting.
+
 ## 2026-09-23 — CozyWinters brand restyle, dark mode, icon pass, and novice-usability UX pass
 
 ### Added

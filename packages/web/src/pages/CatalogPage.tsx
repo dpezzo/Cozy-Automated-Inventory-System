@@ -135,12 +135,42 @@ const COLUMNS: ColumnDef[] = [
   { key: "gtin", label: "GTIN", get: (r) => r.gtinRaw ?? "", defaultWidth: 130, title: "Global Trade Item Number (barcode)" },
   { key: "mpn", label: "MPN", get: (r) => r.mpnRaw ?? "", defaultWidth: 110, title: "Manufacturer Part Number" },
   { key: "brand", label: "Brand", get: (r) => r.brandRaw ?? "", defaultWidth: 130 },
-  { key: "simpleInventory", label: "Simple inventory", get: (r) => r.currentSimpleInventory ?? "", defaultWidth: 140 },
-  { key: "availability", label: "Availability", get: (r) => r.currentAvailability ?? "", defaultWidth: 120 },
+  {
+    key: "simpleInventory",
+    label: "Simple inventory",
+    get: (r) => r.currentSimpleInventory ?? "",
+    defaultWidth: 140,
+    title: "This product's current in-stock/out-of-stock status in Miva.",
+  },
+  {
+    key: "availability",
+    label: "Availability",
+    get: (r) => r.currentAvailability ?? "",
+    defaultWidth: 120,
+    title: "Whether this product can currently be ordered in Miva.",
+  },
   { key: "restockMessage", label: "Restock message", get: (r) => r.currentRestockMessage ?? "", defaultWidth: 160 },
-  { key: "dataFeed", label: "Datafeed", get: (r) => r.currentDataFeed ?? "", defaultWidth: 100 },
-  { key: "shoppingFeed", label: "Shopping feed", get: (r) => r.currentShoppingFeed ?? "", defaultWidth: 120 },
-  { key: "reportFlag", label: "Report flag", get: (r) => r.currentReportFlag ?? "", defaultWidth: 110 },
+  {
+    key: "dataFeed",
+    label: "Datafeed",
+    get: (r) => r.currentDataFeed ?? "",
+    defaultWidth: 100,
+    title: "Whether this product is included in Miva's data feed exports.",
+  },
+  {
+    key: "shoppingFeed",
+    label: "Shopping feed",
+    get: (r) => r.currentShoppingFeed ?? "",
+    defaultWidth: 120,
+    title: "Whether this product is included in shopping/comparison feed exports.",
+  },
+  {
+    key: "reportFlag",
+    label: "Report flag",
+    get: (r) => r.currentReportFlag ?? "",
+    defaultWidth: 110,
+    title: "An internal Miva reporting flag on this product.",
+  },
 ];
 
 export default function CatalogPage() {
@@ -404,7 +434,7 @@ export default function CatalogPage() {
   return (
     <div>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Layers size={20} /> Miva Catalog
+        <Layers size={24} strokeWidth={2.25} /> Miva Catalog
       </h2>
       <InstructionsCard
         pageKey="catalog"

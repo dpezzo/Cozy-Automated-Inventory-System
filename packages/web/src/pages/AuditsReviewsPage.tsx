@@ -315,7 +315,7 @@ function LegacyComparisonSection() {
   return (
     <div>
       <div className="card">
-        <StepHeader step={1} complete={legacyFiles.length > 0} title="Upload legacy audit file" />
+        <StepHeader step={1} complete={legacyFiles.length > 0} title="Upload legacy audit file (skip if already uploaded)" />
         <UploadBox
           kind="legacy_audit"
           label="Upload legacy Olliix_Audit_Master CSV (optional, one-time)"
@@ -495,6 +495,7 @@ function LegacyComparisonSection() {
                             onClick={() => toggleExpanded(key)}
                             style={{ border: "none", background: "none", cursor: "pointer", padding: 0, fontSize: 12 }}
                             aria-label={expanded ? "Collapse row detail" : "Expand row detail"}
+                            title={expanded ? "Collapse field-by-field detail" : "View field-by-field detail"}
                           >
                             {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                           </button>
@@ -677,7 +678,7 @@ export default function AuditsReviewsPage() {
   return (
     <div>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <ClipboardCheck size={20} /> Audits &amp; Reviews
+        <ClipboardCheck size={24} strokeWidth={2.25} /> Audits &amp; Reviews
       </h2>
       <InstructionsCard
         pageKey="audits"

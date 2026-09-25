@@ -13,6 +13,27 @@ function parseAllowlist(text: string): string[] {
     .filter(Boolean);
 }
 
+const MATCH_STRATEGY_LABELS: Record<string, string> = {
+  "upc-to-gtin": "UPC to GTIN",
+  "sku-to-mpn": "SKU to MPN",
+};
+
+const FILE_SHAPE_LABELS: Record<string, string> = {
+  simple_csv: "CSV / XLSX",
+  plugin: "Custom parser",
+  custom: "Custom parser",
+};
+
+const MATCH_STRATEGY_HINT =
+  "Which vendor-file identifier is matched against which Miva catalog field. Use UPC to GTIN unless the vendor only provides SKUs, not UPCs -- then use SKU to MPN instead.";
+const IN_STOCK_THRESHOLD_HINT =
+  "Minimum vendor quantity to be treated as in-stock. E.g. 6 means any vendor quantity below 6 is treated as out of stock in the proposed Miva update.";
+const TIMEZONE_HINT = "Used to determine this vendor's \"business day\" cutoff when comparing file dates. Format: America/New_York, America/Chicago, etc.";
+
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4, fontWeight: 400 }}>{children}</div>;
+}
+
 /** Inline edit form for any vendor, any file_shape. columnMapping fields only show for simple_csv vendors. */
 function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; onDone: () => void; onCancel: () => void }) {
   const [vendorLabel, setVendorLabel] = useState(vendor.vendorLabel);
@@ -70,11 +91,19 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
             style={{ width: "100%" }}
             required
           />
+          <FieldHint>{IN_STOCK_THRESHOLD_HINT}</FieldHint>
         </label>
         <label>
           Timezone (IANA)
           <br />
-          <input value={timezone} onChange={(e) => setTimezone(e.target.value)} style={{ width: "100%" }} required />
+          <input
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            placeholder="America/New_York"
+            style={{ width: "100%" }}
+            required
+          />
+          <FieldHint>{TIMEZONE_HINT}</FieldHint>
         </label>
         <label>
           Match strategy
@@ -83,6 +112,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
             <option value="upc-to-gtin">UPC to GTIN</option>
             <option value="sku-to-mpn">SKU to MPN</option>
           </select>
+          <FieldHint>{MATCH_STRATEGY_HINT}</FieldHint>
         </label>
         <label style={{ gridColumn: "1 / -1" }}>
           Brand allowlist (comma-separated, e.g. "Beautyrest, Serta, Woolrich" for Olliix)
@@ -206,16 +236,20 @@ function AddVendorForm({
 
       <div className="grid cols-2">
         <label>
-          Vendor key (immutable, e.g. "acme-co")
+          Vendor key
           <br />
           <input
             value={vendorKey}
             onChange={(e) => setVendorKey(e.target.value)}
             pattern="[a-z0-9]+(-[a-z0-9]+)*"
             title="lowercase letters, numbers, and hyphens only"
+            placeholder="acme-co"
             style={{ width: "100%" }}
             required
           />
+          <FieldHint>
+            <strong style={{ color: "var(--red)" }}>Cannot be changed after creation.</strong> Lowercase letters, numbers, and hyphens only.
+          </FieldHint>
         </label>
         <label>
           Vendor label
@@ -226,11 +260,13 @@ function AddVendorForm({
           In-stock threshold
           <br />
           <input type="number" min={1} value={inStockThreshold} onChange={(e) => setInStockThreshold(e.target.value)} style={{ width: "100%" }} required />
+          <FieldHint>{IN_STOCK_THRESHOLD_HINT}</FieldHint>
         </label>
         <label>
           Timezone (IANA)
           <br />
-          <input value={timezone} onChange={(e) => setTimezone(e.target.value)} style={{ width: "100%" }} required />
+          <input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="America/New_York" style={{ width: "100%" }} required />
+          <FieldHint>{TIMEZONE_HINT}</FieldHint>
         </label>
         <label>
           Match strategy
@@ -239,6 +275,7 @@ function AddVendorForm({
             <option value="upc-to-gtin">UPC to GTIN</option>
             <option value="sku-to-mpn">SKU to MPN</option>
           </select>
+          <FieldHint>{MATCH_STRATEGY_HINT}</FieldHint>
         </label>
         <label style={{ gridColumn: "1 / -1" }}>
           Brand allowlist (comma-separated, e.g. "Beautyrest, Serta, Woolrich" for Olliix)
@@ -391,7 +428,12 @@ export default function ManageVendorsPage() {
   // spec (a deactivated vendor is expected to be re-created or restored by a
   // developer, not casually flipped back on).
   async function deactivate(v: VendorConfig) {
-    if (!window.confirm(`Deactivate vendor "${v.vendorLabel}"? This cannot be undone from this screen.`)) return;
+    if (
+      !window.confirm(
+        `Deactivate vendor "${v.vendorLabel}"? It will no longer be available when starting a new run. Existing runs and batches for this vendor are unaffected. This cannot be undone from this screen.`,
+      )
+    )
+      return;
     setBusyKey(v.vendorKey);
     setError(null);
     try {
@@ -417,7 +459,7 @@ export default function ManageVendorsPage() {
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Truck size={20} /> Manage Vendors
+          <Truck size={24} strokeWidth={2.25} /> Manage Vendors
         </h2>
         {!showAddVendor && (
           <button className="primary" onClick={() => setShowAddVendor(true)}>
@@ -464,10 +506,14 @@ export default function ManageVendorsPage() {
               <Fragment key={v.vendorKey}>
                 <tr>
                   <td>{v.vendorLabel}</td>
-                  <td>{v.matchStrategy}</td>
+                  <td title={MATCH_STRATEGY_HINT}>{MATCH_STRATEGY_LABELS[v.matchStrategy] ?? v.matchStrategy}</td>
                   <td>{v.inStockThreshold}</td>
-                  <td>{v.brandAllowlist.length}</td>
-                  <td>{v.fileShape}</td>
+                  <td title={v.brandAllowlist.join(", ") || undefined}>
+                    {v.brandAllowlist.length <= 2
+                      ? v.brandAllowlist.join(", ") || "-"
+                      : `${v.brandAllowlist.slice(0, 2).join(", ")} +${v.brandAllowlist.length - 2} more`}
+                  </td>
+                  <td>{FILE_SHAPE_LABELS[v.fileShape] ?? v.fileShape}</td>
                   <td>
                     <span
                       style={{

@@ -16,7 +16,7 @@ import ManageVendorsPage from "./pages/ManageVendorsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ClearDataPage from "./pages/ClearDataPage";
 import { DataSizeAlert } from "./components/DataSizeAlert";
-import { Sun, Moon, Home, History, Layers, ClipboardCheck, Settings, HelpCircle } from "lucide-react";
+import { Sun, Moon, Home, RefreshCcw, History, Layers, ClipboardCheck, Settings, HelpCircle } from "lucide-react";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -46,29 +46,30 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
         <nav>
           <NavLink to="/" end>
-            <Home size={16} /> {homeLabel}
+            {homeLabel === "Run Reconciliation" ? (
+              <RefreshCcw size={19} strokeWidth={2.5} />
+            ) : (
+              <Home size={19} strokeWidth={2.5} />
+            )}{" "}
+            {homeLabel}
           </NavLink>
           <NavLink to="/runs" className={() => (runHistoryActive ? "active" : "")}>
-            <History size={16} /> Run History
+            <History size={19} strokeWidth={2.5} /> Run History
           </NavLink>
           <NavLink to="/catalog">
-            <Layers size={16} /> Miva Catalog
+            <Layers size={19} strokeWidth={2.5} /> Miva Catalog
           </NavLink>
           <NavLink to="/audits">
-            <ClipboardCheck size={16} /> Audits &amp; Reviews
+            <ClipboardCheck size={19} strokeWidth={2.5} /> Audits &amp; Reviews
           </NavLink>
           {user?.role === "admin" && (
             <NavLink to="/settings">
-              <Settings size={16} /> Settings
+              <Settings size={19} strokeWidth={2.5} /> Settings
             </NavLink>
           )}
         </nav>
         <div style={{ marginTop: 32, fontSize: 12, color: "var(--muted)", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</div>
-          <button style={{ justifyContent: "flex-start" }} onClick={toggleTheme}>
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-            {theme === "dark" ? "Light mode" : "Dark mode"}
-          </button>
           <div style={{ display: "flex", gap: 8 }}>
             <button style={{ flex: 1 }} onClick={() => logout()}>
               Sign out
@@ -80,6 +81,13 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       {glossaryOpen && <Glossary onClose={() => setGlossaryOpen(false)} />}
+      <button
+        className="theme-toggle-corner"
+        onClick={toggleTheme}
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
       <main className="main">
         <DataSizeAlert />
         {children}
