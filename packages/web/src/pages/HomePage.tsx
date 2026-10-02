@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download, Play, AlertTriangle, Home, RefreshCcw } from "lucide-react";
 import {
@@ -151,36 +151,6 @@ function TabbedCard({
   );
 }
 
-/** Alternative to TabbedCard: shows every item side by side with an "OR" divider, instead of tabs. */
-function OrDividerRow({
-  step,
-  complete,
-  title,
-  items,
-}: {
-  step?: number;
-  complete?: boolean;
-  title: string;
-  items: TabDef[];
-}) {
-  return (
-    <div className="card">
-      <div className="step-header">
-        {step !== undefined && <StepBadge step={step} complete={complete} />}
-        <h3>{title}</h3>
-      </div>
-      <div className="or-divider-row">
-        {items.map((item, i) => (
-          <Fragment key={item.key}>
-            {i > 0 && <div className="or-divider-label">OR</div>}
-            <WholeCardDropzone onFile={item.onFileDrop}>{item.content}</WholeCardDropzone>
-          </Fragment>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function VendorDataSection({
   step,
   complete,
@@ -225,7 +195,6 @@ function MivaCatalogDataSection({
   mivaApiConfigured: boolean;
   onChanged: (file: FileRecord) => void;
 }) {
-  const [layout, setLayout] = useState<"tabs" | "sidebyside">("tabs");
   const mivaCsv = useUploadControl("miva_snapshot", onChanged);
 
   // API pull is the preferred, first-choice source; CSV upload is the fallback
@@ -249,27 +218,7 @@ function MivaCatalogDataSection({
     ),
   });
 
-  return (
-    <>
-      {items.length > 1 && (
-        <div className="layout-switcher">
-          Preview layout:
-          <button className={layout === "tabs" ? "active" : ""} onClick={() => setLayout("tabs")}>
-            Tabs
-          </button>
-          <button className={layout === "sidebyside" ? "active" : ""} onClick={() => setLayout("sidebyside")}>
-            Side-by-side
-          </button>
-          <span>(preview -- pending final decision)</span>
-        </div>
-      )}
-      {layout === "sidebyside" && items.length > 1 ? (
-        <OrDividerRow step={step} complete={complete} title="Miva Catalog Data" items={items} />
-      ) : (
-        <TabbedCard step={step} complete={complete} title="Miva Catalog Data" tabs={items} />
-      )}
-    </>
-  );
+  return <TabbedCard step={step} complete={complete} title="Miva Catalog Data" tabs={items} />;
 }
 
 export default function HomePage() {

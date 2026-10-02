@@ -117,6 +117,8 @@ export async function callMivaApi(
       try {
         parsed = JSON.parse(text);
       } catch {
+        // eslint-disable-next-line no-console
+        console.error(`Miva API non-JSON response body (HTTP ${response.status}):`, text.slice(0, 500));
         throw new MivaApiError(
           `Miva API returned a non-JSON response (HTTP ${response.status}).`,
           undefined,
