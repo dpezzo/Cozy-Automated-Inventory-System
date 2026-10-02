@@ -144,7 +144,10 @@ export const api = {
     request<ReviewRowView[]>(`/runs/${id}/rows?${new URLSearchParams(params).toString()}`),
   approveAllClean: (runId: string) => request<{ approved: number }>(`/runs/${runId}/decisions/approve-all-clean`, { method: "POST" }),
   bulkDecision: (runId: string, rowIds: string[], decision: "APPROVED" | "REJECTED") =>
-    request(`/runs/${runId}/decisions/bulk`, { method: "POST", body: JSON.stringify({ rowIds, decision }) }),
+    request<{ applied: number; skipped: string[] }>(`/runs/${runId}/decisions/bulk`, {
+      method: "POST",
+      body: JSON.stringify({ rowIds, decision }),
+    }),
   setDecision: (runId: string, rowId: string, decision: string) =>
     request(`/runs/${runId}/decisions/${rowId}`, { method: "POST", body: JSON.stringify({ decision }) }),
   batchableCount: (runId: string) => request<{ count: number }>(`/runs/${runId}/batchable-count`),

@@ -26,6 +26,7 @@ export function useUploadControl(kind: string, onUploaded: (file: FileRecord) =>
       }
       onUploaded(result.file);
     } catch (err) {
+      console.error(err);
       setMessage(friendlyError(err, "Upload failed."));
     } finally {
       setBusy(false);

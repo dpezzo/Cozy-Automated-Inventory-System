@@ -65,6 +65,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
       });
       onDone();
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to update vendor.");
     } finally {
       setSaving(false);
@@ -224,6 +225,7 @@ function AddVendorForm({
       setPluginFilename("");
       onDone();
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to create vendor.");
     } finally {
       setCreating(false);
@@ -419,6 +421,7 @@ export default function ManageVendorsPage() {
       const p = await api.listAvailablePluginFiles();
       setPluginFiles(p);
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to reload plugins.");
     }
   }
@@ -440,6 +443,7 @@ export default function ManageVendorsPage() {
       await api.deleteVendor(v.vendorKey);
       refresh();
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to deactivate vendor.");
     } finally {
       setBusyKey(null);

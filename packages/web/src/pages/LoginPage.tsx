@@ -52,6 +52,7 @@ function GoogleSignInButton({ clientId, onError }: { clientId: string; onError: 
             try {
               await loginWithGoogle(resp.credential);
             } catch (err) {
+              console.error(err);
               if (err instanceof ApiRequestError && err.body.error === "ACCOUNT_NOT_PROVISIONED") {
                 onError("Your Google account isn't set up yet — ask an admin to add you.");
               } else {
@@ -97,6 +98,7 @@ export default function LoginPage() {
     try {
       await login(email, password);
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Sign-in failed.");
     } finally {
       setBusy(false);

@@ -58,6 +58,7 @@ export default function ManageUsersPage() {
       setShowAddUser(false);
       refresh();
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to create user.");
     } finally {
       setCreating(false);
@@ -72,6 +73,7 @@ export default function ManageUsersPage() {
       await api.updateUser(u.id, { isActive: !u.isActive });
       refresh();
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to update user.");
     } finally {
       setBusyId(null);
@@ -85,6 +87,7 @@ export default function ManageUsersPage() {
       await api.updateUser(u.id, { role });
       refresh();
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to update user.");
     } finally {
       setBusyId(null);
@@ -119,6 +122,7 @@ export default function ManageUsersPage() {
       }
       setEditingId(null);
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to update user.");
     } finally {
       setSavingEdit(false);

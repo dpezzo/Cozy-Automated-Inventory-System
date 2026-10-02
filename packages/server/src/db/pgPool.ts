@@ -8,7 +8,16 @@ export function getPool(): Pool {
     if (!connectionString) {
       throw new Error("DATABASE_URL environment variable is required.");
     }
-    pool = new Pool({ connectionString });
+    pool = new Pool({
+      connectionString,
+      // Without these, a leaked/exhausted connection or a runaway query
+      // hangs the request forever with no error and no log line -- these
+      // make such failures fail fast and loud instead.
+      connectionTimeoutMillis: 10_000,
+      idleTimeoutMillis: 30_000,
+      statement_timeout: 30_000,
+      query_timeout: 30_000,
+    });
   }
   return pool;
 }

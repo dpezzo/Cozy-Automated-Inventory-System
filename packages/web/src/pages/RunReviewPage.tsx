@@ -12,6 +12,7 @@ import {
 } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { InfoBanner } from "../components/InfoBanner";
 import { importStatusPillClass, runStatusPillClass, IMPORT_STATUS_TOOLTIPS, RUN_STATUS_TOOLTIPS } from "../lib/format";
 import { friendlyError } from "../lib/errors";
 
@@ -129,6 +130,7 @@ export default function RunReviewPage() {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [vendorReportMenuOpen, setVendorReportMenuOpen] = useState(false);
   const [vendorReportCategories, setVendorReportCategories] = useState<string[]>(VENDOR_EXCEPTION_DEFAULT_CATEGORIES);
@@ -361,9 +363,11 @@ export default function RunReviewPage() {
   async function withBusy(fn: () => Promise<void>) {
     setBusy(true);
     setError(null);
+    setInfo(null);
     try {
       await fn();
     } catch (err) {
+      console.error(err);
       setError(friendlyError(err, "Action failed."));
     } finally {
       setBusy(false);
@@ -373,7 +377,8 @@ export default function RunReviewPage() {
   async function approveAllClean() {
     if (!window.confirm("Approve every clean, changed row in this run? This can be undone per-row until you generate a batch.")) return;
     await withBusy(async () => {
-      await api.approveAllClean(runId!);
+      const { approved } = await api.approveAllClean(runId!);
+      if (approved === 0) setInfo("No eligible clean rows to approve -- everything clean was already decided or locked.");
       await Promise.all([loadRun(), loadRows()]);
     });
   }
@@ -382,7 +387,13 @@ export default function RunReviewPage() {
     const verb = decision === "APPROVED" ? "Approve" : "Reject";
     if (!window.confirm(`${verb} the ${selected.size} selected row${selected.size === 1 ? "" : "s"}? This can be undone per-row until you generate a batch.`)) return;
     await withBusy(async () => {
-      await api.bulkDecision(runId!, [...selected], decision);
+      const { applied, skipped } = await api.bulkDecision(runId!, [...selected], decision);
+      if (skipped.length > 0) {
+        const pastTense = decision === "APPROVED" ? "Approved" : "Rejected";
+        setInfo(
+          `${pastTense} ${applied} of ${applied + skipped.length} selected row${applied + skipped.length === 1 ? "" : "s"} (${skipped.length} ${skipped.length === 1 ? "was" : "were"} ineligible -- not clean, locked, or already decided).`,
+        );
+      }
       setSelected(new Set());
       await Promise.all([loadRun(), loadRows()]);
     });
@@ -514,6 +525,7 @@ export default function RunReviewPage() {
       )}
 
       {error && <ErrorBanner message={error} />}
+      {info && <InfoBanner message={info} />}
 
       {summary && (
         <div className="card">

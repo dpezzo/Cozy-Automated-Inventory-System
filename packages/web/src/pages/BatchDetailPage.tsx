@@ -90,6 +90,7 @@ export default function BatchDetailPage() {
       const result = await api.pushBatchToMiva(batchId, confirmProduction, pushTarget);
       setPushResult(result);
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Push to Miva failed.");
     } finally {
       setBusy(false);
@@ -104,6 +105,7 @@ export default function BatchDetailPage() {
       await api.setImportOutcome(batchId, status);
       await load();
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to record outcome.");
     } finally {
       setBusy(false);
@@ -119,6 +121,7 @@ export default function BatchDetailPage() {
       setVerificationRows(result.rows);
       await load();
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Verification failed.");
     } finally {
       setBusy(false);

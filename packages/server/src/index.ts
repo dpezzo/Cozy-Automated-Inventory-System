@@ -22,6 +22,22 @@ async function main() {
   app.disable("x-powered-by");
   app.use(express.json({ limit: "5mb" }));
 
+  // Minimal request log for /api traffic -- without this, a request that
+  // never reaches the server and a request that reaches it but hangs are
+  // indistinguishable from the outside.
+  app.use((req, res, next) => {
+    if (!req.path.startsWith("/api")) {
+      next();
+      return;
+    }
+    const start = Date.now();
+    res.on("finish", () => {
+      // eslint-disable-next-line no-console
+      console.log(`${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms`);
+    });
+    next();
+  });
+
   // Cookie "secure" must reflect whether the connection is actually HTTPS,
   // not merely NODE_ENV: this app is served over plain http://localhost in
   // its default native deployment, and a "secure" cookie is silently

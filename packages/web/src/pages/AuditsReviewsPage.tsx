@@ -241,6 +241,7 @@ function LegacyComparisonSection() {
       const result = await api.runLegacyComparison(selectedRun, selectedLegacy);
       setRows(result.rows);
     } catch (err) {
+      console.error(err);
       setError(friendlyError(err, "Legacy comparison failed."));
     } finally {
       setBusy(false);

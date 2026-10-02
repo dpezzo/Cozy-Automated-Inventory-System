@@ -254,6 +254,7 @@ export default function CatalogPage() {
       );
       loadFiles(result.file.id);
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to pull catalog from Miva.");
     } finally {
       setPulling(false);

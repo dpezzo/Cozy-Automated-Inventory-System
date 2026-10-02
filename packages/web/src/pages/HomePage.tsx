@@ -40,6 +40,7 @@ function useVendorAutoUploadControl(onUploaded: (file: FileRecord) => void) {
       }
       onUploaded(result.file);
     } catch (err) {
+      console.error(err);
       setMessage(friendlyError(err, "Upload failed."));
     } finally {
       setBusy(false);
@@ -64,6 +65,7 @@ function MivaApiPullControl({ onPulled }: { onPulled: (file: FileRecord) => void
       );
       onPulled(result.file);
     } catch (err) {
+      console.error(err);
       setMessage(friendlyError(err, "Pull failed."));
     } finally {
       setBusy(false);
@@ -277,6 +279,7 @@ export default function HomePage() {
       const run = await api.createRun(selectedVendorFile, selectedMiva, confirmDuplicate);
       navigate(`/runs/${run.id}`);
     } catch (err) {
+      console.error(err);
       if (err instanceof ApiRequestError && err.body.error === "DUPLICATE_RUN") {
         const existingRunId = (err.body.details as { existingRunId?: string } | undefined)?.existingRunId;
         const proceed = window.confirm(

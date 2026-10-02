@@ -82,6 +82,7 @@ function AlertThresholdEditor({ stats, onSaved }: { stats: DataStats | null; onS
       onSaved(updated);
       setMessage("Saved.");
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to save threshold.");
     } finally {
       setSaving(false);
@@ -101,6 +102,7 @@ function AlertThresholdEditor({ stats, onSaved }: { stats: DataStats | null; onS
       setMegabytes(String(Math.round(updated.thresholds.totalFileBytes / (1024 * 1024))));
       setMessage("Reset to default.");
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to reset threshold.");
     } finally {
       setResetting(false);
@@ -179,6 +181,7 @@ export default function ClearDataPage() {
       setConfirmText("");
       api.getDataStats().then(setStats);
     } catch (err) {
+      console.error(err);
       setError(err instanceof ApiRequestError ? err.body.message : "Failed to clear data.");
     } finally {
       setBusy(false);
