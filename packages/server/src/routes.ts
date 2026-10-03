@@ -11,7 +11,7 @@ import {
   clearLoginAttempts,
 } from "./auth";
 import { getRepository, type RowFilter, type FileKind } from "./db";
-import { readStoredFile, readStoredFileText } from "./storage/fileStorage";
+import { readStoredFile, readStoredFileText, storedFileExists } from "./storage/fileStorage";
 import { uploadFile, uploadVendorFileAutoDetect } from "./domain/uploadService";
 import { pullMivaSnapshotFromApi } from "./miva/mivaProducts";
 import { isMivaApiConfigured } from "./miva/mivaApiClient";
@@ -253,6 +253,9 @@ router.get(
     if (file.kind !== "miva_snapshot" && file.kind !== "post_import_snapshot") {
       throw new ValidationError("UNSUPPORTED_KIND", "Only Miva snapshot files can be browsed as a catalog.");
     }
+    if (!storedFileExists(file.storagePath)) {
+      throw new NotFoundError("This file's content is no longer available in storage (it may predate a server restart).");
+    }
     const { rows } = parseMivaSnapshotCsv(readStoredFileText(file.storagePath));
     res.json(rows);
   }),
@@ -263,6 +266,9 @@ router.get(
   asyncHandler(async (req, res) => {
     const file = await getRepository().findFileById(req.params.id!);
     if (!file) throw new NotFoundError("File not found.");
+    if (!storedFileExists(file.storagePath)) {
+      throw new NotFoundError("This file's content is no longer available in storage (it may predate a server restart).");
+    }
     const buffer = readStoredFile(file.storagePath);
     res.setHeader("Content-Disposition", `attachment; filename="${path.basename(file.originalFilename)}"`);
     res.setHeader("Content-Type", "application/octet-stream");

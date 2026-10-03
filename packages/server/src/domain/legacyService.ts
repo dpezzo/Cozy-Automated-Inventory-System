@@ -1,6 +1,6 @@
 import { compareWithLegacy } from "@cozywinters/shared";
 import { getRepository } from "../db";
-import { readStoredFileText } from "../storage/fileStorage";
+import { readStoredFileText, storedFileExists } from "../storage/fileStorage";
 import { parseLegacyAuditCsv } from "../vendor/legacyAuditCsv";
 import { ValidationError } from "../errors";
 
@@ -12,6 +12,12 @@ export async function runLegacyComparison(runId: string, legacyFileId: string, u
   }
   const run = await repo.findRunById(runId);
   if (!run) throw new ValidationError("RUN_NOT_FOUND", "Run not found.");
+  if (!storedFileExists(legacyFile.storagePath)) {
+    throw new ValidationError(
+      "FILE_CONTENT_MISSING",
+      "This file's content is no longer available in storage (it may predate a server restart) -- re-upload it and try again.",
+    );
+  }
 
   const legacyRows = parseLegacyAuditCsv(readStoredFileText(legacyFile.storagePath));
   const reviewRows = await repo.listRunRows(runId);

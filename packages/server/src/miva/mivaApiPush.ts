@@ -1,6 +1,6 @@
 import type { BatchCsvRow } from "@cozywinters/shared";
 import { getRepository } from "../db";
-import { readStoredFileText } from "../storage/fileStorage";
+import { readStoredFileText, storedFileExists } from "../storage/fileStorage";
 import { readBatchCsv } from "../domain/batchCsvIO";
 import { ValidationError } from "../errors";
 import { callMivaApi } from "./mivaApiClient";
@@ -186,6 +186,12 @@ export async function pushBatchToMiva(
 
   const targetFile = await repo.findFileById(targetFileId);
   if (!targetFile) throw new ValidationError("FILE_NOT_FOUND", `Batch ${target} file not found.`);
+  if (!storedFileExists(targetFile.storagePath)) {
+    throw new ValidationError(
+      "FILE_CONTENT_MISSING",
+      "This batch file's content is no longer available in storage (it may predate a server restart).",
+    );
+  }
   const rows = readBatchCsv(readStoredFileText(targetFile.storagePath));
   if (rows.length === 0) {
     throw new ValidationError("NO_ROWS", "This batch has no rows to push.");

@@ -5,7 +5,11 @@ import { describe, it, expect } from "vitest";
 // out so this test only depends on the pure date-parsing logic under test.
 import { vi } from "vitest";
 vi.mock("./db", () => ({ getRepository: () => ({}) }));
-vi.mock("./storage/fileStorage", () => ({ readStoredFile: () => Buffer.from(""), readStoredFileText: () => "" }));
+vi.mock("./storage/fileStorage", () => ({
+  readStoredFile: () => Buffer.from(""),
+  readStoredFileText: () => "",
+  storedFileExists: () => true,
+}));
 vi.mock("./domain/uploadService", () => ({ uploadFile: () => ({}), uploadVendorFileAutoDetect: () => ({}) }));
 vi.mock("./miva/mivaProducts", () => ({ pullMivaSnapshotFromApi: () => ({}) }));
 vi.mock("./miva/mivaApiClient", () => ({ isMivaApiConfigured: () => false }));

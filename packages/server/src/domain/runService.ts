@@ -1,6 +1,6 @@
 import { getVendorFileAdapter, getDynamicVendorFileAdapter } from "../vendor/vendorFileRegistry";
 import { parseMivaSnapshotCsv } from "../vendor/mivaCsv";
-import { readStoredFile, readStoredFileText } from "../storage/fileStorage";
+import { readStoredFile, readStoredFileText, storedFileExists } from "../storage/fileStorage";
 import { ValidationError, ForbiddenError, NotFoundError } from "../errors";
 import { getRepository, type RunRecord, type ReviewRowView } from "../db";
 import { runReconciliation } from "./runPipeline";
@@ -64,6 +64,12 @@ export async function createRun(input: CreateRunInput): Promise<RunRecord> {
 
   try {
     await repo.updateRunStatus(run.id, "normalizing");
+    if (!storedFileExists(vendorFile.storagePath) || !storedFileExists(mivaFile.storagePath)) {
+      throw new ValidationError(
+        "FILE_CONTENT_MISSING",
+        "One of the selected files' content is no longer available in storage (it may predate a server restart) -- re-upload it and try again.",
+      );
+    }
     const vendorBuffer = readStoredFile(vendorFile.storagePath);
     const { rows: vendorRows } = await vendorAdapter.parse(vendorBuffer);
 

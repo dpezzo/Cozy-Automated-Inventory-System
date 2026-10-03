@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, unlinkSync, existsSync } from "node:fs";
 import path from "node:path";
 import { defaultUploadDir } from "../config/paths";
 
@@ -52,6 +52,18 @@ export function saveGeneratedFile(content: string | Buffer, kind: string, filena
 
 export function readStoredFile(storagePath: string): Buffer {
   return readFileSync(path.join(storageRoot(), storagePath));
+}
+
+/**
+ * True only if the file's bytes are actually still on disk. On a host
+ * without a persistent volume, the uploads directory is wiped on every
+ * container restart while the DB row referencing it survives -- callers
+ * that might reuse an old file record (e.g. dedup-by-checksum) must check
+ * this before trusting storagePath, instead of discovering it's gone via
+ * an ENOENT crash the next time someone tries to read it.
+ */
+export function storedFileExists(storagePath: string): boolean {
+  return existsSync(path.join(storageRoot(), storagePath));
 }
 
 export function readStoredFileText(storagePath: string): string {

@@ -14,6 +14,7 @@ vi.mock("../db", () => ({
 
 vi.mock("../storage/fileStorage", () => ({
   readStoredFileText: () => "irrelevant -- readBatchCsv is mocked below",
+  storedFileExists: () => true,
 }));
 
 function row(productCode: string): BatchCsvRow {

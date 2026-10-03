@@ -1,6 +1,6 @@
 import { verifyPostImport } from "@cozywinters/shared";
 import { getRepository } from "../db";
-import { readStoredFileText } from "../storage/fileStorage";
+import { readStoredFileText, storedFileExists } from "../storage/fileStorage";
 import { parseMivaSnapshotCsv, mivaRowsByProductCode } from "../vendor/mivaCsv";
 import { readBatchCsv } from "./batchCsvIO";
 import { ValidationError } from "../errors";
@@ -27,6 +27,15 @@ export async function runPostImportVerification(
 
   const updateFile = await repo.findFileById(batch.updateFileId);
   if (!updateFile) throw new ValidationError("FILE_NOT_FOUND", "Batch update file not found.");
+
+  for (const f of [updateFile, preImportFile, postImportFile]) {
+    if (!storedFileExists(f.storagePath)) {
+      throw new ValidationError(
+        "FILE_CONTENT_MISSING",
+        "One of the files needed for verification is no longer available in storage (it may predate a server restart).",
+      );
+    }
+  }
 
   const updateBatchRows = readBatchCsv(readStoredFileText(updateFile.storagePath));
   const { rows: preRows } = parseMivaSnapshotCsv(readStoredFileText(preImportFile.storagePath));

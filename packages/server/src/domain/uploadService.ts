@@ -1,4 +1,4 @@
-import { saveUploadedFile, computeChecksum } from "../storage/fileStorage";
+import { saveUploadedFile, computeChecksum, storedFileExists } from "../storage/fileStorage";
 import { getRepository, type FileKind, type FileRecord } from "../db";
 import { getVendorFileAdapter, detectVendorFile } from "../vendor/vendorFileRegistry";
 import { parseMivaSnapshotCsv } from "../vendor/mivaCsv";
@@ -52,7 +52,13 @@ async function finishUpload(
   const repo = getRepository();
 
   const checksum = computeChecksum(buffer);
-  const existing = await repo.findFileByChecksum(kind, checksum);
+  const foundExisting = await repo.findFileByChecksum(kind, checksum);
+  // A DB row surviving a container restart doesn't mean its bytes did too,
+  // on a host with no persistent volume -- only treat it as a real
+  // duplicate if the file is actually still readable. Otherwise fall
+  // through and re-save fresh bytes under a new record, same as if no
+  // duplicate had ever existed.
+  const existing = foundExisting && storedFileExists(foundExisting.storagePath) ? foundExisting : null;
   if (existing && !confirmDuplicate) {
     return { file: existing, duplicateOf: existing };
   }
