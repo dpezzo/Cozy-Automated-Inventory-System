@@ -69,6 +69,7 @@ export const api = {
   logout: () => request("/auth/logout", { method: "POST" }),
   me: () => request<AuthUserView>("/auth/me"),
   getAuthConfig: () => request<{ googleClientId: string | null }>("/auth/config"),
+  getHealth: () => request<{ status: string; dbDriver: string; commitSha: string | null }>("/health"),
 
   listUsers: () => request<UserAccount[]>("/users"),
   listAuditLog: (limit?: number) => request<AuditLogRecord[]>(`/audit-log${limit ? `?limit=${limit}` : ""}`),

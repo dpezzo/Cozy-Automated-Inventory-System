@@ -1,8 +1,19 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { api } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { Users, Truck, Trash2, Settings } from "lucide-react";
 
 export default function SettingsPage() {
+  const [commitSha, setCommitSha] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getHealth()
+      .then((h) => setCommitSha(h.commitSha))
+      .catch(() => setCommitSha(null));
+  }, []);
+
   return (
     <div>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -35,6 +46,9 @@ export default function SettingsPage() {
           </p>
         </Link>
       </div>
+      {commitSha && (
+        <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 24 }}>Build: {commitSha.slice(0, 7)}</p>
+      )}
     </div>
   );
 }

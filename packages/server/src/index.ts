@@ -61,8 +61,11 @@ async function main() {
     }),
   );
 
+  // Render sets RENDER_GIT_COMMIT, Railway sets RAILWAY_GIT_COMMIT_SHA;
+  // neither is set for a native-Windows/local run.
+  const commitSha = process.env.RENDER_GIT_COMMIT ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? null;
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", dbDriver: driver });
+    res.json({ status: "ok", dbDriver: driver, commitSha });
   });
 
   app.use("/api", router);
