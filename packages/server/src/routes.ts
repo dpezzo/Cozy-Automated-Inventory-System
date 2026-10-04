@@ -23,6 +23,7 @@ import { generateVendorExceptionReport } from "./domain/vendorExceptionReportSer
 import { VENDOR_EXCEPTION_CATEGORIES, type VendorExceptionCategory } from "@cozywinters/shared";
 import { runPostImportVerification } from "./domain/verificationService";
 import { pushBatchToMiva, resolveMivaPushEnvironment } from "./miva/mivaApiPush";
+import { uploadDevResetReferenceFile, resetDevSiteProducts } from "./miva/devReset";
 import { listUsers, createUser, updateUser, deactivateUser } from "./domain/userService";
 import { previewClearData, clearData } from "./domain/adminService";
 import {
@@ -226,8 +227,34 @@ router.get(
   "/miva/api-status",
   asyncHandler(async (_req, res) => {
     res.json({
-      configured: isMivaApiConfigured(),
-      environment: resolveMivaPushEnvironment(),
+      configured: await isMivaApiConfigured(),
+      environment: await resolveMivaPushEnvironment(),
+      activeSite: await getRepository().getMivaActiveSite(),
+    });
+  }),
+);
+
+router.put(
+  "/admin/miva-active-site",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { site } = req.body as { site?: string };
+    if (site !== "development" && site !== "live") {
+      res.status(400).json({ error: "INVALID_REQUEST", message: 'site must be "development" or "live".' });
+      return;
+    }
+    await getRepository().setMivaActiveSite(site);
+    await getRepository().insertAuditLog({
+      actorId: req.session.userId!,
+      action: "MIVA_ACTIVE_SITE_CHANGED",
+      entityType: "system",
+      entityId: null,
+      details: { site },
+    });
+    res.json({
+      activeSite: site,
+      configured: await isMivaApiConfigured(),
+      environment: await resolveMivaPushEnvironment(),
     });
   }),
 );
@@ -242,6 +269,41 @@ router.post(
         ? `An identical Miva snapshot was already stored on ${result.duplicateOf.uploadedAt}.`
         : null,
     });
+  }),
+);
+
+// ---------- Dev site reset (admin only -- see devReset.ts) ----------
+
+router.get(
+  "/admin/dev-reset/reference",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    const fileId = await getRepository().getDevResetReferenceFileId();
+    const file = fileId ? await getRepository().findFileById(fileId) : null;
+    res.json({ file });
+  }),
+);
+
+router.post(
+  "/admin/dev-reset/reference",
+  requireAdmin,
+  upload.single("file"),
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      res.status(400).json({ error: "FILE_REQUIRED", message: "No file was uploaded." });
+      return;
+    }
+    const result = await uploadDevResetReferenceFile(req.file.buffer, req.file.originalname, req.session.userId!);
+    res.status(201).json(result);
+  }),
+);
+
+router.post(
+  "/admin/dev-reset",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const result = await resetDevSiteProducts(req.session.userId!);
+    res.json(result);
   }),
 );
 

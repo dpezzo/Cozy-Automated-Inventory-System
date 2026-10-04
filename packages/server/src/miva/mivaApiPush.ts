@@ -38,7 +38,7 @@ function toCustomFieldValues(row: BatchCsvRow): Record<string, Record<string, st
     restockMessage: row["*ORD-INV_RESTOCK_DATE_DF-MERG-IN:"],
     dataFeed: row["*DF-DATAFEED"],
     shoppingFeed: row["*DF-SHOPPING_FEED"],
-    reportFlag: row["SHOW_IN_DARREN_INVENTORY_REPORT_(1)"],
+    dsInvMgt: row["DROPSHIP_INVENTORY_MANAGEMENT"],
   });
 }
 
@@ -67,8 +67,8 @@ export function mapMulticallResults(rows: BatchCsvRow[], response: unknown): Pus
   });
 }
 
-/** Pushes one chunk's worth of rows as a single Product_Update multicall (Iterations) request. */
-async function pushChunk(rows: BatchCsvRow[]): Promise<PushRowResult[]> {
+/** Pushes one chunk's worth of rows as a single Product_Update multicall (Iterations) request. Exported for reuse by devReset.ts, which pushes a reference CSV through this exact same Product_Update shape. */
+export async function pushChunk(rows: BatchCsvRow[]): Promise<PushRowResult[]> {
   const response = await callMivaApi({
     Function: "Product_Update",
     Iterations: rows.map((row) => ({
@@ -85,7 +85,7 @@ const VERIFIED_FIELDS: [MivaLogicalField, keyof BatchCsvRow][] = [
   ["restockMessage", "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:"],
   ["dataFeed", "*DF-DATAFEED"],
   ["shoppingFeed", "*DF-SHOPPING_FEED"],
-  ["reportFlag", "SHOW_IN_DARREN_INVENTORY_REPORT_(1)"],
+  ["dsInvMgt", "DROPSHIP_INVENTORY_MANAGEMENT"],
 ];
 
 interface ProductListItem {
@@ -99,7 +99,7 @@ interface ProductListItem {
  * success:1 response alone. Returns the count of rows with at least one
  * field that doesn't match what was pushed.
  */
-async function verifyPushedRows(rows: BatchCsvRow[]): Promise<number> {
+export async function verifyPushedRows(rows: BatchCsvRow[]): Promise<number> {
   let mismatches = 0;
   for (const group of chunk(rows, CHUNK_SIZE)) {
     const codes = group.map((r) => r.PRODUCT_CODE).join(",");
@@ -136,17 +136,18 @@ export type MivaPushTarget = "update" | "rollback";
 
 /**
  * Single source of truth for the production-confirmation gate's effective
- * environment -- only the literal "development" ever skips confirmation.
- * Used both to enforce the gate here and to decide whether the UI shows the
- * confirmation checkbox (GET /miva/api-status) -- those two MUST stay in
- * sync, since a mismatch (e.g. the status endpoint defaulting to
- * "development" while this defaulted to "") previously let a push reach the
- * server with no checkbox ever shown, only to be rejected with a confusing
- * "requires explicit confirmation" error.
+ * environment -- only the literal "development" active site ever skips
+ * confirmation. Used both to enforce the gate here and to decide whether the
+ * UI shows the confirmation checkbox (GET /miva/api-status) -- those two
+ * MUST stay in sync, since previously they were driven by two independently
+ * set values (the store URL and a separate MIVA_ENVIRONMENT label) that could
+ * drift apart. Both now read the same miva_active_site app_settings value
+ * (via getMivaActiveSite()) that also selects which credential set
+ * mivaApiClient.ts uses, so there is exactly one switch to get wrong.
  */
-export function resolveMivaPushEnvironment(): "development" | "production" {
-  const raw = (process.env.MIVA_ENVIRONMENT ?? "").toLowerCase();
-  return raw === "development" ? "development" : "production";
+export async function resolveMivaPushEnvironment(): Promise<"development" | "production"> {
+  const site = await getRepository().getMivaActiveSite();
+  return site === "development" ? "development" : "production";
 }
 
 /**
@@ -172,11 +173,12 @@ export async function pushBatchToMiva(
     throw new ValidationError("BATCH_INCOMPLETE", `Batch is missing its ${target} file.`);
   }
 
-  // Fail-closed: only the explicit "development" value skips the confirmation
-  // requirement. Any unset, misspelled, or unrecognized MIVA_ENVIRONMENT value
-  // (e.g. a missing env var in a real deployment) is treated as production
-  // rather than silently allowing an unconfirmed live push.
-  const environment = resolveMivaPushEnvironment();
+  // Fail-closed: only the explicit "development" active site skips the
+  // confirmation requirement. Anything else (including "live" or an unset
+  // setting, which defaults to "development" -- see getMivaActiveSite) is
+  // resolved by resolveMivaPushEnvironment() rather than silently allowing an
+  // unconfirmed live push.
+  const environment = await resolveMivaPushEnvironment();
   if (environment !== "development" && !confirmProduction) {
     throw new ValidationError(
       "PRODUCTION_CONFIRMATION_REQUIRED",

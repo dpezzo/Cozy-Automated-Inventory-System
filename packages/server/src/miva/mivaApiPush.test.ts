@@ -16,7 +16,7 @@ function row(productCode: string): BatchCsvRow {
     "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:": "",
     "*DF-DATAFEED": "Yes",
     "*DF-SHOPPING_FEED": "",
-    "SHOW_IN_DARREN_INVENTORY_REPORT_(1)": "1",
+    DROPSHIP_INVENTORY_MANAGEMENT: "1",
   };
 }
 

@@ -46,7 +46,7 @@ export interface MivaRawRow {
   currentRestockMessage: string;
   currentDataFeed: string;
   currentShoppingFeed: string;
-  currentReportFlag: string;
+  currentDsInvMgt: string;
   /** "Parent" (has variants), "Variant" (a parent's attribute combination), or blank/"Standard" for a normal product. Informational only -- not used by matching or the rule engine. */
   productType?: string;
   /** Storefront product page URL. For a Variant, this already resolves to its parent's page (optionally with a variant_select query string for deep-linking). Informational only. */
@@ -102,7 +102,7 @@ export interface ManagedValues {
   restockMessage: string;
   dataFeed: string;
   shoppingFeed: string;
-  reportFlag: string;
+  dsInvMgt: string;
 }
 
 export interface ExpectedDateResult {

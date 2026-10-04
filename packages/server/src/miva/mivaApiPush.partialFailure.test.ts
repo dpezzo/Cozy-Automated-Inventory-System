@@ -7,9 +7,17 @@ const findBatchById = vi.fn();
 const findFileById = vi.fn();
 const updateBatchImportStatus = vi.fn();
 const markBatchRolledBack = vi.fn();
+const getMivaActiveSite = vi.fn().mockResolvedValue("development");
 
 vi.mock("../db", () => ({
-  getRepository: () => ({ findBatchById, findFileById, insertAuditLog, updateBatchImportStatus, markBatchRolledBack }),
+  getRepository: () => ({
+    findBatchById,
+    findFileById,
+    insertAuditLog,
+    updateBatchImportStatus,
+    markBatchRolledBack,
+    getMivaActiveSite,
+  }),
 }));
 
 vi.mock("../storage/fileStorage", () => ({
@@ -25,7 +33,7 @@ function row(productCode: string): BatchCsvRow {
     "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:": "",
     "*DF-DATAFEED": "Yes",
     "*DF-SHOPPING_FEED": "",
-    "SHOW_IN_DARREN_INVENTORY_REPORT_(1)": "1",
+    DROPSHIP_INVENTORY_MANAGEMENT: "1",
   };
 }
 
@@ -112,7 +120,7 @@ describe("pushBatchToMiva import status updates", () => {
                 restockMessage: r["*ORD-INV_RESTOCK_DATE_DF-MERG-IN:"],
                 dataFeed: r["*DF-DATAFEED"],
                 shoppingFeed: r["*DF-SHOPPING_FEED"],
-                reportFlag: r["SHOW_IN_DARREN_INVENTORY_REPORT_(1)"],
+                dsInvMgt: r["DROPSHIP_INVENTORY_MANAGEMENT"],
               }),
             })),
           },

@@ -2,6 +2,24 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-04 — Dropship Inventory Management field, tracked-only filtering, Miva site switcher, dev reset
+
+### Added
+
+**`DS_INV_MGT` field rename and real three-value logic**
+- Renamed the Miva custom field previously tracked as `dp_inv_rpt` ("Show in Darren Inventory Report (1)") to `DS_INV_MGT` ("Dropship Inventory Management"), per the business's updated field spec: `1` = Tracking Inventory, `NLA` = No Longer Available, blank = Not tracking. Renamed the internal identifier (`reportFlag` → `dsInvMgt`) and every CSV header/label end-to-end (Miva field map, physical/legacy/batch CSV headers, UI labels on Catalog/Run Review/Audits & Reviews).
+- `NLA`/blank are business-set states in Miva the app only ever reads, never writes — `computeProposedManagedValues` still always proposes `"1"` for both IN STOCK and SOLD OUT, functionally unchanged from before the rename.
+
+**Tracked-only Miva row filtering**
+- A run's Miva snapshot is now filtered to only `DS_INV_MGT`-tracked products (non-blank) before reconciliation, cutting the working set down from the full ~8,000+ SKU catalog to the ~5 vendors actually managed. The stored `miva_snapshot` file itself is untouched (full catalog, for audit/legacy tooling) — only what reaches `reconcile()` and `reconciliation_rows` is scoped. Confirmed via Miva's own docs that custom-field server-side filtering isn't available today; this is a client-side filter in `runService.ts`, not a smaller Miva API pull.
+
+**Dev/Live Miva site switcher**
+- New Settings > Miva Connection page: switches which Miva store's credentials are active (`MIVA_STORE_URL`/etc. for Development, new `_LIVE`-suffixed vars for Live, placeholders until that store exists) via a DB-backed `miva_active_site` setting (`app_settings`), not an env var.
+- Unified the production-push confirmation gate (`resolveMivaPushEnvironment`) with this same setting, retiring the separate `MIVA_ENVIRONMENT` env var — previously two independently-set values that could drift out of sync (the exact bug class a prior incident already flagged); now one switch drives both which credentials are used and whether a push requires confirmation.
+
+**Dev site product reset**
+- New "Reset dev site products" action on the same Settings page: uploads a reference CSV (seeded from `Vendors/dev-miva-products-reset.csv`) and pushes it wholesale to Miva via the same `Product_Update`/verification machinery as a real batch push, restoring the dev store to a known-good baseline. Hard-gated to the Development site unconditionally — no confirmation override can make it reach Live.
+
 ## 2026-09-24 — Full UX audit pass, Run Review layout fixes, and deployment prep
 
 ### Added

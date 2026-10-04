@@ -13,7 +13,7 @@ export interface LegacyAuditRow {
   restockMessage: string | null;
   dataFeed: string | null;
   shoppingFeed: string | null;
-  reportFlag: string | null;
+  dsInvMgt: string | null;
 }
 
 export type LegacyComparisonClass =
@@ -29,7 +29,7 @@ export interface LegacyComparisonValues {
   restockMessage: string | null;
   dataFeed: string | null;
   shoppingFeed: string | null;
-  reportFlag: string | null;
+  dsInvMgt: string | null;
   expectedDate: string | null;
 }
 
@@ -63,7 +63,7 @@ function ourValuesFrom(row: ReconciliationRow): LegacyComparisonValues | null {
     restockMessage: row.proposed.restockMessage ?? null,
     dataFeed: row.proposed.dataFeed ?? null,
     shoppingFeed: row.proposed.shoppingFeed ?? null,
-    reportFlag: row.proposed.reportFlag ?? null,
+    dsInvMgt: row.proposed.dsInvMgt ?? null,
     expectedDate: row.expectedDate,
   };
 }
@@ -76,7 +76,7 @@ function mivaValuesFrom(row: ReconciliationRow): LegacyComparisonValues | null {
     restockMessage: row.current.restockMessage ?? null,
     dataFeed: row.current.dataFeed ?? null,
     shoppingFeed: row.current.shoppingFeed ?? null,
-    reportFlag: row.current.reportFlag ?? null,
+    dsInvMgt: row.current.dsInvMgt ?? null,
     expectedDate: null,
   };
 }
@@ -89,7 +89,7 @@ function legacyValuesFrom(legacy: LegacyAuditRow | undefined): LegacyComparisonV
     restockMessage: legacy.restockMessage,
     dataFeed: legacy.dataFeed,
     shoppingFeed: legacy.shoppingFeed,
-    reportFlag: legacy.reportFlag,
+    dsInvMgt: legacy.dsInvMgt,
     expectedDate: legacy.expectedDateRaw,
   };
 }
@@ -210,7 +210,7 @@ export function compareWithLegacy(
       norm(row.proposed.restockMessage) === norm(legacy.restockMessage) &&
       norm(row.proposed.dataFeed) === norm(legacy.dataFeed) &&
       norm(row.proposed.shoppingFeed) === norm(legacy.shoppingFeed) &&
-      norm(row.proposed.reportFlag) === norm(legacy.reportFlag) &&
+      norm(row.proposed.dsInvMgt) === norm(legacy.dsInvMgt) &&
       expectedDateMatches;
 
     results.push({

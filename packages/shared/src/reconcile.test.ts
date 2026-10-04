@@ -35,7 +35,7 @@ function mivaRow(overrides: Partial<MivaRawRow>): MivaRawRow {
     currentRestockMessage: "",
     currentDataFeed: "Yes",
     currentShoppingFeed: "",
-    currentReportFlag: "1",
+    currentDsInvMgt: "1",
     ...overrides,
   };
 }

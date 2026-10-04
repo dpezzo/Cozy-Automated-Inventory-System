@@ -31,7 +31,7 @@ const mivaRow: MivaRawRow = {
   currentRestockMessage: "",
   currentDataFeed: "No",
   currentShoppingFeed: "No",
-  currentReportFlag: "No",
+  currentDsInvMgt: "No",
 };
 
 function config(overrides: Partial<Record<string, unknown>> = {}) {

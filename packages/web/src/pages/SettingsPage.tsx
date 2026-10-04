@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
-import { Users, Truck, Trash2, Settings } from "lucide-react";
+import { Users, Truck, Trash2, Settings, Plug } from "lucide-react";
 
 export default function SettingsPage() {
   const [commitSha, setCommitSha] = useState<string | null>(null);
@@ -44,6 +44,13 @@ export default function SettingsPage() {
             <strong>Permanently</strong> delete old runs, batches, and their files to free up space, or reset for a
             fresh install.
           </p>
+        </Link>
+        <Link to="/settings/miva-connection" className="card settings-tile">
+          <div className="settings-tile-icon">
+            <Plug size={24} />
+          </div>
+          <h3>Miva Connection</h3>
+          <p>Switch between the Development and Live Miva sites, and reset the dev store's products to a baseline.</p>
         </Link>
       </div>
       {commitSha && (

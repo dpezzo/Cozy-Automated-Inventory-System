@@ -15,6 +15,7 @@ import ManageUsersPage from "./pages/ManageUsersPage";
 import ManageVendorsPage from "./pages/ManageVendorsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ClearDataPage from "./pages/ClearDataPage";
+import MivaConnectionPage from "./pages/MivaConnectionPage";
 import { DataSizeAlert } from "./components/DataSizeAlert";
 import { Sun, Moon, Home, RefreshCcw, History, Layers, ClipboardCheck, Settings, HelpCircle } from "lucide-react";
 
@@ -179,6 +180,14 @@ export default function App() {
           element={
             <RequireAuth>
               <ClearDataPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings/miva-connection"
+          element={
+            <RequireAuth>
+              <MivaConnectionPage />
             </RequireAuth>
           }
         />

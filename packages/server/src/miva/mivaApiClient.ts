@@ -1,4 +1,6 @@
 import { createHmac } from "node:crypto";
+import { getRepository } from "../db";
+import type { MivaActiveSite } from "../db";
 
 /** Thrown for any Miva JSON API transport or application-level failure. Never carries the signing key or token. */
 export class MivaApiError extends Error {
@@ -21,14 +23,39 @@ interface MivaApiConfig {
   basicAuthPassword?: string;
 }
 
-function loadConfig(): MivaApiConfig {
-  const storeUrl = process.env.MIVA_STORE_URL;
-  const storeCode = process.env.MIVA_STORE_CODE;
-  const apiToken = process.env.MIVA_API_TOKEN;
-  const signingKey = process.env.MIVA_API_SIGNING_KEY;
+/** Env var suffix for the active site's credential set -- "" for development (today's unprefixed vars, kept as-is for backward compatibility), "_LIVE" for the live site once it's configured. */
+function envSuffix(site: MivaActiveSite): "" | "_LIVE" {
+  return site === "live" ? "_LIVE" : "";
+}
+
+interface SiteEnvVars {
+  storeUrl: string | undefined;
+  storeCode: string | undefined;
+  apiToken: string | undefined;
+  signingKey: string | undefined;
+  basicAuthUser: string | undefined;
+  basicAuthPassword: string | undefined;
+}
+
+function readSiteEnvVars(site: MivaActiveSite): SiteEnvVars {
+  const suffix = envSuffix(site);
+  return {
+    storeUrl: process.env[`MIVA_STORE_URL${suffix}`],
+    storeCode: process.env[`MIVA_STORE_CODE${suffix}`],
+    apiToken: process.env[`MIVA_API_TOKEN${suffix}`],
+    signingKey: process.env[`MIVA_API_SIGNING_KEY${suffix}`],
+    basicAuthUser: process.env[`MIVA_HTTP_BASIC_USER${suffix}`],
+    basicAuthPassword: process.env[`MIVA_HTTP_BASIC_PASSWORD${suffix}`],
+  };
+}
+
+async function loadConfig(): Promise<MivaApiConfig> {
+  const site = await getRepository().getMivaActiveSite();
+  const { storeUrl, storeCode, apiToken, signingKey, basicAuthUser, basicAuthPassword } = readSiteEnvVars(site);
   if (!storeUrl || !storeCode || !apiToken || !signingKey) {
+    const suffix = envSuffix(site);
     throw new MivaApiError(
-      "Miva API is not configured. Set MIVA_STORE_URL, MIVA_STORE_CODE, MIVA_API_TOKEN, and MIVA_API_SIGNING_KEY.",
+      `Miva API is not configured for the ${site} site. Set MIVA_STORE_URL${suffix}, MIVA_STORE_CODE${suffix}, MIVA_API_TOKEN${suffix}, and MIVA_API_SIGNING_KEY${suffix}.`,
     );
   }
   return {
@@ -36,8 +63,8 @@ function loadConfig(): MivaApiConfig {
     storeCode,
     apiToken,
     signingKey,
-    basicAuthUser: process.env.MIVA_HTTP_BASIC_USER,
-    basicAuthPassword: process.env.MIVA_HTTP_BASIC_PASSWORD,
+    basicAuthUser,
+    basicAuthPassword,
   };
 }
 
@@ -80,7 +107,7 @@ export async function callMivaApi(
   body: Record<string, unknown>,
   options: MivaApiCallOptions = {},
 ): Promise<Record<string, unknown> | unknown[]> {
-  const config = loadConfig();
+  const config = await loadConfig();
   const fullBody = {
     Store_Code: config.storeCode,
     Miva_Request_Timestamp: String(Math.floor(Date.now() / 1000)),
@@ -161,8 +188,9 @@ export async function callMivaApi(
  * though the "link" custom field points to prettier "/shop/..." page URLs
  * that don't reflect this mount segment.
  */
-export function getMivaMountPath(): string {
-  const storeUrl = process.env.MIVA_STORE_URL ?? "";
+export async function getMivaMountPath(): Promise<string> {
+  const site = await getRepository().getMivaActiveSite();
+  const storeUrl = readSiteEnvVars(site).storeUrl ?? "";
   try {
     return new URL(storeUrl).pathname.replace(/\/json\.mvc$/i, "").replace(/\/+$/, "");
   } catch {
@@ -170,12 +198,9 @@ export function getMivaMountPath(): string {
   }
 }
 
-/** True when the required Miva API env vars are present, used to gate UI/route availability. */
-export function isMivaApiConfigured(): boolean {
-  return Boolean(
-    process.env.MIVA_STORE_URL &&
-      process.env.MIVA_STORE_CODE &&
-      process.env.MIVA_API_TOKEN &&
-      process.env.MIVA_API_SIGNING_KEY,
-  );
+/** True when the active site's required Miva API env vars are present, used to gate UI/route availability. */
+export async function isMivaApiConfigured(): Promise<boolean> {
+  const site = await getRepository().getMivaActiveSite();
+  const { storeUrl, storeCode, apiToken, signingKey } = readSiteEnvVars(site);
+  return Boolean(storeUrl && storeCode && apiToken && signingKey);
 }

@@ -24,7 +24,7 @@ export type MivaLogicalField =
   | "restockMessage"
   | "dataFeed"
   | "shoppingFeed"
-  | "reportFlag"
+  | "dsInvMgt"
   | "productType"
   | "link"
   | "canonicalUrl"
@@ -49,7 +49,7 @@ export const MIVA_CUSTOM_FIELD_MAP: Record<MivaLogicalField, MivaFieldCode> = {
   restockMessage: { moduleCode: "customfields", fieldCode: "supplier_restock_date" },
   dataFeed: { moduleCode: "customfields", fieldCode: "datafeed" },
   shoppingFeed: { moduleCode: "customfields", fieldCode: "shopping_feed" },
-  reportFlag: { moduleCode: "customfields", fieldCode: "dp_inv_rpt" },
+  dsInvMgt: { moduleCode: "customfields", fieldCode: "DS_INV_MGT" },
   productType: { moduleCode: "customfields", fieldCode: "productType" },
   // link already resolves to the PARENT product's page for a Variant record
   // (confirmed 2026-09-19: variant "BGA-LG"'s link pointed to "bga.html", the
@@ -79,7 +79,7 @@ export function buildCustomFieldValuesPayload(values: {
   restockMessage?: string;
   dataFeed?: string;
   shoppingFeed?: string;
-  reportFlag?: string;
+  dsInvMgt?: string;
 }): Record<string, Record<string, string>> {
   const payload: Record<string, Record<string, string>> = {};
   for (const [logicalField, value] of Object.entries(values)) {

@@ -165,11 +165,11 @@ const COLUMNS: ColumnDef[] = [
     title: "Whether this product is included in shopping/comparison feed exports.",
   },
   {
-    key: "reportFlag",
-    label: "Report flag",
-    get: (r) => r.currentReportFlag ?? "",
-    defaultWidth: 110,
-    title: "An internal Miva reporting flag on this product.",
+    key: "dsInvMgt",
+    label: "Dropship Inventory Mgmt",
+    get: (r) => r.currentDsInvMgt ?? "",
+    defaultWidth: 150,
+    title: "Whether this product is tracked for dropship inventory management (1 = tracking, NLA = no longer available, blank = not tracking).",
   },
 ];
 

@@ -162,7 +162,7 @@ export const UPDATE_ROLLBACK_HEADERS = [
   "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:",
   "*DF-DATAFEED",
   "*DF-SHOPPING_FEED",
-  "SHOW_IN_DARREN_INVENTORY_REPORT_(1)",
+  "DROPSHIP_INVENTORY_MANAGEMENT",
 ] as const;
 
 export interface BatchCsvRow {
@@ -172,7 +172,7 @@ export interface BatchCsvRow {
   "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:": string;
   "*DF-DATAFEED": string;
   "*DF-SHOPPING_FEED": string;
-  "SHOW_IN_DARREN_INVENTORY_REPORT_(1)": string;
+  DROPSHIP_INVENTORY_MANAGEMENT: string;
 }
 
 /** Rows for the immutable Miva update CSV: complete calculated (proposed) managed state. */
@@ -184,7 +184,7 @@ export function toUpdateBatchRows(approvedChangedRows: ReconciliationRow[]): Bat
     "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:": r.proposed.restockMessage ?? "",
     "*DF-DATAFEED": r.proposed.dataFeed ?? "",
     "*DF-SHOPPING_FEED": r.proposed.shoppingFeed ?? "",
-    "SHOW_IN_DARREN_INVENTORY_REPORT_(1)": r.proposed.reportFlag ?? "",
+    DROPSHIP_INVENTORY_MANAGEMENT: r.proposed.dsInvMgt ?? "",
   }));
 }
 
@@ -197,7 +197,7 @@ export function toRollbackBatchRows(approvedChangedRows: ReconciliationRow[]): B
     "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:": r.current.restockMessage ?? "",
     "*DF-DATAFEED": r.current.dataFeed ?? "",
     "*DF-SHOPPING_FEED": r.current.shoppingFeed ?? "",
-    "SHOW_IN_DARREN_INVENTORY_REPORT_(1)": r.current.reportFlag ?? "",
+    DROPSHIP_INVENTORY_MANAGEMENT: r.current.dsInvMgt ?? "",
   }));
 }
 
@@ -241,8 +241,8 @@ export function toFullReconciliationRows(
       PROPOSED_DATAFEED: r.proposed.dataFeed ?? "",
       CURRENT_SHOPPING_FEED: r.current.shoppingFeed ?? "",
       PROPOSED_SHOPPING_FEED: r.proposed.shoppingFeed ?? "",
-      CURRENT_REPORT_FLAG: r.current.reportFlag ?? "",
-      PROPOSED_REPORT_FLAG: r.proposed.reportFlag ?? "",
+      CURRENT_DS_INV_MGT: r.current.dsInvMgt ?? "",
+      PROPOSED_DS_INV_MGT: r.proposed.dsInvMgt ?? "",
       FIELDS_CHANGED: r.changed ? "1" : "0",
       TOTAL_QTY: r.totalQtyRaw ?? "",
       EXPECTED_DATE: r.expectedDate ?? "",
@@ -278,8 +278,8 @@ export const FULL_RECONCILIATION_HEADERS = [
   "PROPOSED_DATAFEED",
   "CURRENT_SHOPPING_FEED",
   "PROPOSED_SHOPPING_FEED",
-  "CURRENT_REPORT_FLAG",
-  "PROPOSED_REPORT_FLAG",
+  "CURRENT_DS_INV_MGT",
+  "PROPOSED_DS_INV_MGT",
   "FIELDS_CHANGED",
   "TOTAL_QTY",
   "EXPECTED_DATE",

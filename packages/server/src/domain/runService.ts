@@ -74,7 +74,14 @@ export async function createRun(input: CreateRunInput): Promise<RunRecord> {
     const { rows: vendorRows } = await vendorAdapter.parse(vendorBuffer);
 
     const mivaText = readStoredFileText(mivaFile.storagePath);
-    const { rows: mivaRows } = parseMivaSnapshotCsv(mivaText);
+    const { rows: allMivaRows } = parseMivaSnapshotCsv(mivaText);
+    // Only ~5 vendors' worth of SKUs are actually tracked out of the full
+    // Miva catalog (8,000+ SKUs); DS_INV_MGT is blank for everything this app
+    // doesn't manage. Filtering here (not at snapshot-parse time) keeps the
+    // stored miva_snapshot file a full, untouched catalog record for
+    // legacy/audit tooling, while keeping reconciliation_rows and Run Review
+    // scoped to tracked products only.
+    const mivaRows = allMivaRows.filter((r) => r.currentDsInvMgt.trim() !== "");
 
     await repo.updateRunStatus(run.id, "matching");
     const { rows, ruleId, ruleConfigHash } = await runReconciliation({

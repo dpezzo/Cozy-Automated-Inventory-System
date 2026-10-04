@@ -16,7 +16,7 @@ async function validateAndCountRows(buffer: Buffer, kind: FileKind): Promise<num
     const { rows } = await vendorAdapter.parse(buffer);
     return rows.length;
   }
-  if (kind === "miva_snapshot" || kind === "post_import_snapshot") {
+  if (kind === "miva_snapshot" || kind === "post_import_snapshot" || kind === "dev_reset_reference") {
     const { rows } = parseMivaSnapshotCsv(buffer.toString("utf8"));
     return rows.length;
   }

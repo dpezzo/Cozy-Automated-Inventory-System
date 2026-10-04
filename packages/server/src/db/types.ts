@@ -50,7 +50,9 @@ export type FileKind =
   | "batch_reconciliation"
   | "vendor_exception_report"
   /** A dynamically-configured vendor's file (file_shape 'simple_csv' or 'plugin'). Which vendor is recorded in FileRecord.vendorKey, not in this kind. */
-  | "vendor_dynamic";
+  | "vendor_dynamic"
+  /** The dev-site "reset products" reference CSV -- see devReset.ts. Only ever pushed against the development Miva site, never live. */
+  | "dev_reset_reference";
 
 export interface FileRecord {
   id: string;
@@ -248,6 +250,9 @@ export interface DataStats {
   totalFileBytes: number;
   thresholds: DataSizeAlertThresholds;
 }
+
+/** Which Miva store's credentials (env vars) and push-confirmation behavior are active. "live" always requires push confirmation; only "development" skips it. */
+export type MivaActiveSite = "development" | "live";
 
 export interface ClearDataCounts {
   runs: number;

@@ -9,7 +9,7 @@ describe("buildCustomFieldValuesPayload", () => {
       restockMessage: "restock note",
       dataFeed: "Yes",
       shoppingFeed: "",
-      reportFlag: "1",
+      dsInvMgt: "1",
     });
     const customfields = payload["customfields"]!;
     expect(customfields[MIVA_CUSTOM_FIELD_MAP.simpleInventory.fieldCode]).toBe("IN STOCK");
@@ -17,7 +17,7 @@ describe("buildCustomFieldValuesPayload", () => {
     expect(customfields[MIVA_CUSTOM_FIELD_MAP.restockMessage.fieldCode]).toBe("restock note");
     expect(customfields[MIVA_CUSTOM_FIELD_MAP.dataFeed.fieldCode]).toBe("Yes");
     expect(customfields[MIVA_CUSTOM_FIELD_MAP.shoppingFeed.fieldCode]).toBe("");
-    expect(customfields[MIVA_CUSTOM_FIELD_MAP.reportFlag.fieldCode]).toBe("1");
+    expect(customfields[MIVA_CUSTOM_FIELD_MAP.dsInvMgt.fieldCode]).toBe("1");
   });
 
   it("omits fields that aren't provided", () => {

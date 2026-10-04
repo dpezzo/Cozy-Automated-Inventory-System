@@ -42,7 +42,7 @@ const REQUIRED_HEADERS = [
   "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:",
   "*DF-DATAFEED",
   "*DF-SHOPPING_FEED",
-  "SHOW_IN_DARREN_INVENTORY_REPORT_(1)",
+  "DROPSHIP_INVENTORY_MANAGEMENT",
 ];
 
 export function parseLegacyAuditCsv(fileContent: string): LegacyAuditRow[] {
@@ -79,6 +79,6 @@ export function parseLegacyAuditCsv(fileContent: string): LegacyAuditRow[] {
     restockMessage: r["*ORD-INV_RESTOCK_DATE_DF-MERG-IN:"] ?? "",
     dataFeed: r["*DF-DATAFEED"] ?? "",
     shoppingFeed: r["*DF-SHOPPING_FEED"] ?? "",
-    reportFlag: r["SHOW_IN_DARREN_INVENTORY_REPORT_(1)"] ?? "",
+    dsInvMgt: r["DROPSHIP_INVENTORY_MANAGEMENT"] ?? "",
   }));
 }

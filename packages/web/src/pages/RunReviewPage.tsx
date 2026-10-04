@@ -81,18 +81,18 @@ const BASE_COLUMNS: ColumnDef[] = [
   { key: "decision", label: "Decision", get: (v) => v.decision.status },
 ];
 
-/** All six fields the rule engine actually manages -- the review table only ever shows simpleInventory ("status") and restockMessage by default; the other four (availability/dataFeed/shoppingFeed/reportFlag) can differ and drive "changed" without appearing in those two columns at all. */
+/** All six fields the rule engine actually manages -- the review table only ever shows simpleInventory ("status") and restockMessage by default; the other four (availability/dataFeed/shoppingFeed/dsInvMgt) can differ and drive "changed" without appearing in those two columns at all. */
 const MANAGED_FIELD_LABELS: Record<string, string> = {
   simpleInventory: "Status",
   availability: "Availability",
   restockMessage: "Restock",
   dataFeed: "Datafeed",
   shoppingFeed: "Shopping feed",
-  reportFlag: "Report flag",
+  dsInvMgt: "Dropship Inventory Management",
 };
 
 const CHANGED_FIELDS_TOOLTIP =
-  "Miva product fields this rule manages, beyond Status/Restock (shown as their own columns above): Availability, Datafeed, Shopping feed, and Report flag. See Miva's own product settings for what each controls.";
+  "Miva product fields this rule manages, beyond Status/Restock (shown as their own columns above): Availability, Datafeed, Shopping feed, and Dropship Inventory Management. See Miva's own product settings for what each controls.";
 
 function diffFields(current: ManagedValuesView, proposed: ManagedValuesView): string[] {
   return Object.keys(MANAGED_FIELD_LABELS).filter((field) => {

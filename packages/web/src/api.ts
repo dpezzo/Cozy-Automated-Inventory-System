@@ -130,9 +130,28 @@ export const api = {
   },
   getCatalogRows: (fileId: string) => request<MivaCatalogRow[]>(`/files/${fileId}/catalog-rows`),
 
-  getMivaApiStatus: () => request<{ configured: boolean; environment: "development" | "production" }>("/miva/api-status"),
+  getMivaApiStatus: () =>
+    request<{ configured: boolean; environment: "development" | "production"; activeSite: "development" | "live" }>(
+      "/miva/api-status",
+    ),
+  setMivaActiveSite: (site: "development" | "live") =>
+    request<{ activeSite: "development" | "live"; configured: boolean; environment: "development" | "production" }>(
+      "/admin/miva-active-site",
+      { method: "PUT", body: JSON.stringify({ site }) },
+    ),
   pullMivaSnapshot: () =>
     request<{ file: FileRecord; duplicateWarning: string | null }>("/miva/pull-snapshot", { method: "POST" }),
+
+  getDevResetReference: () => request<{ file: FileRecord | null }>("/admin/dev-reset/reference"),
+  uploadDevResetReference: async (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/admin/dev-reset/reference", { method: "POST", body: form, credentials: "include" });
+    const body = await res.json();
+    if (!res.ok) throw new ApiRequestError(res.status, body);
+    return body as { fileId: string; rowCount: number };
+  },
+  runDevReset: () => request<PushBatchResult>("/admin/dev-reset", { method: "POST" }),
 
   listRuns: () => request<RunRecord[]>("/runs"),
   createRun: (vendorFileId: string, mivaFileId: string, confirmDuplicate = false) =>
@@ -196,7 +215,7 @@ export interface MivaCatalogRow {
   currentRestockMessage: string;
   currentDataFeed: string;
   currentShoppingFeed: string;
-  currentReportFlag: string;
+  currentDsInvMgt: string;
   productType?: string;
   productUrl?: string;
   thumbnailUrl?: string;
@@ -308,7 +327,7 @@ export interface ManagedValuesView {
   restockMessage?: string;
   dataFeed?: string;
   shoppingFeed?: string;
-  reportFlag?: string;
+  dsInvMgt?: string;
 }
 
 export interface ReconciliationRowView {
@@ -404,7 +423,7 @@ export interface LegacyComparisonValues {
   restockMessage: string | null;
   dataFeed: string | null;
   shoppingFeed: string | null;
-  reportFlag: string | null;
+  dsInvMgt: string | null;
   expectedDate: string | null;
 }
 

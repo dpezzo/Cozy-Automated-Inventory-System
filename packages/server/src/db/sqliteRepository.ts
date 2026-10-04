@@ -24,6 +24,7 @@ import type {
   AuditLogRecord,
   DataStats,
   DataSizeAlertThresholds,
+  MivaActiveSite,
   ClearDataCounts,
   ClearDataResult,
   VendorConfigRecord,
@@ -51,6 +52,8 @@ function inClause(n: number): string {
 }
 
 const DATA_SIZE_ALERT_SETTINGS_KEY = "data_size_alert_thresholds";
+const MIVA_ACTIVE_SITE_SETTINGS_KEY = "miva_active_site";
+const DEV_RESET_REFERENCE_FILE_SETTINGS_KEY = "dev_reset_reference_file_id";
 
 /**
  * password_hash stays NOT NULL at the schema level (see
@@ -683,6 +686,38 @@ export class SqliteRepository implements Repository {
 
   async resetDataSizeAlertThresholds(): Promise<void> {
     this.conn().prepare("DELETE FROM app_settings WHERE key = ?").run(DATA_SIZE_ALERT_SETTINGS_KEY);
+  }
+
+  async getMivaActiveSite(): Promise<MivaActiveSite> {
+    const row = this.conn().prepare("SELECT value FROM app_settings WHERE key = ?").get(MIVA_ACTIVE_SITE_SETTINGS_KEY) as
+      | { value: string }
+      | undefined;
+    return row?.value === "live" ? "live" : "development";
+  }
+
+  async setMivaActiveSite(site: MivaActiveSite): Promise<void> {
+    this.conn()
+      .prepare(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(MIVA_ACTIVE_SITE_SETTINGS_KEY, site, nowIso());
+  }
+
+  async getDevResetReferenceFileId(): Promise<string | null> {
+    const row = this.conn()
+      .prepare("SELECT value FROM app_settings WHERE key = ?")
+      .get(DEV_RESET_REFERENCE_FILE_SETTINGS_KEY) as { value: string } | undefined;
+    return row?.value ?? null;
+  }
+
+  async setDevResetReferenceFileId(fileId: string): Promise<void> {
+    this.conn()
+      .prepare(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(DEV_RESET_REFERENCE_FILE_SETTINGS_KEY, fileId, nowIso());
   }
 
   async previewClearData(beforeDate: string | null): Promise<ClearDataCounts> {

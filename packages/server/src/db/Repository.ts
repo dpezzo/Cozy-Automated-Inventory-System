@@ -19,6 +19,7 @@ import type {
   AuditLogRecord,
   DataStats,
   DataSizeAlertThresholds,
+  MivaActiveSite,
   ClearDataCounts,
   ClearDataResult,
   VendorConfigRecord,
@@ -126,6 +127,14 @@ export interface Repository {
   setDataSizeAlertThresholds(thresholds: DataSizeAlertThresholds): Promise<void>;
   /** Clears any saved override, so getDataStats() falls back to DEFAULT_DATA_SIZE_ALERT_THRESHOLDS again. */
   resetDataSizeAlertThresholds(): Promise<void>;
+
+  /** Which Miva store (credentials + push-confirmation gate) is active. Defaults to "development" when never set -- see resolveMivaPushEnvironment() in mivaApiPush.ts, the single source of truth this setting drives. */
+  getMivaActiveSite(): Promise<MivaActiveSite>;
+  setMivaActiveSite(site: MivaActiveSite): Promise<void>;
+
+  /** Points at the `files` row (kind "dev_reset_reference") holding the current dev-site reset reference CSV. Null until one has ever been uploaded. */
+  getDevResetReferenceFileId(): Promise<string | null>;
+  setDevResetReferenceFileId(fileId: string): Promise<void>;
 
   // Vendor configs
   listVendorConfigs(): Promise<VendorConfigRecord[]>;

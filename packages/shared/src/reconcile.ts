@@ -26,7 +26,7 @@ function currentValuesFromMiva(row: MivaRawRow): Partial<ManagedValues> {
     restockMessage: row.currentRestockMessage,
     dataFeed: row.currentDataFeed,
     shoppingFeed: row.currentShoppingFeed,
-    reportFlag: row.currentReportFlag,
+    dsInvMgt: row.currentDsInvMgt,
   };
 }
 

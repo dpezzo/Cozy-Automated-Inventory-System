@@ -20,7 +20,7 @@ function managedFromMiva(row: MivaRawRow): ManagedValues {
     restockMessage: row.currentRestockMessage,
     dataFeed: row.currentDataFeed,
     shoppingFeed: row.currentShoppingFeed,
-    reportFlag: row.currentReportFlag,
+    dsInvMgt: row.currentDsInvMgt,
   };
 }
 
@@ -31,7 +31,7 @@ function managedFromBatchRow(row: BatchCsvRow): ManagedValues {
     restockMessage: row["*ORD-INV_RESTOCK_DATE_DF-MERG-IN:"],
     dataFeed: row["*DF-DATAFEED"],
     shoppingFeed: row["*DF-SHOPPING_FEED"],
-    reportFlag: row["SHOW_IN_DARREN_INVENTORY_REPORT_(1)"],
+    dsInvMgt: row["DROPSHIP_INVENTORY_MANAGEMENT"],
   };
 }
 
@@ -42,7 +42,7 @@ function fieldDiffs(expected: ManagedValues, actual: ManagedValues): (keyof Mana
     "restockMessage",
     "dataFeed",
     "shoppingFeed",
-    "reportFlag",
+    "dsInvMgt",
   ];
   return fields.filter((f) => norm(expected[f]) !== norm(actual[f]));
 }

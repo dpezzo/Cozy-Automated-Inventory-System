@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createHmac } from "node:crypto";
+
+// mivaApiClient.ts imports ../db (for getRepository, used to pick the active
+// site's credentials) at module scope, which transitively pulls in
+// node:sqlite -- irrelevant to this pure signRequestBody test and not
+// resolvable in this test environment, so it's mocked out entirely.
+vi.mock("../db", () => ({ getRepository: () => ({}) }));
+
 import { signRequestBody } from "./mivaApiClient";
 
 describe("signRequestBody", () => {

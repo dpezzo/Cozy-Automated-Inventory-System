@@ -237,7 +237,7 @@ Phase 1 never writes to Miva itself. You import manually:
 2. This submission ships the CSV contract from `MVP_CSV_Contracts.md`
    (`PRODUCT_CODE`, `*CUSTOM_SIMPLE_INVENTORY`, `*DF-AVAILABILITY`,
    `*ORD-INV_RESTOCK_DATE_DF-MERG-IN:`, `*DF-DATAFEED`, `*DF-SHOPPING_FEED`,
-   `SHOW_IN_DARREN_INVENTORY_REPORT_(1)`) as **provisional** headers — per
+   `DROPSHIP_INVENTORY_MANAGEMENT`) as **provisional** headers — per
    the contract, these are not certified production-safe until the
    three-product development-store activation test in
    `MVP_CSV_Contracts.md` section 8 has actually been run and its exact

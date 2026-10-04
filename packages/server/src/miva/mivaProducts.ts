@@ -25,6 +25,7 @@ interface MivaApiProduct {
 function buildUrlAndThumbnail(
   get: (field: Parameters<typeof readCustomFieldValue>[1]) => string,
   product: MivaApiProduct,
+  mountPath: string,
 ): { productUrl: string; thumbnailUrl: string } {
   const link = get("canonicalUrl") || get("link");
   const variantSelect = get("variantSelect");
@@ -34,7 +35,6 @@ function buildUrlAndThumbnail(
   let thumbnailUrl = "";
   if (imagePath && link) {
     try {
-      const mountPath = getMivaMountPath();
       thumbnailUrl = `${new URL(link).origin}${mountPath}/${imagePath.replace(/^\/+/, "")}`;
     } catch {
       thumbnailUrl = "";
@@ -55,10 +55,10 @@ const PAGE_SIZE = 500;
 /** One physical CSV row, keyed by Miva's own export header strings (see vendor/mivaCsv.ts MIVA_HEADER_MAP). */
 type PhysicalMivaRow = Record<string, string>;
 
-function toPhysicalRow(product: MivaApiProduct): PhysicalMivaRow {
+function toPhysicalRow(product: MivaApiProduct, mountPath: string): PhysicalMivaRow {
   const get = (field: Parameters<typeof readCustomFieldValue>[1]) =>
     readCustomFieldValue(product.CustomField_Values, field);
-  const { productUrl, thumbnailUrl } = buildUrlAndThumbnail(get, product);
+  const { productUrl, thumbnailUrl } = buildUrlAndThumbnail(get, product, mountPath);
   return {
     PRODUCT_CODE: product.code ?? "",
     PRODUCT_NAME: product.name ?? "",
@@ -70,7 +70,7 @@ function toPhysicalRow(product: MivaApiProduct): PhysicalMivaRow {
     "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:": get("restockMessage"),
     "*DF-DATAFEED": get("dataFeed"),
     "*DF-SHOPPING_FEED": get("shoppingFeed"),
-    "SHOW_IN_DARREN_INVENTORY_REPORT_(1)": get("reportFlag"),
+    DROPSHIP_INVENTORY_MANAGEMENT: get("dsInvMgt"),
     PRODUCT_TYPE: get("productType"),
     PRODUCT_URL: productUrl,
     PRODUCT_THUMBNAIL: thumbnailUrl,
@@ -84,6 +84,7 @@ function toPhysicalRow(product: MivaApiProduct): PhysicalMivaRow {
  * against the development store).
  */
 export async function fetchAllMivaProductsAsPhysicalRows(): Promise<PhysicalMivaRow[]> {
+  const mountPath = await getMivaMountPath();
   const rows: PhysicalMivaRow[] = [];
   let offset = 0;
   for (;;) {
@@ -100,7 +101,7 @@ export async function fetchAllMivaProductsAsPhysicalRows(): Promise<PhysicalMiva
     })) as unknown as ProductListLoadQueryResponse;
 
     const page = response.data.data;
-    for (const product of page) rows.push(toPhysicalRow(product));
+    for (const product of page) rows.push(toPhysicalRow(product, mountPath));
 
     offset += page.length;
     if (page.length < PAGE_SIZE || offset >= response.data.total_count) break;

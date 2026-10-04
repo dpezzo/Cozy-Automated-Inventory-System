@@ -14,7 +14,7 @@ export const MIVA_HEADER_MAP: Record<string, keyof MivaLogicalRow> = {
   "*ORD-INV_RESTOCK_DATE_DF-MERG-IN:": "restockMessage",
   "*DF-DATAFEED": "dataFeed",
   "*DF-SHOPPING_FEED": "shoppingFeed",
-  "SHOW_IN_DARREN_INVENTORY_REPORT_(1)": "reportFlag",
+  DROPSHIP_INVENTORY_MANAGEMENT: "dsInvMgt",
   // Optional: not in REQUIRED_LOGICAL_FIELDS, so snapshots without this column still parse.
   PRODUCT_TYPE: "productType",
   PRODUCT_URL: "productUrl",
@@ -32,7 +32,7 @@ interface MivaLogicalRow {
   restockMessage: string;
   dataFeed: string;
   shoppingFeed: string;
-  reportFlag: string;
+  dsInvMgt: string;
   productType: string;
   productUrl: string;
   thumbnailUrl: string;
@@ -49,7 +49,7 @@ const REQUIRED_LOGICAL_FIELDS: (keyof MivaLogicalRow)[] = [
   "restockMessage",
   "dataFeed",
   "shoppingFeed",
-  "reportFlag",
+  "dsInvMgt",
 ];
 
 export interface ParsedMivaCsv {
@@ -124,7 +124,7 @@ export function parseMivaSnapshotCsv(fileContent: string): ParsedMivaCsv {
     currentRestockMessage: get(record, "restockMessage"),
     currentDataFeed: get(record, "dataFeed"),
     currentShoppingFeed: get(record, "shoppingFeed"),
-    currentReportFlag: get(record, "reportFlag"),
+    currentDsInvMgt: get(record, "dsInvMgt"),
     productType: get(record, "productType"),
     productUrl: get(record, "productUrl"),
     thumbnailUrl: get(record, "thumbnailUrl"),

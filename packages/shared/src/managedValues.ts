@@ -12,7 +12,7 @@ export function computeProposedManagedValues(
       restockMessage: "",
       dataFeed: "Yes",
       shoppingFeed: "",
-      reportFlag: "1",
+      dsInvMgt: "1",
     };
   }
   return {
@@ -21,7 +21,7 @@ export function computeProposedManagedValues(
     restockMessage: expectedDate ? `<b>Out until ${expectedDate}</b>` : "",
     dataFeed: "Yes",
     shoppingFeed: "",
-    reportFlag: "1",
+    dsInvMgt: "1",
   };
 }
 
@@ -31,7 +31,7 @@ const MANAGED_FIELDS: (keyof ManagedValues)[] = [
   "restockMessage",
   "dataFeed",
   "shoppingFeed",
-  "reportFlag",
+  "dsInvMgt",
 ];
 
 function normalizeForCompare(value: string | undefined): string {

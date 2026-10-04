@@ -114,8 +114,8 @@ describe("synthetic fixture suite (28 cases)", () => {
       expect(r.proposed.dataFeed ?? "", `${exp.CASE_ID} PROPOSED_DATAFEED`).toBe(exp.PROPOSED_DATAFEED ?? "");
       expect(r.current.shoppingFeed ?? "", `${exp.CASE_ID} CURRENT_SHOPPING_FEED`).toBe(exp.CURRENT_SHOPPING_FEED ?? "");
       expect(r.proposed.shoppingFeed ?? "", `${exp.CASE_ID} PROPOSED_SHOPPING_FEED`).toBe(exp.PROPOSED_SHOPPING_FEED ?? "");
-      expect(r.current.reportFlag ?? "", `${exp.CASE_ID} CURRENT_REPORT_FLAG`).toBe(exp.CURRENT_REPORT_FLAG ?? "");
-      expect(r.proposed.reportFlag ?? "", `${exp.CASE_ID} PROPOSED_REPORT_FLAG`).toBe(exp.PROPOSED_REPORT_FLAG ?? "");
+      expect(r.current.dsInvMgt ?? "", `${exp.CASE_ID} CURRENT_DS_INV_MGT`).toBe(exp.CURRENT_DS_INV_MGT ?? "");
+      expect(r.proposed.dsInvMgt ?? "", `${exp.CASE_ID} PROPOSED_DS_INV_MGT`).toBe(exp.PROPOSED_DS_INV_MGT ?? "");
       expect(r.changed ? "1" : "0", `${exp.CASE_ID} CHANGED`).toBe(exp.CHANGED ?? "0");
 
       const expectedInBatch = exp.IN_EXPECTED_BATCH === "1";

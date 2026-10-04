@@ -40,7 +40,7 @@ const VALUE_FIELD_LABELS: Record<keyof LegacyComparisonValues, string> = {
   restockMessage: "Restock",
   dataFeed: "Datafeed",
   shoppingFeed: "Shopping feed",
-  reportFlag: "Report flag",
+  dsInvMgt: "Dropship Inventory Management",
   expectedDate: "Expected date",
 };
 
