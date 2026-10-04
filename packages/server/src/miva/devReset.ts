@@ -109,7 +109,14 @@ export async function resetDevSiteProducts(userId: string): Promise<DevResetResu
     action: chunkError ? "DEV_RESET_PARTIAL_FAILURE" : failed === 0 ? "DEV_RESET_PUSHED" : "DEV_RESET_FAILED",
     entityType: "file",
     entityId: file.id,
-    details: { pushed, failed, verificationMismatches, totalRows: rows.length },
+    details: {
+      pushed,
+      failed,
+      verificationMismatches,
+      totalRows: rows.length,
+      unattempted: chunkError ? rows.length - results.length : 0,
+      chunkError: chunkError instanceof Error ? chunkError.message : chunkError ? String(chunkError) : undefined,
+    },
   });
 
   if (chunkError) throw chunkError;
