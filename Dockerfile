@@ -31,6 +31,7 @@ RUN npm install --omit=dev --no-audit --no-fund
 COPY --from=build /repo/packages/shared/dist packages/shared/dist
 COPY --from=build /repo/packages/server/dist packages/server/dist
 COPY --from=build /repo/packages/server/migrations packages/server/migrations
+COPY --from=build /repo/packages/server/migrations-sqlite packages/server/migrations-sqlite
 COPY --from=build /repo/packages/web/dist packages/web/dist
 COPY docker-entrypoint.sh docker-entrypoint.sh
 RUN chmod +x docker-entrypoint.sh
