@@ -74,7 +74,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
     date: "2026-09-19",
     items: [
       "Added the ability to pull the Miva catalog directly from Miva's API, instead of only via manual file upload.",
-      "Added the Miva Catalog browser page.",
+      "Added the Miva Catalog browser page: search, filter, and sort the full catalog, with resizable and hideable columns.",
       "Added support for K&H Pet Products, Gobi Heat, and FieldSheer/Mobile Warming vendors, with automatic vendor detection from the uploaded file.",
       "Added \"Push to Miva via API\" directly from a batch, with automatic verification that the push actually took effect.",
       "Home page redesigned into a clear numbered Step 1/2/3 walkthrough.",
