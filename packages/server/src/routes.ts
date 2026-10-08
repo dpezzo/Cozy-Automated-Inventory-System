@@ -20,7 +20,7 @@ import { createRun, getRunSummary, approveAllClean, setRowDecision, bulkDecision
 import { generateBatch } from "./domain/batchService";
 import { runLegacyComparison } from "./domain/legacyService";
 import { generateVendorExceptionReport } from "./domain/vendorExceptionReportService";
-import { VENDOR_EXCEPTION_CATEGORIES, type VendorExceptionCategory } from "@cozywinters/shared";
+import { VENDOR_EXCEPTION_CATEGORIES, type VendorExceptionCategory, RELEASE_NOTES } from "@cozywinters/shared";
 import { runPostImportVerification } from "./domain/verificationService";
 import { pushBatchToMiva, resolveMivaPushEnvironment } from "./miva/mivaApiPush";
 import { uploadDevResetReferenceFile, resetDevSiteProducts } from "./miva/devReset";
@@ -29,6 +29,7 @@ import { previewClearData, clearData } from "./domain/adminService";
 import {
   listVendorConfigs,
   listVendorConfigSummaries,
+  listActiveVendorBrands,
   createVendorConfig,
   updateVendorConfig,
   deactivateVendorConfig,
@@ -725,6 +726,16 @@ router.delete(
   }),
 );
 
+// ---------- Release notes ----------
+
+// Not admin-gated -- short, plain-language entries meant for every user, shown on Settings.
+router.get(
+  "/release-notes",
+  asyncHandler(async (_req, res) => {
+    res.json(RELEASE_NOTES);
+  }),
+);
+
 // ---------- Vendors ----------
 
 // Deliberately NOT requireAdmin: every signed-in user needs this to label
@@ -744,6 +755,16 @@ router.get(
   requireAdmin,
   asyncHandler(async (_req, res) => {
     res.json(await listVendorConfigs());
+  }),
+);
+
+// Deliberately NOT requireAdmin, same reasoning as /vendors/summary above --
+// exposes only the merged brand-name strings, never a vendor's other tunables.
+// Used by the Miva Catalog page to default to "our vendors' brands only."
+router.get(
+  "/vendors/active-brands",
+  asyncHandler(async (_req, res) => {
+    res.json(await listActiveVendorBrands());
   }),
 );
 

@@ -456,11 +456,6 @@ export default function ManageVendorsPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 4 }}>
-        <Link to="/settings" style={{ fontSize: 13 }}>
-          ← Settings
-        </Link>
-      </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Truck size={24} strokeWidth={2.25} /> Manage Vendors
@@ -479,6 +474,9 @@ export default function ManageVendorsPage() {
           "Edit or deactivate an existing vendor from the table below.",
         ]}
       />
+      <div className="card">
+        <Link to="/settings">Back to settings</Link>
+      </div>
       {error && <ErrorBanner message={error} />}
 
       <div className="card">

@@ -75,6 +75,20 @@ export async function listVendorConfigSummaries(): Promise<VendorConfigSummary[]
     .map((c) => ({ vendorKey: c.vendorKey, vendorLabel: c.vendorLabel, fileShape: c.fileShape, isActive: c.isActive }));
 }
 
+/** Deduped, trimmed brand names across every active vendor's allowlist -- only the brand strings, never the other tunables (threshold, match strategy, etc.) that stay admin-only. Used to default the Miva Catalog page to "our vendors' brands only." */
+export async function listActiveVendorBrands(): Promise<string[]> {
+  const configs = await getRepository().listVendorConfigs();
+  const brands = new Set<string>();
+  for (const c of configs) {
+    if (!c.isActive) continue;
+    for (const brand of c.brandAllowlist) {
+      const trimmed = brand.trim();
+      if (trimmed) brands.add(trimmed);
+    }
+  }
+  return [...brands].sort((a, b) => a.localeCompare(b));
+}
+
 export interface CreateSimpleCsvVendorRequest {
   vendorKey: string;
   vendorLabel: string;

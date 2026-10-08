@@ -28,7 +28,8 @@ export type MivaLogicalField =
   | "productType"
   | "link"
   | "canonicalUrl"
-  | "variantSelect";
+  | "variantSelect"
+  | "parentCode";
 
 /**
  * NOTE: gtin/mpn/brand are match-critical (the reconciliation engine's exact
@@ -58,6 +59,9 @@ export const MIVA_CUSTOM_FIELD_MAP: Record<MivaLogicalField, MivaFieldCode> = {
   canonicalUrl: { moduleCode: "customfields", fieldCode: "canonicalprodurl" },
   // Deep-links to the exact variant selection on the parent's page, e.g. "VS=BGA-LG".
   variantSelect: { moduleCode: "customfields", fieldCode: "variant_select" },
+  // Confirmed 2026-10-07 (per Darren): lives under the same "customfields" module as the
+  // other eight fields above, field code "parent_code".
+  parentCode: { moduleCode: "customfields", fieldCode: "parent_code" },
 };
 
 /** The ondemandcolumns filter value that asks Miva to include every custom field on each product. */

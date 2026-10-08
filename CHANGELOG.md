@@ -2,6 +2,24 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-07 — Catalog Active/Parent Code/brand filter, Miva site-switch safety, Settings version/changelog/activity log, column reordering
+
+### Added
+
+**Miva Catalog: Active, Parent Code, and a default vendor-brand filter**
+- Added `active` (Miva's native per-product flag, rendered as Yes/No to match Miva's own display) and `parentCode` (custom field `customfields`/`parent_code`, confirmed against the dev store) end-to-end: `MivaRawRow`/`MivaCatalogRow` types, `MIVA_HEADER_MAP` (optional physical headers), `mivaProducts.ts`'s `toPhysicalRow()`, and new `ColumnDef` entries in `CatalogPage.tsx` positioned Image → Parent Code → Product Code → Active.
+- New `GET /vendors/active-brands` endpoint (not admin-gated, brand names only -- same non-sensitive precedent as `/vendors/summary`) backing a new "Vendor brands only" toggle on the Catalog page (default on, persisted), which filters the catalog to only the brands configured on currently-active vendors.
+- Catalog columns can now be dragged (via the header label) into any order, persisted to `localStorage`; a "Reset column order" button in the Columns menu restores the built-in default order.
+
+**Miva Connection: site-switch safety + reset-dev-products changes**
+- `SiteSwitcher`'s radios no longer apply instantly -- selecting Development/Live now stages a pending choice that only takes effect after clicking Save and confirming via `window.confirm()` (root cause of a real incident: the active site was accidentally left on Live, which silently broke the Catalog page's "Pull latest catalog" button since only Development has credentials configured).
+- "Reset dev site products" merged into the same card as the site switcher and now only renders while Development is the actual (saved) active site, instead of being a separate always-visible card with a "switch to Development" message. Its reference-file upload is now a scoped drag-anywhere dropzone (heading through the upload box) instead of only the small upload control.
+
+**Settings: version number, changelog, and a dedicated Activity Log page**
+- New `app/packages/shared/src/releaseNotes.ts` (`RELEASE_NOTES`), a short plain-language list for end users, rendered on the Settings page alongside a date-derived version number (`RELEASE_NOTES[0].date` reformatted `YYYY.MM.DD`) and the existing commit-hash "Build" line. Served via new `GET /release-notes` (not admin-gated). Backfilled with one entry per `CHANGELOG.md` date back to the 2026-09-18 initial release.
+- Activity Log split out of Audits & Reviews (where it was an admin-only tab easily mistaken for the page itself) into its own page/route (`ActivityLogPage.tsx`, `/settings/activity-log`), reached via a new admin-only Settings tile. Audits & Reviews is back to being just Legacy Comparison, no tabs.
+- Every Settings sub-page (Manage Users, Manage Vendors, Clear Data, Miva Connection, Activity Log) now has a consistent "Back to settings" link, placed as its own card between the instructions card and the main content.
+
 ## 2026-10-04 — Dropship Inventory Management field, tracked-only filtering, Miva site switcher, dev reset
 
 ### Added

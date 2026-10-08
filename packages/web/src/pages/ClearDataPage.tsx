@@ -202,6 +202,9 @@ export default function ClearDataPage() {
           "Type DELETE to confirm -- this cannot be undone.",
         ]}
       />
+      <div className="card">
+        <Link to="/settings">Back to settings</Link>
+      </div>
 
       <div className="card">
         <h3>What to clear</h3>
@@ -269,10 +272,6 @@ export default function ClearDataPage() {
       )}
 
       {user?.role === "admin" && <AlertThresholdEditor stats={stats} onSaved={setStats} />}
-
-      <div className="card">
-        <Link to="/settings">Back to settings</Link>
-      </div>
     </div>
   );
 }

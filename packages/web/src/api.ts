@@ -70,6 +70,7 @@ export const api = {
   me: () => request<AuthUserView>("/auth/me"),
   getAuthConfig: () => request<{ googleClientId: string | null }>("/auth/config"),
   getHealth: () => request<{ status: string; dbDriver: string; commitSha: string | null }>("/health"),
+  getReleaseNotes: () => request<ReleaseNoteEntry[]>("/release-notes"),
 
   listUsers: () => request<UserAccount[]>("/users"),
   listAuditLog: (limit?: number) => request<AuditLogRecord[]>(`/audit-log${limit ? `?limit=${limit}` : ""}`),
@@ -100,6 +101,8 @@ export const api = {
   reloadPlugins: () => request<{ ok: true }>("/vendors/reload-plugins", { method: "POST" }),
   /** Non-admin-safe minimal vendor list -- every signed-in user needs this to label/pick vendor files on the Home page, unlike the full config in listVendors(). */
   listVendorSummaries: () => request<VendorSummary[]>("/vendors/summary"),
+  /** Deduped brand names across every active vendor's allowlist -- used to default the Miva Catalog page to "our vendors' brands only." */
+  listActiveVendorBrands: () => request<string[]>("/vendors/active-brands"),
 
   listFiles: (kind?: string) => request<FileRecord[]>(`/files${kind ? `?kind=${kind}` : ""}`),
   /** Every uploaded/pulled file across all vendor FileKinds, newest first -- what Step 3's vendor-file dropdown lists. */
@@ -219,6 +222,8 @@ export interface MivaCatalogRow {
   productType?: string;
   productUrl?: string;
   thumbnailUrl?: string;
+  active?: string;
+  parentCode?: string;
 }
 
 export interface AuthUserView {
@@ -233,6 +238,11 @@ export interface UserAccount {
   role: "admin" | "member";
   displayName: string | null;
   isActive: boolean;
+}
+
+export interface ReleaseNoteEntry {
+  date: string;
+  items: string[];
 }
 
 export interface FileRecord {

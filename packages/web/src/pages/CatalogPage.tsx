@@ -27,6 +27,8 @@ interface ColumnDef {
 
 const HIDDEN_COLUMNS_KEY = "cw-catalog-hidden-columns-v1";
 const COLUMN_WIDTHS_KEY = "cw-catalog-column-widths-v1";
+const VENDOR_BRANDS_ONLY_KEY = "cw-catalog-vendor-brands-only-v1";
+const COLUMN_ORDER_KEY = "cw-catalog-column-order-v1";
 
 // Fixed row height + windowing: with ~8,000 rows, rendering every <tr> makes
 // any state change (a column toggle, a filter, a sort) feel laggy, since the
@@ -81,6 +83,14 @@ function CopyableCode({ value }: { value: string }) {
   );
 }
 
+/** Normalizes Miva's native active flag (raw API value or a legacy "1"/"0" CSV export) to "Yes"/"No", matching how Miva's own admin displays it. */
+function formatActive(raw: string | undefined): string {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (v === "1" || v === "true" || v === "yes") return "Yes";
+  if (v === "0" || v === "false" || v === "no") return "No";
+  return "";
+}
+
 const COLUMNS: ColumnDef[] = [
   {
     key: "thumbnail",
@@ -103,11 +113,25 @@ const COLUMNS: ColumnDef[] = [
       ),
   },
   {
+    key: "parentCode",
+    label: "Parent code",
+    get: (r) => r.parentCode ?? "",
+    defaultWidth: 140,
+    title: "This variant's parent product code, if applicable.",
+  },
+  {
     key: "productCode",
     label: "Product code",
     get: (r) => r.productCode ?? "",
     defaultWidth: 160,
     render: (r) => <CopyableCode value={r.productCode ?? ""} />,
+  },
+  {
+    key: "active",
+    label: "Active",
+    get: (r) => formatActive(r.active),
+    defaultWidth: 90,
+    title: "Whether this product is active in Miva.",
   },
   {
     key: "productUrl",
@@ -173,6 +197,8 @@ const COLUMNS: ColumnDef[] = [
   },
 ];
 
+const DEFAULT_COLUMN_ORDER = COLUMNS.map((c) => c.key);
+
 export default function CatalogPage() {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [selectedFile, setSelectedFile] = useState<string>("");
@@ -183,6 +209,10 @@ export default function CatalogPage() {
   const [pulling, setPulling] = useState(false);
   const [pullMessage, setPullMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [activeBrands, setActiveBrands] = useState<string[]>([]);
+  const [vendorBrandsOnly, setVendorBrandsOnly] = useState<boolean>(() =>
+    loadFromStorage<boolean>(VENDOR_BRANDS_ONLY_KEY, true),
+  );
   const [columnFilterValues, setColumnFilterValues] = useState<Record<string, Set<string>>>({});
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
   const [popoverSearch, setPopoverSearch] = useState("");
@@ -195,6 +225,15 @@ export default function CatalogPage() {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() =>
     loadFromStorage<Record<string, number>>(COLUMN_WIDTHS_KEY, {}),
   );
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    const stored = loadFromStorage<string[]>(COLUMN_ORDER_KEY, DEFAULT_COLUMN_ORDER);
+    const known = new Set(DEFAULT_COLUMN_ORDER);
+    const kept = stored.filter((k) => known.has(k));
+    const missing = DEFAULT_COLUMN_ORDER.filter((k) => !kept.includes(k));
+    return [...kept, ...missing];
+  });
+  const [draggedColumnKey, setDraggedColumnKey] = useState<string | null>(null);
+  const [dragOverColumnKey, setDragOverColumnKey] = useState<string | null>(null);
   const resizing = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -240,8 +279,17 @@ export default function CatalogPage() {
   useEffect(() => {
     loadFiles();
     api.getMivaApiStatus().then((s) => setMivaApiConfigured(s.configured));
+    api.listActiveVendorBrands().then(setActiveBrands).catch(() => setActiveBrands([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function toggleVendorBrandsOnly() {
+    setVendorBrandsOnly((prev) => {
+      const next = !prev;
+      saveToStorage(VENDOR_BRANDS_ONLY_KEY, next);
+      return next;
+    });
+  }
 
   async function pullLatest() {
     setPulling(true);
@@ -283,17 +331,26 @@ export default function CatalogPage() {
     return raw === "" ? "(Blank)" : raw;
   }
 
+  const activeBrandSet = useMemo(() => new Set(activeBrands.map((b) => b.trim().toLowerCase())), [activeBrands]);
+
+  // Base filter, applied ahead of search/column-filter/sort so it composes
+  // cleanly with the rest of the pipeline below instead of needing special-casing.
+  const brandFiltered = useMemo(() => {
+    if (!vendorBrandsOnly || activeBrandSet.size === 0) return rows;
+    return rows.filter((r) => activeBrandSet.has((r.brandRaw ?? "").trim().toLowerCase()));
+  }, [rows, vendorBrandsOnly, activeBrandSet]);
+
   const searched = useMemo(() => {
-    if (!search) return rows;
+    if (!search) return brandFiltered;
     const needle = search.toLowerCase();
-    return rows.filter(
+    return brandFiltered.filter(
       (r) =>
         (r.productCode ?? "").toLowerCase().includes(needle) ||
         (r.productName ?? "").toLowerCase().includes(needle) ||
         (r.gtinRaw ?? "").toLowerCase().includes(needle) ||
         (r.mpnRaw ?? "").toLowerCase().includes(needle),
     );
-  }, [rows, search]);
+  }, [brandFiltered, search]);
 
   const filterableColumns = useMemo(() => COLUMNS.filter((c) => c.filterable !== false), []);
 
@@ -356,6 +413,22 @@ export default function CatalogPage() {
       saveToStorage(HIDDEN_COLUMNS_KEY, [...next]);
       return next;
     });
+  }
+
+  function moveColumn(draggedKey: string, targetKey: string) {
+    if (draggedKey === targetKey) return;
+    setColumnOrder((prev) => {
+      const next = prev.filter((k) => k !== draggedKey);
+      const targetIndex = next.indexOf(targetKey);
+      next.splice(targetIndex, 0, draggedKey);
+      saveToStorage(COLUMN_ORDER_KEY, next);
+      return next;
+    });
+  }
+
+  function resetColumnOrder() {
+    setColumnOrder(DEFAULT_COLUMN_ORDER);
+    saveToStorage(COLUMN_ORDER_KEY, DEFAULT_COLUMN_ORDER);
   }
 
   function widthFor(key: string, fallback: number): number {
@@ -421,7 +494,11 @@ export default function CatalogPage() {
   }, [searched, columnFilterValues, sortKey, sortDir, filterableColumns]);
 
   const hasColumnFilters = Object.keys(columnFilterValues).length > 0;
-  const visibleColumns = COLUMNS.filter((c) => !hiddenColumns.has(c.key));
+  const orderedColumns = useMemo(
+    () => columnOrder.map((key) => COLUMNS.find((c) => c.key === key)).filter((c): c is ColumnDef => Boolean(c)),
+    [columnOrder],
+  );
+  const visibleColumns = orderedColumns.filter((c) => !hiddenColumns.has(c.key));
 
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
   const endIndex = Math.min(
@@ -443,7 +520,7 @@ export default function CatalogPage() {
         steps={[
           "Pick a snapshot from the dropdown, or click Pull latest catalog to fetch the current one from Miva.",
           "Search by product code, name, GTIN, or MPN, or use the funnel on any column header to filter its values.",
-          "Click a column header to sort, drag its right edge to resize, and use Columns to show or hide any of them.",
+          "Click a column header to sort, drag its right edge to resize, drag its label to reorder it, and use Columns to show/hide columns or reset their order.",
         ]}
       />
       {error && <ErrorBanner message={error} />}
@@ -481,6 +558,13 @@ export default function CatalogPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <label
+            style={{ marginLeft: 16, display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
+            title="When on, only shows products whose brand matches one of your active vendors' configured brands (Settings > Manage Vendors). Turn off to see the full Miva catalog."
+          >
+            <input type="checkbox" checked={vendorBrandsOnly} onChange={toggleVendorBrandsOnly} />
+            Vendor brands only
+          </label>
           <div className="columns-menu-wrap" style={{ position: "relative", marginLeft: 16 }}>
             <button onClick={() => setColumnsMenuOpen((v) => !v)}>
               <Columns size={16} /> Columns
@@ -502,7 +586,7 @@ export default function CatalogPage() {
                   overflow: "auto",
                 }}
               >
-                {COLUMNS.map((col) => (
+                {orderedColumns.map((col) => (
                   <label key={col.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "3px 0" }}>
                     <input
                       type="checkbox"
@@ -512,6 +596,11 @@ export default function CatalogPage() {
                     {col.label}
                   </label>
                 ))}
+                <div style={{ borderTop: "1px solid var(--border)", marginTop: 6, paddingTop: 6 }}>
+                  <button style={{ width: "100%", fontSize: 12 }} onClick={resetColumnOrder}>
+                    Reset column order
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -566,17 +655,41 @@ export default function CatalogPage() {
                         // high-cardinality ones) look like it wasn't opening.
                         // Let it escape while this column's popover is open.
                         overflow: openFilterColumn === col.key ? "visible" : "hidden",
+                        boxShadow: dragOverColumnKey === col.key ? "inset 2px 0 0 var(--blue)" : undefined,
+                      }}
+                      onDragOver={(e) => {
+                        if (!draggedColumnKey) return;
+                        e.preventDefault();
+                        if (dragOverColumnKey !== col.key) setDragOverColumnKey(col.key);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverColumnKey === col.key) setDragOverColumnKey(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedColumnKey) moveColumn(draggedColumnKey, col.key);
+                        setDraggedColumnKey(null);
+                        setDragOverColumnKey(null);
                       }}
                     >
                       <div className="col-filter-wrap" style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
                         <span
                           onClick={() => toggleSort(col.key)}
                           title={col.title}
+                          draggable
+                          onDragStart={(e) => {
+                            setDraggedColumnKey(col.key);
+                            e.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragEnd={() => {
+                            setDraggedColumnKey(null);
+                            setDragOverColumnKey(null);
+                          }}
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 4,
-                            cursor: "pointer",
+                            cursor: "grab",
                             userSelect: "none",
                             overflow: "hidden",
                             textOverflow: "ellipsis",

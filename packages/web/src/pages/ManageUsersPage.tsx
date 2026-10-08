@@ -131,11 +131,6 @@ export default function ManageUsersPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 4 }}>
-        <Link to="/settings" style={{ fontSize: 13 }}>
-          ← Settings
-        </Link>
-      </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Users size={24} strokeWidth={2.25} /> Manage Users
@@ -155,6 +150,9 @@ export default function ManageUsersPage() {
           "Change a user's role or deactivate their account from the table below.",
         ]}
       />
+      <div className="card">
+        <Link to="/settings">Back to settings</Link>
+      </div>
       {error && <ErrorBanner message={error} />}
 
       <div className="card">

@@ -8,3 +8,4 @@ export * from "./reconcile";
 export * from "./reports";
 export * from "./legacyCompare";
 export * from "./postImportVerify";
+export * from "./releaseNotes";

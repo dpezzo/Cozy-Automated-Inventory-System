@@ -10,6 +10,10 @@ interface MivaApiProduct {
   name: string;
   thumbnail?: string;
   image?: string;
+  // UNCONFIRMED key name -- Miva's JSON API returns a native active/inactive flag on every
+  // product record; confirm the exact key (likely "active") against a real
+  // ProductList_Load_Query response before trusting this for a real pull.
+  active?: boolean | string;
   CustomField_Values?: Record<string, Record<string, unknown>>;
 }
 
@@ -74,6 +78,8 @@ function toPhysicalRow(product: MivaApiProduct, mountPath: string): PhysicalMiva
     PRODUCT_TYPE: get("productType"),
     PRODUCT_URL: productUrl,
     PRODUCT_THUMBNAIL: thumbnailUrl,
+    ACTIVE: product.active === undefined ? "" : String(product.active),
+    PARENT_CODE: get("parentCode"),
   };
 }
 
