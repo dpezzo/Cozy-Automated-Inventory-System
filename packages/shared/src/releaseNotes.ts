@@ -12,6 +12,12 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-08",
+    items: [
+      "The Home page is now permanently named \"Inventory Update\" (previously a preview toggle between \"Home\" and \"Run Reconciliation\"), to describe what it actually does for anyone new to the app.",
+    ],
+  },
+  {
     date: "2026-10-07",
     items: [
       "Miva Connection: switching the active site now requires clicking Save and confirming, instead of applying instantly, to prevent an accidental switch from breaking the catalog pull button.",

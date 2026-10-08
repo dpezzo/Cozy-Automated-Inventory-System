@@ -2,6 +2,11 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-08 — Home page name finalized
+
+### Changed
+- Resolved the temporary "Home" vs "Run Reconciliation" owner-decision switcher (live since 2026-09-23) by permanently naming the page **Inventory Update** -- chosen over "Run Reconciliation" because "reconciliation" is internal jargon a new warehouse employee won't know, and over plain "Home" because it tells a first-time user what the page actually does, consistent with the 2026-09-24 login-tagline change that already reframed the app around "updating inventory" rather than "reconciliation" for the same reason. Removed `HomeLabelContext.tsx` and the preview switcher UI/CSS now that the decision is final; sidebar nav, page heading, and icon (`RefreshCcw`) are hardcoded. The underlying "reconciliation" terminology used on Run History/Run Review and the "Start Reconciliation" action were left as-is -- out of scope for this naming decision.
+
 ## 2026-10-07 — Catalog Active/Parent Code/brand filter, Miva site-switch safety, Settings version/changelog/activity log, column reordering
 
 ### Added

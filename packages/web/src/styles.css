@@ -502,21 +502,6 @@ button.size-alert-collapsed svg:last-child { margin-left: auto; }
 .or-divider-label::before { top: 0; height: calc(50% - 14px); }
 .or-divider-label::after { bottom: 0; height: calc(50% - 14px); }
 
-.layout-switcher {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 6px 10px;
-  border: 1px dashed var(--amber);
-  border-radius: 8px;
-  background: #fffbeb;
-  font-size: 12px;
-  color: #92400e;
-}
-.layout-switcher button { padding: 3px 10px; font-size: 12px; }
-.layout-switcher button.active { background: var(--amber); color: #fff; border-color: var(--amber); }
-
 .dropzone {
   position: relative;
   display: flex;

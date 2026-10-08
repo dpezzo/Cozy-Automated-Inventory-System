@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, Play, AlertTriangle, Home, RefreshCcw } from "lucide-react";
+import { Download, Play, AlertTriangle, RefreshCcw } from "lucide-react";
 import {
   api,
   ApiRequestError,
@@ -15,7 +15,6 @@ import { useUploadControl, UploadControlView, WholeCardDropzone } from "../compo
 import { friendlyError } from "../lib/errors";
 import { StepBadge } from "../components/StepBadge";
 import { InstructionsCard } from "../components/InstructionsCard";
-import { HOME_LABEL_OPTIONS, useHomeLabel } from "../HomeLabelContext";
 import { ErrorBanner } from "../components/ErrorBanner";
 
 /** Same shape as useUploadControl, but for the single vendor-file upload area -- the vendor is detected server-side from the file's content, never picked via a tab. */
@@ -225,7 +224,6 @@ function MivaCatalogDataSection({
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { homeLabel, setHomeLabel } = useHomeLabel();
   const [vendorFiles, setVendorFiles] = useState<FileRecord[]>([]);
   const [mivaFiles, setMivaFiles] = useState<FileRecord[]>([]);
   const [selectedVendorFile, setSelectedVendorFile] = useState<string>("");
@@ -305,27 +303,13 @@ export default function HomePage() {
   return (
     <div>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {homeLabel === "Run Reconciliation" ? (
-          <RefreshCcw size={24} strokeWidth={2.25} />
-        ) : (
-          <Home size={24} strokeWidth={2.25} />
-        )}{" "}
-        {homeLabel}
+        <RefreshCcw size={24} strokeWidth={2.25} /> Inventory Update
       </h2>
-      <div className="layout-switcher">
-        Page name:
-        {HOME_LABEL_OPTIONS.map((label) => (
-          <button key={label} className={homeLabel === label ? "active" : ""} onClick={() => setHomeLabel(label)}>
-            {label}
-          </button>
-        ))}
-        <span>(preview -- pending final decision)</span>
-      </div>
       {error && <ErrorBanner message={error} />}
 
       <InstructionsCard
         pageKey="home"
-        description="Run a reconciliation by working through the three steps below."
+        description="Update your Miva store's inventory by working through the three steps below."
         steps={[
           "Upload the vendor's inventory file (or a file for any of the supported vendors).",
           "Upload a Miva catalog snapshot, pull one via API, or reuse one you already pulled earlier today (e.g. for another vendor) from the dropdown below.",

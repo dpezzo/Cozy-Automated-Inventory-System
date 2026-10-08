@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Routes, Route, Navigate, NavLink, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { ThemeProvider, useTheme } from "./ThemeContext";
-import { HomeLabelProvider, useHomeLabel } from "./HomeLabelContext";
 import { Glossary } from "./components/Glossary";
 import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
@@ -18,12 +17,11 @@ import ClearDataPage from "./pages/ClearDataPage";
 import MivaConnectionPage from "./pages/MivaConnectionPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
 import { DataSizeAlert } from "./components/DataSizeAlert";
-import { Sun, Moon, Home, RefreshCcw, History, Layers, ClipboardCheck, Settings, HelpCircle } from "lucide-react";
+import { Sun, Moon, RefreshCcw, History, Layers, ClipboardCheck, Settings, HelpCircle } from "lucide-react";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { homeLabel } = useHomeLabel();
   const location = useLocation();
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   // A run's review page (/runs/:runId) and a batch's detail page
@@ -48,12 +46,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
         <nav>
           <NavLink to="/" end>
-            {homeLabel === "Run Reconciliation" ? (
-              <RefreshCcw size={19} strokeWidth={2.5} />
-            ) : (
-              <Home size={19} strokeWidth={2.5} />
-            )}{" "}
-            {homeLabel}
+            <RefreshCcw size={19} strokeWidth={2.5} /> Inventory Update
           </NavLink>
           <NavLink to="/runs" className={() => (runHistoryActive ? "active" : "")}>
             <History size={19} strokeWidth={2.5} /> Run History
@@ -108,7 +101,6 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
 export default function App() {
   return (
     <ThemeProvider>
-    <HomeLabelProvider>
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -210,7 +202,6 @@ export default function App() {
         />
       </Routes>
     </AuthProvider>
-    </HomeLabelProvider>
     </ThemeProvider>
   );
 }
