@@ -10,7 +10,7 @@ import {
   recordFailedLogin,
   clearLoginAttempts,
 } from "./auth";
-import { getRepository, type RowFilter, type FileKind } from "./db";
+import { getRepository, type RowFilter, type FileKind, type ClearDataScope } from "./db";
 import { readStoredFile, readStoredFileText, storedFileExists } from "./storage/fileStorage";
 import { uploadFile, uploadVendorFileAutoDetect } from "./domain/uploadService";
 import { pullMivaSnapshotFromApi } from "./miva/mivaProducts";
@@ -592,21 +592,36 @@ router.get(
 
 // ---------- Admin: clear data (admin only) ----------
 
-function parseBeforeDate(body: unknown): string | null {
-  const beforeDate = (body as { beforeDate?: unknown } | undefined)?.beforeDate;
-  if (beforeDate === undefined || beforeDate === null) return null;
-  if (typeof beforeDate !== "string" || Number.isNaN(Date.parse(beforeDate))) {
-    throw new ValidationError("INVALID_REQUEST", "beforeDate must be an ISO date string, or omitted to clear everything.");
+function parseClearDataScope(body: unknown): ClearDataScope {
+  const b = (body as { scope?: unknown } | undefined)?.scope as Record<string, unknown> | undefined;
+  if (!b || typeof b !== "object") {
+    throw new ValidationError("INVALID_REQUEST", "scope is required.");
   }
-  return beforeDate;
+  const runHistory = Boolean(b.runHistory);
+  const catalog = Boolean(b.catalog);
+  const activityLog = Boolean(b.activityLog);
+  if (!runHistory && !catalog && !activityLog) {
+    throw new ValidationError("INVALID_REQUEST", "At least one scope category must be selected.");
+  }
+  let runHistoryBeforeDate: string | null = null;
+  if (runHistory && b.runHistoryBeforeDate !== undefined && b.runHistoryBeforeDate !== null) {
+    if (typeof b.runHistoryBeforeDate !== "string" || Number.isNaN(Date.parse(b.runHistoryBeforeDate))) {
+      throw new ValidationError(
+        "INVALID_REQUEST",
+        "runHistoryBeforeDate must be an ISO date string, or omitted to clear every run.",
+      );
+    }
+    runHistoryBeforeDate = b.runHistoryBeforeDate;
+  }
+  return { runHistory, runHistoryBeforeDate, catalog, activityLog };
 }
 
 router.post(
   "/admin/clear-data/preview",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const beforeDate = parseBeforeDate(req.body);
-    res.json(await previewClearData(beforeDate));
+    const scope = parseClearDataScope(req.body);
+    res.json(await previewClearData(scope));
   }),
 );
 
@@ -614,7 +629,7 @@ router.post(
   "/admin/clear-data",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const beforeDate = parseBeforeDate(req.body);
+    const scope = parseClearDataScope(req.body);
     // A second, server-side gate behind the client's type-to-confirm UI --
     // this route is destructive and irreversible, so it should never fire
     // without an explicit, deliberate confirmation flag in the request body.
@@ -622,7 +637,7 @@ router.post(
       res.status(400).json({ error: "CONFIRMATION_REQUIRED", message: "confirm must be true to clear data." });
       return;
     }
-    const result = await clearData(beforeDate, req.session.userId!);
+    const result = await clearData(scope, req.session.userId!);
     res.json(result);
   }),
 );

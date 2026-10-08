@@ -15,6 +15,8 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
     date: "2026-10-08",
     items: [
       "The Home page is now permanently named \"Inventory Update\" (previously a preview toggle between \"Home\" and \"Run Reconciliation\"), to describe what it actually does for anyone new to the app.",
+      "A small badge in the sidebar now always shows whether you're pointed at the Dev or the LIVE Miva store.",
+      "Clear Data redesigned: choose \"Clear all\" or pick exactly what to clear -- Run History, Miva Catalog (previously missed entirely if a snapshot was never used in a run), and optionally the Activity Log.",
     ],
   },
   {

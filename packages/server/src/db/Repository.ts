@@ -22,6 +22,7 @@ import type {
   MivaActiveSite,
   ClearDataCounts,
   ClearDataResult,
+  ClearDataScope,
   VendorConfigRecord,
   InsertVendorConfigInput,
   UpdateVendorConfigPatch,
@@ -109,17 +110,17 @@ export interface Repository {
   listAuditLog(limit?: number): Promise<AuditLogRecord[]>;
 
   /**
-   * Admin data clearing: wipes runs and everything hanging off them
-   * (reconciliation rows, decisions, batches, legacy comparisons, post-import
-   * verifications) plus the files that become orphaned as a result, both the
-   * DB rows and (via the returned storage paths) the files on disk. Users,
-   * vendor configs, and the audit log itself are never touched.
-   * `beforeDate` null clears every run; otherwise only runs created before it.
-   * previewClearData runs the exact same logic and rolls back instead of
-   * committing, so the preview counts are guaranteed to match a real run.
+   * Admin data clearing, scoped per-category by the caller (see ClearDataScope):
+   * run history (runs and everything hanging off them), Miva catalog snapshot
+   * files not referenced by anything kept, and/or the activity log -- plus the
+   * files that become orphaned as a result, both the DB rows and (via the
+   * returned storage paths) the files on disk. Users and vendor configs are
+   * never touched by any scope. previewClearData runs the exact same logic
+   * and rolls back instead of committing, so the preview counts are
+   * guaranteed to match a real run.
    */
-  previewClearData(beforeDate: string | null): Promise<ClearDataCounts>;
-  clearData(beforeDate: string | null): Promise<ClearDataResult>;
+  previewClearData(scope: ClearDataScope): Promise<ClearDataCounts>;
+  clearData(scope: ClearDataScope): Promise<ClearDataResult>;
 
   /** Cheap overall-size stats (no per-run breakdown) for the storage-growth alert every signed-in user sees -- unlike previewClearData, this is just two aggregate queries, safe to call on every page load. Includes the current alert thresholds so the client never has to fetch them separately. */
   getDataStats(): Promise<DataStats>;

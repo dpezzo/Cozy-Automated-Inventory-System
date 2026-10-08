@@ -74,10 +74,10 @@ export const api = {
 
   listUsers: () => request<UserAccount[]>("/users"),
   listAuditLog: (limit?: number) => request<AuditLogRecord[]>(`/audit-log${limit ? `?limit=${limit}` : ""}`),
-  previewClearData: (beforeDate: string | null) =>
-    request<ClearDataCounts>("/admin/clear-data/preview", { method: "POST", body: JSON.stringify({ beforeDate }) }),
-  clearData: (beforeDate: string | null) =>
-    request<ClearDataResult>("/admin/clear-data", { method: "POST", body: JSON.stringify({ beforeDate, confirm: true }) }),
+  previewClearData: (scope: ClearDataScope) =>
+    request<ClearDataCounts>("/admin/clear-data/preview", { method: "POST", body: JSON.stringify({ scope }) }),
+  clearData: (scope: ClearDataScope) =>
+    request<ClearDataResult>("/admin/clear-data", { method: "POST", body: JSON.stringify({ scope, confirm: true }) }),
 
   getDataStats: () => request<DataStats>("/data-stats"),
   setDataSizeAlertThresholds: (thresholds: DataSizeAlertThresholds) =>
@@ -401,6 +401,13 @@ export interface DataStats {
   thresholds: DataSizeAlertThresholds;
 }
 
+export interface ClearDataScope {
+  runHistory: boolean;
+  runHistoryBeforeDate: string | null;
+  catalog: boolean;
+  activityLog: boolean;
+}
+
 export interface ClearDataCounts {
   runs: number;
   batches: number;
@@ -410,6 +417,7 @@ export interface ClearDataCounts {
   postImportVerifications: number;
   files: number;
   totalFileBytes: number;
+  activityLogEntries: number;
 }
 
 export interface ClearDataResult extends ClearDataCounts {

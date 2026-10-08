@@ -2,7 +2,21 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
-## 2026-10-08 — Home page name finalized
+## 2026-10-08 — Home page name finalized, live Miva credentials, Dev/Live indicator, selective Clear Data
+
+### Added
+
+**Dev/Live Miva site indicator**
+- A colored pill in the sidebar (above the user email/Sign out) now always shows "Dev Miva store" (green) or "LIVE Miva store" (red), refetched on every navigation. Exists so it's never ambiguous which store pull/push actions are about to hit, especially now that real Live credentials are configured.
+
+**Live Miva credentials wired up**
+- `MIVA_STORE_URL_LIVE`/`MIVA_STORE_CODE_LIVE`/`MIVA_API_TOKEN_LIVE`/`MIVA_API_SIGNING_KEY_LIVE` populated in both Railway and local `.env`, using the `_LIVE`-suffixed credential scheme already built on 2026-10-04. Removed the now-fully-dead `MIVA_ENVIRONMENT` env var (confirmed zero remaining runtime reads) from both.
+
+**Selective Clear Data**
+- Root-caused a real gap: Clear Data only ever deleted a Miva catalog file if it had been used to start a run that got deleted -- a snapshot pulled/uploaded on the Catalog page but never used in a run was invisible to it entirely. Confirmed live against this project's own dev data (2 orphaned catalog files, ~5MB, previously unreachable by any Clear Data scope).
+- Replaced the single `beforeDate` clear with a `ClearDataScope` (`runHistory` + optional `runHistoryBeforeDate`, `catalog`, `activityLog`), implemented identically in both `sqliteRepository.ts` and `postgresRepository.ts`. Run-history deletion runs first within the same transaction so the catalog category's "still referenced?" check only ever sees rows that survive the same clear -- a catalog file a kept run still points at is never deleted even when Catalog is selected.
+- Activity Log is now a clearable category, but deliberately excluded from "Clear all" and requires explicitly checking it under "Choose what to clear" (with an on-page warning) -- it's the audit trail of who cleared what, including past clears, so it shouldn't be erasable by accident. The clear action itself is always re-logged as a fresh entry afterward, even when it just wiped the table being written back into.
+- `ClearDataPage.tsx` redesigned: radio between "Clear all" (run history + catalog, all runs, never the log) and "Choose what to clear" (per-category checkboxes, with the before-date filter now scoped specifically to Run History instead of being a page-wide mode).
 
 ### Changed
 - Resolved the temporary "Home" vs "Run Reconciliation" owner-decision switcher (live since 2026-09-23) by permanently naming the page **Inventory Update** -- chosen over "Run Reconciliation" because "reconciliation" is internal jargon a new warehouse employee won't know, and over plain "Home" because it tells a first-time user what the page actually does, consistent with the 2026-09-24 login-tagline change that already reframed the app around "updating inventory" rather than "reconciliation" for the same reason. Removed `HomeLabelContext.tsx` and the preview switcher UI/CSS now that the decision is final; sidebar nav, page heading, and icon (`RefreshCcw`) are hardcoded. The underlying "reconciliation" terminology used on Run History/Run Review and the "Start Reconciliation" action were left as-is -- out of scope for this naming decision.

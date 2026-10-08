@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, NavLink, useLocation } from "react-router-dom";
+import { api } from "./api";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { ThemeProvider, useTheme } from "./ThemeContext";
 import { Glossary } from "./components/Glossary";
@@ -24,6 +25,17 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const [glossaryOpen, setGlossaryOpen] = useState(false);
+  const [activeSite, setActiveSite] = useState<"development" | "live" | null>(null);
+
+  // Refetched on every navigation (not just once on mount) so switching the
+  // active site on the Miva Connection page is reflected here as soon as the
+  // admin navigates away from it, without needing a full page reload.
+  useEffect(() => {
+    api
+      .getMivaApiStatus()
+      .then((s) => setActiveSite(s.activeSite))
+      .catch(() => setActiveSite(null));
+  }, [location.pathname]);
   // A run's review page (/runs/:runId) and a batch's detail page
   // (/batches/:batchId) are both reached either from Home (start a new
   // reconciliation) or from Run History (open an existing row) -- but
@@ -64,6 +76,19 @@ function Shell({ children }: { children: React.ReactNode }) {
           )}
         </nav>
         <div style={{ marginTop: 32, fontSize: 12, color: "var(--muted)", display: "flex", flexDirection: "column", gap: 8 }}>
+          {activeSite && (
+            <div
+              className={`pill ${activeSite === "live" ? "blocked" : "clean"}`}
+              style={{ alignSelf: "flex-start" }}
+              title={
+                activeSite === "live"
+                  ? "Every Miva pull/push right now hits the real, live store."
+                  : "Every Miva pull/push right now hits the Development store, not Live."
+              }
+            >
+              {activeSite === "live" ? "LIVE Miva store" : "Dev Miva store"}
+            </div>
+          )}
           <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button style={{ flex: 1 }} onClick={() => logout()}>

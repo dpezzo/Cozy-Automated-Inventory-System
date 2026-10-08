@@ -254,6 +254,18 @@ export interface DataStats {
 /** Which Miva store's credentials (env vars) and push-confirmation behavior are active. "live" always requires push confirmation; only "development" skips it. */
 export type MivaActiveSite = "development" | "live";
 
+/** Which categories of data a Clear Data run should touch. Each is independently selectable; at least one must be true. */
+export interface ClearDataScope {
+  /** Runs and everything hanging off them (reconciliation rows, decisions, batches, legacy comparisons, post-import verifications) plus their exclusively-referenced files. */
+  runHistory: boolean;
+  /** Only applies when runHistory is true. null clears every run regardless of age. */
+  runHistoryBeforeDate: string | null;
+  /** Miva catalog snapshot files (kind miva_snapshot/post_import_snapshot) not referenced by anything still being kept. */
+  catalog: boolean;
+  /** The admin-only audit_log table -- off by default everywhere in the UI since it's the app's own record of who cleared what; the clear action itself is always re-logged as the first entry afterward. */
+  activityLog: boolean;
+}
+
 export interface ClearDataCounts {
   runs: number;
   batches: number;
@@ -261,8 +273,10 @@ export interface ClearDataCounts {
   decisions: number;
   legacyComparisons: number;
   postImportVerifications: number;
+  /** Files deleted across every selected category (run-history files + catalog files combined). */
   files: number;
   totalFileBytes: number;
+  activityLogEntries: number;
 }
 
 export interface ClearDataResult extends ClearDataCounts {

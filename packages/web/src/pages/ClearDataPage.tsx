@@ -1,13 +1,26 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
-import { api, ApiRequestError, type ClearDataCounts, type ClearDataResult, type DataStats } from "../api";
+import { api, ApiRequestError, type ClearDataCounts, type ClearDataResult, type ClearDataScope, type DataStats } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { formatBytes } from "../lib/format";
 import { useAuth } from "../AuthContext";
 
 const CONFIRM_PHRASE = "DELETE";
+
+function totalCount(counts: ClearDataCounts): number {
+  return (
+    counts.runs +
+    counts.batches +
+    counts.reconciliationRows +
+    counts.decisions +
+    counts.legacyComparisons +
+    counts.postImportVerifications +
+    counts.files +
+    counts.activityLogEntries
+  );
+}
 
 function CountsSummary({ counts }: { counts: ClearDataCounts }) {
   return (
@@ -43,6 +56,10 @@ function CountsSummary({ counts }: { counts: ClearDataCounts }) {
       <div className="stat">
         <div className="value">{formatBytes(counts.totalFileBytes)}</div>
         <div className="label">Disk space freed</div>
+      </div>
+      <div className="stat">
+        <div className="value">{counts.activityLogEntries}</div>
+        <div className="label">Activity log entries</div>
       </div>
     </div>
   );
@@ -142,8 +159,11 @@ function AlertThresholdEditor({ stats, onSaved }: { stats: DataStats | null; onS
 
 export default function ClearDataPage() {
   const { user } = useAuth();
-  const [mode, setMode] = useState<"all" | "before">("before");
-  const [beforeDate, setBeforeDate] = useState("");
+  const [mode, setMode] = useState<"all" | "select">("all");
+  const [includeRunHistory, setIncludeRunHistory] = useState(false);
+  const [runHistoryBeforeDate, setRunHistoryBeforeDate] = useState("");
+  const [includeCatalog, setIncludeCatalog] = useState(false);
+  const [includeActivityLog, setIncludeActivityLog] = useState(false);
   const [preview, setPreview] = useState<ClearDataCounts | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -155,8 +175,20 @@ export default function ClearDataPage() {
     api.getDataStats().then(setStats);
   }, []);
 
-  const effectiveBeforeDate = mode === "all" ? null : beforeDate ? new Date(beforeDate).toISOString() : null;
-  const readyToPreview = mode === "all" || Boolean(beforeDate);
+  // "Clear all" always includes Run History (every run, no date filter) and
+  // Catalog -- but deliberately never Activity Log, since that's the app's
+  // own record of who cleared what; reaching it requires switching to
+  // "Choose what to clear" and checking it explicitly.
+  const scope: ClearDataScope =
+    mode === "all"
+      ? { runHistory: true, runHistoryBeforeDate: null, catalog: true, activityLog: false }
+      : {
+          runHistory: includeRunHistory,
+          runHistoryBeforeDate: includeRunHistory && runHistoryBeforeDate ? new Date(runHistoryBeforeDate).toISOString() : null,
+          catalog: includeCatalog,
+          activityLog: includeActivityLog,
+        };
+  const readyToPreview = mode === "all" || includeRunHistory || includeCatalog || includeActivityLog;
 
   useEffect(() => {
     setPreview(null);
@@ -165,17 +197,17 @@ export default function ClearDataPage() {
     setConfirmText("");
     if (!readyToPreview) return;
     api
-      .previewClearData(effectiveBeforeDate)
+      .previewClearData(scope)
       .then(setPreview)
       .catch((err) => setError(err instanceof ApiRequestError ? err.body.message : "Failed to load preview."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, beforeDate]);
+  }, [mode, includeRunHistory, runHistoryBeforeDate, includeCatalog, includeActivityLog]);
 
   async function runClear() {
     setBusy(true);
     setError(null);
     try {
-      const cleared = await api.clearData(effectiveBeforeDate);
+      const cleared = await api.clearData(scope);
       setResult(cleared);
       setPreview(null);
       setConfirmText("");
@@ -195,9 +227,9 @@ export default function ClearDataPage() {
       </h2>
       <InstructionsCard
         pageKey="clear-data"
-        description="Permanently deletes runs and everything generated from them -- reconciliation rows, decisions, batches, legacy comparisons, post-import verifications -- along with the uploaded and generated files that only those runs used. Users, vendor configuration, and the activity log are never touched. This cannot be undone."
+        description="Permanently deletes data you choose below -- run history, Miva catalog snapshots, and/or the activity log -- along with any files that become orphaned as a result. Users and vendor configuration are never touched. This cannot be undone."
         steps={[
-          "Choose what to clear: runs older than a date, or everything.",
+          "Choose Clear all (run history + catalog, never the activity log) or Choose what to clear to pick categories individually.",
           "Review the preview of exactly what will be deleted.",
           "Type DELETE to confirm -- this cannot be undone.",
         ]}
@@ -210,24 +242,63 @@ export default function ClearDataPage() {
         <h3>What to clear</h3>
         <div className="filters">
           <label>
-            <input type="radio" checked={mode === "before"} onChange={() => setMode("before")} /> Runs created before
-            a date
+            <input type="radio" checked={mode === "all"} onChange={() => setMode("all")} />{" "}
+            <span style={{ color: "var(--red)", fontWeight: 600 }}>Clear all</span> (run history + Miva catalog --
+            start over as if newly installed; never touches the activity log)
           </label>
-          {mode === "before" && (
-            <input
-              type="date"
-              value={beforeDate}
-              onChange={(e) => setBeforeDate(e.target.value)}
-              style={{ marginLeft: 16 }}
-            />
-          )}
         </div>
         <div className="filters" style={{ marginTop: 8 }}>
           <label>
-            <input type="radio" checked={mode === "all"} onChange={() => setMode("all")} />{" "}
-            <span style={{ color: "var(--red)", fontWeight: 600 }}>Delete everything</span> (start over as if newly installed)
+            <input type="radio" checked={mode === "select"} onChange={() => setMode("select")} /> Choose what to clear
           </label>
         </div>
+
+        {mode === "select" && (
+          <div style={{ marginTop: 12, paddingLeft: 24, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={includeRunHistory}
+                  onChange={(e) => setIncludeRunHistory(e.target.checked)}
+                />{" "}
+                Run History -- runs, batches, reconciliation reviews, decisions, legacy comparisons, post-import
+                verifications
+              </label>
+              {includeRunHistory && (
+                <div style={{ marginTop: 6, marginLeft: 22, fontSize: 13 }}>
+                  <label>
+                    Only runs created before:{" "}
+                    <input
+                      type="date"
+                      value={runHistoryBeforeDate}
+                      onChange={(e) => setRunHistoryBeforeDate(e.target.value)}
+                    />
+                  </label>
+                  <span style={{ color: "var(--muted)", marginLeft: 8 }}>(leave blank to clear every run)</span>
+                </div>
+              )}
+            </div>
+            <label>
+              <input type="checkbox" checked={includeCatalog} onChange={(e) => setIncludeCatalog(e.target.checked)} />{" "}
+              Miva Catalog -- pulled/uploaded catalog snapshot files, including ones never used to start a run (only
+              ones not still referenced by a run you're keeping)
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={includeActivityLog}
+                onChange={(e) => setIncludeActivityLog(e.target.checked)}
+              />{" "}
+              <span style={{ color: "var(--red)", fontWeight: 600 }}>Activity Log</span>
+              <span style={{ color: "var(--muted)" }}>
+                {" "}
+                -- permanently erases the audit trail of who did what, including every past Clear Data run. This
+                action itself is always re-logged as the first new entry afterward.
+              </span>
+            </label>
+          </div>
+        )}
       </div>
 
       {error && <ErrorBanner message={error} />}
@@ -246,7 +317,7 @@ export default function ClearDataPage() {
           <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <AlertTriangle size={16} /> This will delete
           </h3>
-          {preview.runs === 0 ? (
+          {totalCount(preview) === 0 ? (
             <p>Nothing matches this scope -- there is nothing to clear.</p>
           ) : (
             <>

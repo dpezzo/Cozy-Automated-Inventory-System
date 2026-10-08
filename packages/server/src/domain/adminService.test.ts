@@ -20,8 +20,11 @@ const RESULT = {
   postImportVerifications: 0,
   files: 3,
   totalFileBytes: 12345,
+  activityLogEntries: 0,
   deletedFileStoragePaths: ["vendor/a.csv", "miva/b.csv", "batch_update/c.csv"],
 };
+
+const RUN_HISTORY_SCOPE = { runHistory: true, runHistoryBeforeDate: null, catalog: false, activityLog: false };
 
 describe("adminService", () => {
   beforeEach(() => {
@@ -31,13 +34,13 @@ describe("adminService", () => {
     deleteStoredFile.mockReset();
   });
 
-  it("previewClearData passes the cutoff straight through and never touches disk", async () => {
+  it("previewClearData passes the scope straight through and never touches disk", async () => {
     previewClearDataRepo.mockResolvedValue({ ...RESULT, deletedFileStoragePaths: undefined });
 
     const { previewClearData } = await import("./adminService");
-    await previewClearData("2024-01-01T00:00:00.000Z");
+    await previewClearData(RUN_HISTORY_SCOPE);
 
-    expect(previewClearDataRepo).toHaveBeenCalledWith("2024-01-01T00:00:00.000Z");
+    expect(previewClearDataRepo).toHaveBeenCalledWith(RUN_HISTORY_SCOPE);
     expect(deleteStoredFile).not.toHaveBeenCalled();
     expect(insertAuditLog).not.toHaveBeenCalled();
   });
@@ -46,9 +49,9 @@ describe("adminService", () => {
     clearDataRepo.mockResolvedValue(RESULT);
 
     const { clearData } = await import("./adminService");
-    const result = await clearData(null, "actor-1");
+    const result = await clearData(RUN_HISTORY_SCOPE, "actor-1");
 
-    expect(clearDataRepo).toHaveBeenCalledWith(null);
+    expect(clearDataRepo).toHaveBeenCalledWith(RUN_HISTORY_SCOPE);
     expect(deleteStoredFile).toHaveBeenCalledTimes(3);
     expect(deleteStoredFile).toHaveBeenNthCalledWith(1, "vendor/a.csv");
     expect(deleteStoredFile).toHaveBeenNthCalledWith(2, "miva/b.csv");
@@ -60,7 +63,7 @@ describe("adminService", () => {
       entityType: "system",
       entityId: null,
       details: {
-        beforeDate: null,
+        scope: RUN_HISTORY_SCOPE,
         runs: 2,
         batches: 1,
         reconciliationRows: 10,
@@ -69,6 +72,7 @@ describe("adminService", () => {
         postImportVerifications: 0,
         files: 3,
         totalFileBytes: 12345,
+        activityLogEntries: 0,
       },
     });
     expect(result).toBe(RESULT);
@@ -84,7 +88,7 @@ describe("adminService", () => {
     // deleteStoredFile itself already swallows ENOENT in the real implementation --
     // this just documents that clearData doesn't add its own try/catch around it,
     // so a genuine unexpected disk error propagates rather than being silently lost.
-    await expect(clearData(null, "actor-1")).rejects.toThrow("ENOENT-like failure");
+    await expect(clearData(RUN_HISTORY_SCOPE, "actor-1")).rejects.toThrow("ENOENT-like failure");
     expect(insertAuditLog).not.toHaveBeenCalled();
   });
 });

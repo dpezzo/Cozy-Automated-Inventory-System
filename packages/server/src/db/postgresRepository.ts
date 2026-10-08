@@ -26,6 +26,7 @@ import type {
   MivaActiveSite,
   ClearDataCounts,
   ClearDataResult,
+  ClearDataScope,
   VendorConfigRecord,
   InsertVendorConfigInput,
   UpdateVendorConfigPatch,
@@ -579,17 +580,17 @@ export class PostgresRepository implements Repository {
     );
   }
 
-  async previewClearData(beforeDate: string | null): Promise<ClearDataCounts> {
-    const { deletedFileStoragePaths, ...counts } = await this.runClearData(beforeDate, true);
+  async previewClearData(scope: ClearDataScope): Promise<ClearDataCounts> {
+    const { deletedFileStoragePaths, ...counts } = await this.runClearData(scope, true);
     return counts;
   }
 
-  async clearData(beforeDate: string | null): Promise<ClearDataResult> {
-    return this.runClearData(beforeDate, false);
+  async clearData(scope: ClearDataScope): Promise<ClearDataResult> {
+    return this.runClearData(scope, false);
   }
 
-  /** Same deletion-order and "is this file still referenced elsewhere" logic as SqliteRepository -- see the comment there. */
-  private async runClearData(beforeDate: string | null, dryRun: boolean): Promise<ClearDataResult> {
+  /** Same deletion-order, scope handling, and "is this file still referenced elsewhere" logic as SqliteRepository -- see the comment there. */
+  private async runClearData(scope: ClearDataScope, dryRun: boolean): Promise<ClearDataResult> {
     const client = await this.getPool().connect();
     const empty: ClearDataResult = {
       runs: 0,
@@ -600,85 +601,113 @@ export class PostgresRepository implements Repository {
       postImportVerifications: 0,
       files: 0,
       totalFileBytes: 0,
+      activityLogEntries: 0,
       deletedFileStoragePaths: [],
     };
+    if (!scope.runHistory && !scope.catalog && !scope.activityLog) {
+      client.release();
+      return empty;
+    }
     try {
       await client.query("BEGIN");
 
-      const { rows: runRows } = beforeDate
-        ? await client.query("SELECT id FROM runs WHERE created_at < $1", [beforeDate])
-        : await client.query("SELECT id FROM runs");
-      const runIds: string[] = runRows.map((r) => r.id);
-
-      if (runIds.length === 0) {
-        await client.query("ROLLBACK");
-        return empty;
-      }
-
-      const { rows: batchRows } = await client.query(
-        `SELECT id, update_file_id, rollback_file_id, exception_file_id, reconciliation_file_id
-         FROM batches WHERE run_id = ANY($1)`,
-        [runIds],
-      );
-      const batchIds: string[] = batchRows.map((b) => b.id);
-
-      const { rows: runFileRows } = await client.query("SELECT vendor_file_id, miva_file_id FROM runs WHERE id = ANY($1)", [
-        runIds,
-      ]);
-      const { rows: legacyRows } = await client.query("SELECT legacy_file_id FROM legacy_comparisons WHERE run_id = ANY($1)", [
-        runIds,
-      ]);
-      const { rows: postImportRows } = batchIds.length
-        ? await client.query("SELECT post_import_file_id FROM post_import_verifications WHERE batch_id = ANY($1)", [batchIds])
-        : { rows: [] as { post_import_file_id: string | null }[] };
-
+      let runIds: string[] = [];
+      let batchIds: string[] = [];
+      let reconciliationRows = 0;
+      let decisions = 0;
+      let legacyCount = 0;
+      let postImportCount = 0;
       const candidateFileIds = new Set<string>();
-      for (const r of runFileRows) {
-        candidateFileIds.add(r.vendor_file_id);
-        candidateFileIds.add(r.miva_file_id);
-      }
-      for (const b of batchRows) {
-        for (const col of ["update_file_id", "rollback_file_id", "exception_file_id", "reconciliation_file_id"]) {
-          if (b[col]) candidateFileIds.add(b[col]);
+
+      if (scope.runHistory) {
+        const { rows: runRows } = scope.runHistoryBeforeDate
+          ? await client.query("SELECT id FROM runs WHERE created_at < $1", [scope.runHistoryBeforeDate])
+          : await client.query("SELECT id FROM runs");
+        runIds = runRows.map((r) => r.id);
+
+        if (runIds.length > 0) {
+          const { rows: batchRows } = await client.query(
+            `SELECT id, update_file_id, rollback_file_id, exception_file_id, reconciliation_file_id
+             FROM batches WHERE run_id = ANY($1)`,
+            [runIds],
+          );
+          batchIds = batchRows.map((b) => b.id);
+
+          const { rows: runFileRows } = await client.query(
+            "SELECT vendor_file_id, miva_file_id FROM runs WHERE id = ANY($1)",
+            [runIds],
+          );
+          const { rows: legacyRows } = await client.query(
+            "SELECT legacy_file_id FROM legacy_comparisons WHERE run_id = ANY($1)",
+            [runIds],
+          );
+          const { rows: postImportRows } = batchIds.length
+            ? await client.query("SELECT post_import_file_id FROM post_import_verifications WHERE batch_id = ANY($1)", [
+                batchIds,
+              ])
+            : { rows: [] as { post_import_file_id: string | null }[] };
+          legacyCount = legacyRows.length;
+          postImportCount = postImportRows.length;
+
+          for (const r of runFileRows) {
+            candidateFileIds.add(r.vendor_file_id);
+            candidateFileIds.add(r.miva_file_id);
+          }
+          for (const b of batchRows) {
+            for (const col of ["update_file_id", "rollback_file_id", "exception_file_id", "reconciliation_file_id"]) {
+              if (b[col]) candidateFileIds.add(b[col]);
+            }
+          }
+          for (const r of legacyRows) if (r.legacy_file_id) candidateFileIds.add(r.legacy_file_id);
+          for (const r of postImportRows) if (r.post_import_file_id) candidateFileIds.add(r.post_import_file_id);
+
+          const {
+            rows: [{ c: rr }],
+          } = await client.query("SELECT COUNT(*)::int AS c FROM reconciliation_rows WHERE run_id = ANY($1)", [runIds]);
+          reconciliationRows = rr;
+          const {
+            rows: [{ c: dc }],
+          } = await client.query("SELECT COUNT(*)::int AS c FROM decisions WHERE run_id = ANY($1)", [runIds]);
+          decisions = dc;
+
+          // Children first, then the run itself -- runs/batches/files relationships
+          // have no ON DELETE CASCADE (see migrations/0001_init.sql), only the
+          // direct child tables (reconciliation_rows/decisions/legacy_comparison_rows/
+          // post_import_verification_rows) do.
+          if (batchIds.length > 0) {
+            await client.query(
+              `DELETE FROM post_import_verification_rows
+               WHERE verification_id IN (SELECT id FROM post_import_verifications WHERE batch_id = ANY($1))`,
+              [batchIds],
+            );
+            await client.query("DELETE FROM post_import_verifications WHERE batch_id = ANY($1)", [batchIds]);
+          }
+          await client.query(
+            `DELETE FROM legacy_comparison_rows
+             WHERE legacy_comparison_id IN (SELECT id FROM legacy_comparisons WHERE run_id = ANY($1))`,
+            [runIds],
+          );
+          await client.query("DELETE FROM legacy_comparisons WHERE run_id = ANY($1)", [runIds]);
+          await client.query("DELETE FROM decisions WHERE run_id = ANY($1)", [runIds]);
+          if (batchIds.length > 0) {
+            await client.query("DELETE FROM batches WHERE id = ANY($1)", [batchIds]);
+          }
+          await client.query("DELETE FROM reconciliation_rows WHERE run_id = ANY($1)", [runIds]);
+          await client.query("DELETE FROM runs WHERE id = ANY($1)", [runIds]);
         }
       }
-      for (const r of legacyRows) if (r.legacy_file_id) candidateFileIds.add(r.legacy_file_id);
-      for (const r of postImportRows) if (r.post_import_file_id) candidateFileIds.add(r.post_import_file_id);
 
-      const {
-        rows: [{ c: reconciliationRows }],
-      } = await client.query("SELECT COUNT(*)::int AS c FROM reconciliation_rows WHERE run_id = ANY($1)", [runIds]);
-      const {
-        rows: [{ c: decisions }],
-      } = await client.query("SELECT COUNT(*)::int AS c FROM decisions WHERE run_id = ANY($1)", [runIds]);
-
-      // Children first, then the run itself -- runs/batches/files relationships
-      // have no ON DELETE CASCADE (see migrations/0001_init.sql), only the
-      // direct child tables (reconciliation_rows/decisions/legacy_comparison_rows/
-      // post_import_verification_rows) do.
-      if (batchIds.length > 0) {
-        await client.query(
-          `DELETE FROM post_import_verification_rows
-           WHERE verification_id IN (SELECT id FROM post_import_verifications WHERE batch_id = ANY($1))`,
-          [batchIds],
+      if (scope.catalog) {
+        const { rows: catalogRows } = await client.query(
+          "SELECT id FROM files WHERE kind IN ('miva_snapshot', 'post_import_snapshot')",
         );
-        await client.query("DELETE FROM post_import_verifications WHERE batch_id = ANY($1)", [batchIds]);
+        for (const r of catalogRows) candidateFileIds.add(r.id);
       }
-      await client.query(
-        `DELETE FROM legacy_comparison_rows
-         WHERE legacy_comparison_id IN (SELECT id FROM legacy_comparisons WHERE run_id = ANY($1))`,
-        [runIds],
-      );
-      await client.query("DELETE FROM legacy_comparisons WHERE run_id = ANY($1)", [runIds]);
-      await client.query("DELETE FROM decisions WHERE run_id = ANY($1)", [runIds]);
-      if (batchIds.length > 0) {
-        await client.query("DELETE FROM batches WHERE id = ANY($1)", [batchIds]);
-      }
-      await client.query("DELETE FROM reconciliation_rows WHERE run_id = ANY($1)", [runIds]);
-      await client.query("DELETE FROM runs WHERE id = ANY($1)", [runIds]);
 
-      // Only drop files nothing else still points at -- the same file can be
-      // reused across runs via the checksum-dedupe upload flow.
+      // Only drop files nothing still points at -- the same file can be
+      // reused across runs via the checksum-dedupe upload flow, and a
+      // catalog file selected above may still be referenced by a run that
+      // wasn't in this clear's scope (or survived a beforeDate filter).
       const fileIdList = Array.from(candidateFileIds);
       const deletableFileIds: string[] = [];
       for (const fid of fileIdList) {
@@ -704,15 +733,25 @@ export class PostgresRepository implements Repository {
         await client.query("DELETE FROM files WHERE id = ANY($1)", [deletableFileIds]);
       }
 
+      let activityLogEntries = 0;
+      if (scope.activityLog) {
+        const {
+          rows: [{ c }],
+        } = await client.query("SELECT COUNT(*)::int AS c FROM audit_log");
+        activityLogEntries = c;
+        await client.query("DELETE FROM audit_log");
+      }
+
       const result: ClearDataResult = {
         runs: runIds.length,
         batches: batchIds.length,
         reconciliationRows,
         decisions,
-        legacyComparisons: legacyRows.length,
-        postImportVerifications: postImportRows.length,
+        legacyComparisons: legacyCount,
+        postImportVerifications: postImportCount,
         files: deletableFileIds.length,
         totalFileBytes,
+        activityLogEntries,
         deletedFileStoragePaths,
       };
 

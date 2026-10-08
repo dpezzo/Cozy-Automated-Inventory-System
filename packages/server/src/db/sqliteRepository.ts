@@ -27,6 +27,7 @@ import type {
   MivaActiveSite,
   ClearDataCounts,
   ClearDataResult,
+  ClearDataScope,
   VendorConfigRecord,
   InsertVendorConfigInput,
   UpdateVendorConfigPatch,
@@ -720,27 +721,30 @@ export class SqliteRepository implements Repository {
       .run(DEV_RESET_REFERENCE_FILE_SETTINGS_KEY, fileId, nowIso());
   }
 
-  async previewClearData(beforeDate: string | null): Promise<ClearDataCounts> {
-    const { deletedFileStoragePaths, ...counts } = await this.runClearData(beforeDate, true);
+  async previewClearData(scope: ClearDataScope): Promise<ClearDataCounts> {
+    const { deletedFileStoragePaths, ...counts } = await this.runClearData(scope, true);
     return counts;
   }
 
-  async clearData(beforeDate: string | null): Promise<ClearDataResult> {
-    return this.runClearData(beforeDate, false);
+  async clearData(scope: ClearDataScope): Promise<ClearDataResult> {
+    return this.runClearData(scope, false);
   }
 
   /**
    * Deletes in dependency order (children before parents -- see the FK
    * layout in migrations/0001_init.sql: only reconciliation_rows/decisions/
    * legacy_comparison_rows/post_import_verification_rows cascade from their
-   * direct parent; runs/batches/files relationships do not), then figures
-   * out which of the files referenced by the deleted rows are now
-   * unreferenced anywhere else (a file can be reused across runs via the
-   * checksum-dedupe upload flow) before deleting those file rows too.
-   * dryRun runs the identical logic and rolls back instead of committing, so
-   * the preview is guaranteed to match what a real run would do.
+   * direct parent; runs/batches/files relationships do not), scoped by which
+   * of ClearDataScope's categories are selected. Run-history deletion happens
+   * first so the catalog category's "still referenced?" check below only
+   * ever sees rows that survive this same clear -- a catalog file a kept run
+   * still points at is never deleted, even if the catalog category is
+   * selected; a catalog file whose only reference was a run just deleted in
+   * this same call is swept up correctly either way. dryRun runs the
+   * identical logic and rolls back instead of committing, so the preview is
+   * guaranteed to match what a real run would do.
    */
-  private async runClearData(beforeDate: string | null, dryRun: boolean): Promise<ClearDataResult> {
+  private async runClearData(scope: ClearDataScope, dryRun: boolean): Promise<ClearDataResult> {
     const db = this.conn();
     const empty: ClearDataResult = {
       runs: 0,
@@ -751,88 +755,110 @@ export class SqliteRepository implements Repository {
       postImportVerifications: 0,
       files: 0,
       totalFileBytes: 0,
+      activityLogEntries: 0,
       deletedFileStoragePaths: [],
     };
+    if (!scope.runHistory && !scope.catalog && !scope.activityLog) return empty;
 
     db.exec("BEGIN");
     try {
-      const runRows = (
-        beforeDate
-          ? db.prepare("SELECT id FROM runs WHERE created_at < ?").all(beforeDate)
-          : db.prepare("SELECT id FROM runs").all()
-      ) as { id: string }[];
-      const runIds = runRows.map((r) => r.id);
-
-      if (runIds.length === 0) {
-        db.exec("ROLLBACK");
-        return empty;
-      }
-      const runPh = inClause(runIds.length);
-
-      const batchRows = db
-        .prepare(
-          `SELECT id, update_file_id, rollback_file_id, exception_file_id, reconciliation_file_id
-           FROM batches WHERE run_id IN ${runPh}`,
-        )
-        .all(...runIds) as Record<string, unknown>[];
-      const batchIds = batchRows.map((b) => b.id as string);
-      const batchPh = batchIds.length ? inClause(batchIds.length) : null;
-
-      const runFileRows = db.prepare(`SELECT vendor_file_id, miva_file_id FROM runs WHERE id IN ${runPh}`).all(...runIds) as {
-        vendor_file_id: string;
-        miva_file_id: string;
-      }[];
-      const legacyRows = db.prepare(`SELECT legacy_file_id FROM legacy_comparisons WHERE run_id IN ${runPh}`).all(...runIds) as {
-        legacy_file_id: string | null;
-      }[];
-      const postImportRows = batchPh
-        ? (db.prepare(`SELECT post_import_file_id FROM post_import_verifications WHERE batch_id IN ${batchPh}`).all(
-            ...batchIds,
-          ) as { post_import_file_id: string | null }[])
-        : [];
-
+      let runIds: string[] = [];
+      let batchIds: string[] = [];
+      let reconciliationRows = 0;
+      let decisions = 0;
+      let legacyCount = 0;
+      let postImportCount = 0;
       const candidateFileIds = new Set<string>();
-      for (const r of runFileRows) {
-        candidateFileIds.add(r.vendor_file_id);
-        candidateFileIds.add(r.miva_file_id);
-      }
-      for (const b of batchRows) {
-        for (const col of ["update_file_id", "rollback_file_id", "exception_file_id", "reconciliation_file_id"] as const) {
-          const v = b[col] as string | null;
-          if (v) candidateFileIds.add(v);
+
+      if (scope.runHistory) {
+        const runRows = (
+          scope.runHistoryBeforeDate
+            ? db.prepare("SELECT id FROM runs WHERE created_at < ?").all(scope.runHistoryBeforeDate)
+            : db.prepare("SELECT id FROM runs").all()
+        ) as { id: string }[];
+        runIds = runRows.map((r) => r.id);
+
+        if (runIds.length > 0) {
+          const runPh = inClause(runIds.length);
+
+          const batchRows = db
+            .prepare(
+              `SELECT id, update_file_id, rollback_file_id, exception_file_id, reconciliation_file_id
+               FROM batches WHERE run_id IN ${runPh}`,
+            )
+            .all(...runIds) as Record<string, unknown>[];
+          batchIds = batchRows.map((b) => b.id as string);
+          const batchPh = batchIds.length ? inClause(batchIds.length) : null;
+
+          const runFileRows = db.prepare(`SELECT vendor_file_id, miva_file_id FROM runs WHERE id IN ${runPh}`).all(
+            ...runIds,
+          ) as { vendor_file_id: string; miva_file_id: string }[];
+          const legacyRows = db.prepare(`SELECT legacy_file_id FROM legacy_comparisons WHERE run_id IN ${runPh}`).all(
+            ...runIds,
+          ) as { legacy_file_id: string | null }[];
+          const postImportRows = batchPh
+            ? (db.prepare(`SELECT post_import_file_id FROM post_import_verifications WHERE batch_id IN ${batchPh}`).all(
+                ...batchIds,
+              ) as { post_import_file_id: string | null }[])
+            : [];
+          legacyCount = legacyRows.length;
+          postImportCount = postImportRows.length;
+
+          for (const r of runFileRows) {
+            candidateFileIds.add(r.vendor_file_id);
+            candidateFileIds.add(r.miva_file_id);
+          }
+          for (const b of batchRows) {
+            for (const col of ["update_file_id", "rollback_file_id", "exception_file_id", "reconciliation_file_id"] as const) {
+              const v = b[col] as string | null;
+              if (v) candidateFileIds.add(v);
+            }
+          }
+          for (const r of legacyRows) if (r.legacy_file_id) candidateFileIds.add(r.legacy_file_id);
+          for (const r of postImportRows) if (r.post_import_file_id) candidateFileIds.add(r.post_import_file_id);
+
+          reconciliationRows = (
+            db.prepare(`SELECT COUNT(*) AS c FROM reconciliation_rows WHERE run_id IN ${runPh}`).get(...runIds) as {
+              c: number;
+            }
+          ).c;
+          decisions = (
+            db.prepare(`SELECT COUNT(*) AS c FROM decisions WHERE run_id IN ${runPh}`).get(...runIds) as { c: number }
+          ).c;
+
+          // Children first, then the run itself -- see the ordering note above.
+          if (batchPh) {
+            db.prepare(
+              `DELETE FROM post_import_verification_rows
+               WHERE verification_id IN (SELECT id FROM post_import_verifications WHERE batch_id IN ${batchPh})`,
+            ).run(...batchIds);
+            db.prepare(`DELETE FROM post_import_verifications WHERE batch_id IN ${batchPh}`).run(...batchIds);
+          }
+          db.prepare(
+            `DELETE FROM legacy_comparison_rows
+             WHERE legacy_comparison_id IN (SELECT id FROM legacy_comparisons WHERE run_id IN ${runPh})`,
+          ).run(...runIds);
+          db.prepare(`DELETE FROM legacy_comparisons WHERE run_id IN ${runPh}`).run(...runIds);
+          db.prepare(`DELETE FROM decisions WHERE run_id IN ${runPh}`).run(...runIds);
+          if (batchPh) {
+            db.prepare(`DELETE FROM batches WHERE id IN ${batchPh}`).run(...batchIds);
+          }
+          db.prepare(`DELETE FROM reconciliation_rows WHERE run_id IN ${runPh}`).run(...runIds);
+          db.prepare(`DELETE FROM runs WHERE id IN ${runPh}`).run(...runIds);
         }
       }
-      for (const r of legacyRows) if (r.legacy_file_id) candidateFileIds.add(r.legacy_file_id);
-      for (const r of postImportRows) if (r.post_import_file_id) candidateFileIds.add(r.post_import_file_id);
 
-      const reconciliationRows = (
-        db.prepare(`SELECT COUNT(*) AS c FROM reconciliation_rows WHERE run_id IN ${runPh}`).get(...runIds) as { c: number }
-      ).c;
-      const decisions = (db.prepare(`SELECT COUNT(*) AS c FROM decisions WHERE run_id IN ${runPh}`).get(...runIds) as { c: number })
-        .c;
-
-      // Children first, then the run itself -- see the ordering note above.
-      if (batchPh) {
-        db.prepare(
-          `DELETE FROM post_import_verification_rows
-           WHERE verification_id IN (SELECT id FROM post_import_verifications WHERE batch_id IN ${batchPh})`,
-        ).run(...batchIds);
-        db.prepare(`DELETE FROM post_import_verifications WHERE batch_id IN ${batchPh}`).run(...batchIds);
+      if (scope.catalog) {
+        const catalogRows = db
+          .prepare(`SELECT id FROM files WHERE kind IN ('miva_snapshot', 'post_import_snapshot')`)
+          .all() as { id: string }[];
+        for (const r of catalogRows) candidateFileIds.add(r.id);
       }
-      db.prepare(
-        `DELETE FROM legacy_comparison_rows
-         WHERE legacy_comparison_id IN (SELECT id FROM legacy_comparisons WHERE run_id IN ${runPh})`,
-      ).run(...runIds);
-      db.prepare(`DELETE FROM legacy_comparisons WHERE run_id IN ${runPh}`).run(...runIds);
-      db.prepare(`DELETE FROM decisions WHERE run_id IN ${runPh}`).run(...runIds);
-      if (batchPh) {
-        db.prepare(`DELETE FROM batches WHERE id IN ${batchPh}`).run(...batchIds);
-      }
-      db.prepare(`DELETE FROM reconciliation_rows WHERE run_id IN ${runPh}`).run(...runIds);
-      db.prepare(`DELETE FROM runs WHERE id IN ${runPh}`).run(...runIds);
 
-      // Only drop files nothing else still points at -- the same file can be
-      // reused across runs via the checksum-dedupe upload flow.
+      // Only drop files nothing still points at -- the same file can be
+      // reused across runs via the checksum-dedupe upload flow, and a
+      // catalog file selected above may still be referenced by a run that
+      // wasn't in this clear's scope (or survived a beforeDate filter).
       const fileIdList = Array.from(candidateFileIds);
       const deletableFileIds: string[] = [];
       for (const fid of fileIdList) {
@@ -862,15 +888,22 @@ export class SqliteRepository implements Repository {
         db.prepare(`DELETE FROM files WHERE id IN ${filePh}`).run(...deletableFileIds);
       }
 
+      let activityLogEntries = 0;
+      if (scope.activityLog) {
+        activityLogEntries = (db.prepare("SELECT COUNT(*) AS c FROM audit_log").get() as { c: number }).c;
+        db.exec("DELETE FROM audit_log");
+      }
+
       const result: ClearDataResult = {
         runs: runIds.length,
         batches: batchIds.length,
         reconciliationRows,
         decisions,
-        legacyComparisons: legacyRows.length,
-        postImportVerifications: postImportRows.length,
+        legacyComparisons: legacyCount,
+        postImportVerifications: postImportCount,
         files: deletableFileIds.length,
         totalFileBytes,
+        activityLogEntries,
         deletedFileStoragePaths,
       };
 
