@@ -2,6 +2,12 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-09 — Acme Test Brand and TechNiche vendors backfilled, plugin files now ship via git
+
+### Added
+- New migration (`0009_acme_test_and_techniche_vendors.sql`, both DB drivers) backfills two vendor_configs rows that previously only existed as live rows created through the Manage Vendors UI on the local dev database, so they now reach every environment including production: `acme-test` ("Acme Test Brand", a synthetic simple-CSV test vendor matching the 10 Acme Test Brand products imported into the live Miva store, UPC/Description/Quantity columns), and `techniche` (relabeled "TechNiche International (Occunomix)" -- its `plugin_filename` actually parses Occunomix's UTF-16LE/tab-delimited export, not a real TechNiche file; it's a placeholder with no matching inventory until TechNiche's real file is available).
+- Vendor parser plugin files (`vendor/pluginLoader.ts`) previously had to be copied onto a server's filesystem by hand. New `vendor/seedPluginFiles.ts`, called on every boot from `migrate.ts`, copies any `.js` file checked into the new `packages/server/vendor-plugins-seed/` directory into the runtime plugins directory, skipping files that already exist there. `occunomix.js` is the first file seeded this way; Dockerfile now copies `vendor-plugins-seed/` into the runtime image. Lets a plugin ship through a normal git push + deploy instead of manual server/volume access.
+
 ## 2026-10-08 — Home page name finalized, live Miva credentials, Dev/Live indicator, selective Clear Data
 
 ### Added

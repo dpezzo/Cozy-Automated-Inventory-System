@@ -12,6 +12,12 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-09",
+    items: [
+      "Manage Vendors: added the Acme Test Brand test vendor and the TechNiche International (Occunomix) placeholder vendor, available in every environment.",
+    ],
+  },
+  {
     date: "2026-10-08",
     items: [
       "The Home page is now permanently named \"Inventory Update\" (previously a preview toggle between \"Home\" and \"Run Reconciliation\"), to describe what it actually does for anyone new to the app.",

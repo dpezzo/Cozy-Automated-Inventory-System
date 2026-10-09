@@ -31,6 +31,15 @@ export function defaultVendorPluginsDir(): string {
     : path.join(defaultDataDir(), "vendor-plugins");
 }
 
+/**
+ * Plugin files checked into git (see vendor/seedPluginFiles.ts), copied into
+ * defaultVendorPluginsDir() on boot so a plugin ships via a normal git
+ * push + deploy instead of a manual file copy onto the server/volume.
+ */
+export function vendorPluginsSeedDir(): string {
+  return path.join(SERVER_ROOT, "vendor-plugins-seed");
+}
+
 export function defaultLogDir(): string {
   return path.join(defaultDataDir(), "logs");
 }
