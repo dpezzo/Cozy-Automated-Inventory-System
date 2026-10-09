@@ -166,6 +166,11 @@ export const api = {
   getRunRows: (id: string, params: Record<string, string>) =>
     request<ReviewRowView[]>(`/runs/${id}/rows?${new URLSearchParams(params).toString()}`),
   approveAllClean: (runId: string) => request<{ approved: number }>(`/runs/${runId}/decisions/approve-all-clean`, { method: "POST" }),
+  approveAllWarning: (runId: string, warningCode: string) =>
+    request<{ approved: number }>(`/runs/${runId}/decisions/approve-all-warning`, {
+      method: "POST",
+      body: JSON.stringify({ warningCode }),
+    }),
   bulkDecision: (runId: string, rowIds: string[], decision: "APPROVED" | "REJECTED") =>
     request<{ applied: number; skipped: string[] }>(`/runs/${runId}/decisions/bulk`, {
       method: "POST",

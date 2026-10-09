@@ -43,20 +43,32 @@ vi.mock("../vendor/vendorFileRegistry", () => ({
           descriptionRaw: "Tracked product",
           totalQtyRaw: "10",
         },
+        {
+          sourceRowNumber: 2,
+          itemNoRaw: "MPN-UNTRACKED",
+          upcRaw: null,
+          skuRaw: "MPN-UNTRACKED",
+          descriptionRaw: "Untracked product referenced by vendor",
+          totalQtyRaw: "10",
+        },
       ],
     }),
   }),
 }));
 
-// One tracked product (DS_INV_MGT = "1") that the vendor file also references,
-// and one untracked product (DS_INV_MGT blank) that only exists in Miva --
-// exactly the "present in Miva, absent from vendor file" shape that would
-// otherwise synthesize a MISSING-REVIEW-REQUIRED row for every one of the
-// ~8,000 untracked SKUs if this filter weren't applied before reconciliation.
+// One tracked product (DS_INV_MGT = "1") that the vendor file also
+// references, and one untracked product (DS_INV_MGT blank) that the vendor
+// file ALSO references -- the blank-flag filter no longer happens before
+// reconciliation, so this genuine match must now surface as a WARNING
+// (MIVA_NOT_DROPSHIP_TRACKED) instead of being silently dropped. A third,
+// Miva-only untracked product (never referenced by the vendor file) must
+// still never synthesize a MISSING-REVIEW-REQUIRED row -- that's what
+// would otherwise flood in for every one of the ~8,000 untracked SKUs.
 const MIVA_SNAPSHOT_CSV = [
   "PRODUCT_CODE,PRODUCT_NAME,*DF-GTIN,*DF-MPN,*DF-PRODUCT_BRAND,*CUSTOM_SIMPLE_INVENTORY,*DF-AVAILABILITY,*ORD-INV_RESTOCK_DATE_DF-MERG-IN:,*DF-DATAFEED,*DF-SHOPPING_FEED,DROPSHIP_INVENTORY_MANAGEMENT",
   "TRACKED-1,Tracked product,,MPN-TRACKED,Acme,IN STOCK,in stock,,Yes,,1",
-  "UNTRACKED-1,Untracked product,,MPN-UNTRACKED,Acme,IN STOCK,in stock,,Yes,,",
+  "UNTRACKED-1,Untracked product referenced by vendor,,MPN-UNTRACKED,Acme,IN STOCK,in stock,,Yes,,",
+  "UNTRACKED-ORPHAN,Untracked orphan product,,MPN-ORPHAN,Acme,IN STOCK,in stock,,Yes,,",
 ].join("\n");
 
 describe("createRun Miva tracked-only filter", () => {
@@ -89,7 +101,7 @@ describe("createRun Miva tracked-only filter", () => {
     findRunById.mockResolvedValue({ id: "run-1", status: "ready" });
   });
 
-  it("never passes a blank-DS_INV_MGT Miva row into reconciliation, even as a Miva-only row", async () => {
+  it("a blank-DS_INV_MGT Miva row with no vendor match still never becomes a MISSING row", async () => {
     const { createRun } = await import("./runService");
     await createRun({
       vendorFileId: "v1",
@@ -99,9 +111,20 @@ describe("createRun Miva tracked-only filter", () => {
     });
 
     expect(insertReconciliationRows).toHaveBeenCalledTimes(1);
-    const rows = insertReconciliationRows.mock.calls[0]![1] as Array<{ productCode: string | null }>;
+    const rows = insertReconciliationRows.mock.calls[0]![1] as Array<{
+      productCode: string | null;
+      reviewClass: string;
+      warningCodes: string[];
+    }>;
     const productCodes = rows.map((r) => r.productCode);
     expect(productCodes).toContain("TRACKED-1");
-    expect(productCodes).not.toContain("UNTRACKED-1");
+    expect(productCodes).not.toContain("UNTRACKED-ORPHAN");
+
+    // The blank-flagged product the vendor file DOES reference now surfaces
+    // as a WARNING instead of being invisible.
+    const untrackedMatch = rows.find((r) => r.productCode === "UNTRACKED-1");
+    expect(untrackedMatch).toBeDefined();
+    expect(untrackedMatch!.reviewClass).toBe("WARNING");
+    expect(untrackedMatch!.warningCodes).toContain("MIVA_NOT_DROPSHIP_TRACKED");
   });
 });

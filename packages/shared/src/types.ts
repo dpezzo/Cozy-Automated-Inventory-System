@@ -81,7 +81,11 @@ export type WarningCode =
   | "EXPECTED_DATE_CONFLICT"
   | "DATE_WITH_NONPOSITIVE_INCOMING_QTY"
   | "INCOMING_QTY_WITHOUT_DATE"
-  | "AMBIGUOUS_INCOMING_DATE";
+  | "AMBIGUOUS_INCOMING_DATE"
+  /** A genuine vendor match against a Miva product whose DROPSHIP_INVENTORY_MANAGEMENT is blank -- forced to WARNING so it can't be bulk-approved as CLEAN. */
+  | "MIVA_NOT_DROPSHIP_TRACKED"
+  /** A genuine vendor match against a Miva product currently flagged NLA -- approving would reactivate a deliberately-discontinued product. */
+  | "MIVA_CURRENTLY_NLA";
 
 export type BlockerCode =
   | "BLANK_UPC"

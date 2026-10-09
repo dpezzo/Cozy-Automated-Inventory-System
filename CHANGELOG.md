@@ -2,6 +2,19 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-09 — DS_INV_MGT tracked-flag safety nets, Legacy Comparison fix
+
+### Added
+
+**DS_INV_MGT tracked-flag safety nets**
+- Root-caused the overnight matching regression (Gobi/K&H/TechNiche matching zero products): `runService.ts` was silently discarding every Miva row with a blank `DROPSHIP_INVENTORY_MANAGEMENT` field *before* matching ever ran, so a vendor's genuine match against one of those rows looked identical to "doesn't exist in Miva at all." Confirmed via a full catalog export that the Live store's tracked flag is in fact blank on almost everything except the new Acme Test Brand vendor's products -- a real data gap from the recent field rename, not a code bug.
+- The blank-flag pre-filter is removed; the full Miva catalog now reaches the matching engine. Two new warning codes instead catch the cases that actually need a human's attention: `MIVA_NOT_DROPSHIP_TRACKED` (a genuine match against a blank-flagged Miva product -- forces `WARNING`, never silently `CLEAN`, so it can't be swept up by "Approve all clean") and `MIVA_CURRENTLY_NLA` (a genuine match against a product already marked discontinued in Miva -- also forced to `WARNING`, so a vendor still shipping something you'd written off can't silently reactivate it). The "missing from vendor" review-required scan still excludes blank-flagged products, so this doesn't flood Run Review with thousands of fake "missing" rows for the untracked majority of the catalog.
+- New dedicated bulk action on Run Review, "Approve all (blank tracked-flag only)", for clearing the one-time backlog this surfaces -- it only sweeps rows whose *sole* warning is the blank flag; anything with a second warning mixed in (date conflicts, warehouse mismatches) still requires individual review, same as every other warning today.
+- Repopulating the Live store's historical tracked-flag data was deliberately left out of the app -- it's a one-time Miva-side cleanup (native product import), not an ongoing rule worth building into the most safety-critical code in the app.
+
+**Legacy Comparison dropdown fix**
+- Root-caused "Select legacy audit" showing no options after a successful-looking upload: `AuditsReviewsPage.tsx`'s run list and legacy-file list were both fetched with no error handling at all -- any failed request left the dropdown silently empty with zero feedback. Both now surface failures through the page's existing error banner instead of failing silently.
+
 ## 2026-10-09 — Acme Test Brand and TechNiche vendors backfilled, plugin files now ship via git
 
 ### Added

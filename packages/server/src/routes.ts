@@ -16,11 +16,11 @@ import { uploadFile, uploadVendorFileAutoDetect } from "./domain/uploadService";
 import { pullMivaSnapshotFromApi } from "./miva/mivaProducts";
 import { isMivaApiConfigured } from "./miva/mivaApiClient";
 import { parseMivaSnapshotCsv } from "./vendor/mivaCsv";
-import { createRun, getRunSummary, approveAllClean, setRowDecision, bulkDecision, getBatchableRows } from "./domain/runService";
+import { createRun, getRunSummary, approveAllClean, approveAllSingleWarning, setRowDecision, bulkDecision, getBatchableRows } from "./domain/runService";
 import { generateBatch } from "./domain/batchService";
 import { runLegacyComparison } from "./domain/legacyService";
 import { generateVendorExceptionReport } from "./domain/vendorExceptionReportService";
-import { VENDOR_EXCEPTION_CATEGORIES, type VendorExceptionCategory, RELEASE_NOTES } from "@cozywinters/shared";
+import { VENDOR_EXCEPTION_CATEGORIES, type VendorExceptionCategory, RELEASE_NOTES, type WarningCode } from "@cozywinters/shared";
 import { runPostImportVerification } from "./domain/verificationService";
 import { pushBatchToMiva, resolveMivaPushEnvironment } from "./miva/mivaApiPush";
 import { uploadDevResetReferenceFile, resetDevSiteProducts } from "./miva/devReset";
@@ -434,6 +434,15 @@ router.post(
   "/runs/:id/decisions/approve-all-clean",
   asyncHandler(async (req, res) => {
     const count = await approveAllClean(req.params.id!, req.session.userId!);
+    res.json({ approved: count });
+  }),
+);
+
+router.post(
+  "/runs/:id/decisions/approve-all-warning",
+  asyncHandler(async (req, res) => {
+    const { warningCode } = req.body as { warningCode: WarningCode };
+    const count = await approveAllSingleWarning(req.params.id!, warningCode, req.session.userId!);
     res.json({ approved: count });
   }),
 );

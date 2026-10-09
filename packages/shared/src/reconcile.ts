@@ -280,6 +280,16 @@ export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], op
     const status: "IN STOCK" | "SOLD OUT" = totalQty.value >= config.inStockThreshold ? "IN STOCK" : "SOLD OUT";
 
     const warnings: WarningCode[] = [];
+
+    // Matching no longer requires a non-blank DS_INV_MGT upstream (see
+    // runService.ts) -- a genuine identifier+brand match against an
+    // untracked or NLA Miva row must never silently resolve to CLEAN, since
+    // approving it would either start tracking a product nobody's reviewed
+    // or reactivate something deliberately marked discontinued.
+    const dsInvMgt = (current.dsInvMgt ?? "").trim();
+    if (dsInvMgt === "") warnings.push("MIVA_NOT_DROPSHIP_TRACKED");
+    else if (dsInvMgt === "NLA") warnings.push("MIVA_CURRENTLY_NLA");
+
     let dateResult: { date: string | null; sources: string[]; conflict: boolean } = { date: null, sources: [], conflict: false };
 
     // Only vendors with a per-location incoming-date breakdown (Olliix today)
@@ -326,12 +336,17 @@ export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], op
     });
   }
 
-  // Pass 2: Miva products in the applicable population never referenced by a
-  // successful or ambiguous vendor match are MISSING - REVIEW REQUIRED.
+  // Pass 2: Miva products in the applicable, tracked population never
+  // referenced by a successful or ambiguous vendor match are MISSING -
+  // REVIEW REQUIRED. A blank DS_INV_MGT Miva row is excluded here even
+  // though it's no longer excluded from matching (see pass 1 above) --
+  // otherwise every brand-eligible, untracked product in the full catalog
+  // would flood in as a fake "missing from vendor" row.
   const seenMissingKeys = new Set<string>();
   for (const row of mivaRows) {
     const normalized = mivaNormalize(getMivaIdentifierRaw(row));
     if (!normalized.valid || normalized.normalized === null) continue;
+    if (row.currentDsInvMgt.trim() === "") continue;
     if (!isBrandAllowed(row.brandRaw, config.brandAllowlist)) continue;
     if (usedMivaKeys.has(normalized.normalized)) continue;
     seenMissingKeys.add(`${normalized.normalized}:${row.productCode}`);

@@ -89,3 +89,44 @@ describe("reconcile: Miva products missing from Olliix", () => {
     expect(rows[0]!.reviewClass).toBe("CLEAN");
   });
 });
+
+describe("reconcile: DS_INV_MGT tracked-flag warnings", () => {
+  it("forces a genuine match against a blank-DS_INV_MGT Miva row to WARNING with MIVA_NOT_DROPSHIP_TRACKED", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({ currentDsInvMgt: "" })];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.matchOutcome).toBe("MATCHED");
+    expect(rows[0]!.changed).toBe(true);
+    expect(rows[0]!.reviewClass).toBe("WARNING");
+    expect(rows[0]!.warningCodes).toContain("MIVA_NOT_DROPSHIP_TRACKED");
+  });
+
+  it("forces a genuine match against an NLA-flagged Miva row to WARNING with MIVA_CURRENTLY_NLA", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({ currentDsInvMgt: "NLA" })];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.matchOutcome).toBe("MATCHED");
+    expect(rows[0]!.changed).toBe(true);
+    expect(rows[0]!.reviewClass).toBe("WARNING");
+    expect(rows[0]!.warningCodes).toContain("MIVA_CURRENTLY_NLA");
+  });
+
+  it("still resolves CLEAN for a normal tracked (DS_INV_MGT=1) match with no other warning", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({ currentSimpleInventory: "SOLD OUT", currentDsInvMgt: "1" })];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.reviewClass).toBe("CLEAN");
+    expect(rows[0]!.warningCodes).toEqual([]);
+  });
+
+  it("never synthesizes a MISSING row for a blank-DS_INV_MGT, brand-eligible Miva product with no vendor match", () => {
+    const { rows } = reconcile([], [mivaRow({ currentDsInvMgt: "" })], {
+      config: OLLIIX_RULE_CONFIG,
+      runDate: RUN_DATE,
+    });
+    expect(rows).toHaveLength(0);
+  });
+});

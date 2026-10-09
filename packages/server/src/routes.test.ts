@@ -18,6 +18,7 @@ vi.mock("./domain/runService", () => ({
   createRun: () => ({}),
   getRunSummary: () => ({}),
   approveAllClean: () => 0,
+  approveAllSingleWarning: () => 0,
   setRowDecision: () => undefined,
   bulkDecision: () => ({ applied: 0, skipped: [] }),
   getBatchableRows: () => [],

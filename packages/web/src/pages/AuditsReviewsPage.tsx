@@ -205,11 +205,14 @@ function LegacyComparisonSection() {
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
 
   useEffect(() => {
-    api.listRuns().then(setRuns);
+    api.listRuns().then(setRuns).catch((err) => setError(friendlyError(err, "Failed to load runs.")));
   }, []);
 
   const loadLegacyFiles = () => {
-    api.listFiles("legacy_audit").then(setLegacyFiles);
+    api
+      .listFiles("legacy_audit")
+      .then(setLegacyFiles)
+      .catch((err) => setError(friendlyError(err, "Failed to load uploaded legacy audit files.")));
   };
 
   useEffect(() => {

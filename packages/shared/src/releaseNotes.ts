@@ -15,6 +15,8 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
     date: "2026-10-09",
     items: [
       "Manage Vendors: added the Acme Test Brand test vendor and the TechNiche International (Occunomix) placeholder vendor, available in every environment.",
+      "Fixed a matching regression where vendors could show far fewer matches than expected -- a product whose Miva tracked-flag wasn't set to 1 now shows up as a warning requiring your review instead of being silently invisible, with a one-click \"Approve all (blank tracked-flag only)\" action to clear a backlog of these at once.",
+      "Fixed Audits & Reviews: the \"Select legacy audit\" dropdown could silently stay empty after a successful upload with no error shown -- failures are now shown on screen.",
     ],
   },
   {

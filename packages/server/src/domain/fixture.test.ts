@@ -64,6 +64,33 @@ const RUN_DATE = { year: 2026, month: 9, day: 18 };
 const APPROVED_PRODUCT_CODES = new Set(["P001", "P004", "P012", "P013", "P015", "P018", "P019", "P020"]);
 const REJECTED_PRODUCT_CODES = new Set(["P002"]);
 
+/**
+ * The frozen bake-off fixture bundle (test-fixtures/synthetic/) predates the
+ * DS_INV_MGT tracked-flag safety net added 2026-10-09. Its Miva snapshot
+ * (Miva_synthetic_pre_import.csv) happens to leave DROPSHIP_INVENTORY_MANAGEMENT
+ * blank on every "NO LONGER AVAILABLE" product -- not a deliberate test of this
+ * feature, just incidental to when the column was retrofitted onto an already-
+ * frozen file. expected_reconciliation.csv/expected_exceptions.csv are
+ * deliberately NOT edited to match (README: "shared benchmark truth... do not
+ * regenerate"), so these specific, well-understood divergences are asserted
+ * here instead, with the real reason documented inline rather than silently
+ * skipped. CASE_ID -> the exact field overrides that replace the frozen
+ * file's expectation for that one row.
+ */
+const KNOWN_FIXTURE_DIVERGENCES: Record<string, { reviewClass?: string; warningCodes?: string }> = {
+  // Previously CLEAN: a vendor re-shipping a blank-tracked-flag "NO LONGER
+  // AVAILABLE" product is now exactly the silent-reactivation case the new
+  // warning exists to catch.
+  "SYN-001": { reviewClass: "WARNING", warningCodes: "MIVA_NOT_DROPSHIP_TRACKED" },
+  "SYN-004": { reviewClass: "WARNING", warningCodes: "MIVA_NOT_DROPSHIP_TRACKED" },
+  // Already WARNING for an unrelated reason; the blank tracked-flag now adds
+  // a second code alongside the original one (pushed first -- see reconcile.ts).
+  "SYN-012": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,WAREHOUSE_TOTAL_MISMATCH" },
+  "SYN-014": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,EXPECTED_DATE_CONFLICT" },
+  "SYN-016": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,DATE_WITH_NONPOSITIVE_INCOMING_QTY" },
+  "SYN-017": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,INCOMING_QTY_WITHOUT_DATE" },
+};
+
 describe("synthetic fixture suite (28 cases)", () => {
   let rows: ReconciliationRow[];
 
@@ -97,9 +124,10 @@ describe("synthetic fixture suite (28 cases)", () => {
       expect(r.rawUpc ?? "", `${exp.CASE_ID} RAW_UPC`).toBe(exp.RAW_UPC ?? "");
       expect(r.normalizedUpc ?? "", `${exp.CASE_ID} NORMALIZED_UPC`).toBe(exp.NORMALIZED_UPC ?? "");
       expect(r.productCode ?? "", `${exp.CASE_ID} PRODUCT_CODE`).toBe(exp.PRODUCT_CODE ?? "");
+      const divergence = KNOWN_FIXTURE_DIVERGENCES[exp.CASE_ID!];
       expect(r.matchOutcome, `${exp.CASE_ID} MATCH_OUTCOME`).toBe(exp.MATCH_OUTCOME);
-      expect(r.reviewClass, `${exp.CASE_ID} REVIEW_CLASS`).toBe(exp.REVIEW_CLASS);
-      expect(r.warningCodes.join(","), `${exp.CASE_ID} WARNING_CODES`).toBe(exp.WARNING_CODES ?? "");
+      expect(r.reviewClass, `${exp.CASE_ID} REVIEW_CLASS`).toBe(divergence?.reviewClass ?? exp.REVIEW_CLASS);
+      expect(r.warningCodes.join(","), `${exp.CASE_ID} WARNING_CODES`).toBe(divergence?.warningCodes ?? exp.WARNING_CODES ?? "");
       expect(r.blockerCodes.join(","), `${exp.CASE_ID} BLOCKER_CODES`).toBe(exp.BLOCKER_CODES ?? "");
       expect(r.totalQtyRaw ?? "", `${exp.CASE_ID} TOTAL_QTY`).toBe(exp.TOTAL_QTY ?? "");
       expect(r.expectedDate ?? "", `${exp.CASE_ID} EXPECTED_DATE`).toBe(exp.EXPECTED_DATE ?? "");
@@ -127,17 +155,34 @@ describe("synthetic fixture suite (28 cases)", () => {
   });
 
   it("matches expected_exceptions.csv", () => {
-    const expected = readCsvRecords(fx("expected_exceptions.csv"));
+    const frozenExpected = readCsvRecords(fx("expected_exceptions.csv"));
+
+    // SYN-001/SYN-004 were CLEAN in the frozen file (no exception row at
+    // all); the new tracked-flag warning now makes both WARNING, so they
+    // must appear here too. Inserted and re-sorted the same way
+    // sortForReview orders the real rows (by sourceRowNumber), rather than
+    // editing the frozen CSV -- see KNOWN_FIXTURE_DIVERGENCES above.
+    const newExceptionRows = [
+      { CASE_ID: "SYN-001", SOURCE_ROW: "3", ITEM_NO: "SYN-001", PRODUCT_CODE: "P001", SEVERITY: "WARNING", REASON_CODES: "MIVA_NOT_DROPSHIP_TRACKED", APPROVAL_ELIGIBILITY: "INDIVIDUAL_WITH_ACK" },
+      { CASE_ID: "SYN-004", SOURCE_ROW: "6", ITEM_NO: "SYN-004", PRODUCT_CODE: "P004", SEVERITY: "WARNING", REASON_CODES: "MIVA_NOT_DROPSHIP_TRACKED", APPROVAL_ELIGIBILITY: "INDIVIDUAL_WITH_ACK" },
+    ];
+    const expected = [...frozenExpected, ...newExceptionRows].sort((a, b) => {
+      const aKey = a.SOURCE_ROW === "" ? Number.MAX_SAFE_INTEGER : Number(a.SOURCE_ROW);
+      const bKey = b.SOURCE_ROW === "" ? Number.MAX_SAFE_INTEGER : Number(b.SOURCE_ROW);
+      return aKey - bKey;
+    });
+
     const actual = toExceptionRows(rows);
     expect(actual.length).toBe(expected.length);
     for (let i = 0; i < expected.length; i++) {
       const exp = expected[i]!;
       const act = actual[i]!;
+      const divergence = KNOWN_FIXTURE_DIVERGENCES[exp.CASE_ID!];
       expect(String(act.sourceRowNumber ?? ""), `row ${i} SOURCE_ROW`).toBe(exp.SOURCE_ROW ?? "");
       expect(act.itemNo ?? "", `row ${i} ITEM_NO`).toBe(exp.ITEM_NO ?? "");
       expect(act.productCode ?? "", `row ${i} PRODUCT_CODE`).toBe(exp.PRODUCT_CODE ?? "");
-      expect(act.severity, `row ${i} SEVERITY`).toBe(exp.SEVERITY);
-      expect(act.reasonCodes, `row ${i} REASON_CODES`).toBe(exp.REASON_CODES);
+      expect(act.severity, `row ${i} SEVERITY`).toBe(divergence?.reviewClass ?? exp.SEVERITY);
+      expect(act.reasonCodes, `row ${i} REASON_CODES`).toBe(divergence?.warningCodes ?? exp.REASON_CODES);
       expect(act.approvalEligibility, `row ${i} APPROVAL_ELIGIBILITY`).toBe(exp.APPROVAL_ELIGIBILITY);
     }
   });

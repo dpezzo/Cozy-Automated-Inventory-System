@@ -4,7 +4,7 @@ import { readStoredFile, readStoredFileText, storedFileExists } from "../storage
 import { ValidationError, ForbiddenError, NotFoundError } from "../errors";
 import { getRepository, type RunRecord, type ReviewRowView } from "../db";
 import { runReconciliation } from "./runPipeline";
-import type { ParsedCalendarDate } from "@cozywinters/shared";
+import type { ParsedCalendarDate, WarningCode } from "@cozywinters/shared";
 
 export interface CreateRunInput {
   vendorFileId: string;
@@ -74,14 +74,14 @@ export async function createRun(input: CreateRunInput): Promise<RunRecord> {
     const { rows: vendorRows } = await vendorAdapter.parse(vendorBuffer);
 
     const mivaText = readStoredFileText(mivaFile.storagePath);
-    const { rows: allMivaRows } = parseMivaSnapshotCsv(mivaText);
-    // Only ~5 vendors' worth of SKUs are actually tracked out of the full
-    // Miva catalog (8,000+ SKUs); DS_INV_MGT is blank for everything this app
-    // doesn't manage. Filtering here (not at snapshot-parse time) keeps the
-    // stored miva_snapshot file a full, untouched catalog record for
-    // legacy/audit tooling, while keeping reconciliation_rows and Run Review
-    // scoped to tracked products only.
-    const mivaRows = allMivaRows.filter((r) => r.currentDsInvMgt.trim() !== "");
+    // The full catalog (8,000+ SKUs) is passed through unfiltered -- DS_INV_MGT
+    // is blank for most of it, but reconcile() itself now decides what to do
+    // with that: a blank/NLA row that's genuinely matched by a vendor's file
+    // surfaces as a WARNING (see reconcile.ts) instead of being silently
+    // dropped before matching, and pass-2's "missing from vendor" scan still
+    // excludes blank-flagged rows so untracked products don't flood in as
+    // fake missing rows.
+    const { rows: mivaRows } = parseMivaSnapshotCsv(mivaText);
 
     await repo.updateRunStatus(run.id, "matching");
     const { rows, ruleId, ruleConfigHash } = await runReconciliation({
@@ -159,6 +159,34 @@ export async function approveAllClean(runId: string, userId: string): Promise<nu
     entityType: "run",
     entityId: runId,
     details: { count: eligible.length },
+  });
+  return eligible.length;
+}
+
+/**
+ * Approve-all-single-warning: only eligible, changed, WARNING, unlocked rows
+ * whose warningCodes is EXACTLY [warningCode] -- a row with this warning
+ * mixed with another (e.g. WAREHOUSE_TOTAL_MISMATCH) is excluded and still
+ * requires individual review. Used for the "Approve all (blank
+ * tracked-flag only)" bulk action so a one-time backlog of
+ * MIVA_NOT_DROPSHIP_TRACKED rows doesn't require clicking through each one
+ * by hand, while anything more ambiguous still does.
+ */
+export async function approveAllSingleWarning(runId: string, warningCode: WarningCode, userId: string): Promise<number> {
+  const repo = getRepository();
+  const rows = await repo.listRunRows(runId, { reviewClass: ["WARNING"], changed: true });
+  const eligible = rows.filter(
+    (r) => r.row.isEligibleForApproval && !r.decision.locked && r.row.warningCodes.length === 1 && r.row.warningCodes[0] === warningCode,
+  );
+  for (const r of eligible) {
+    await repo.setDecision(r.row.id, "APPROVED_WARNING_ACK", r.row.warningCodes, userId);
+  }
+  await repo.insertAuditLog({
+    actorId: userId,
+    action: "APPROVE_ALL_WARNING",
+    entityType: "run",
+    entityId: runId,
+    details: { count: eligible.length, warningCode },
   });
   return eligible.length;
 }

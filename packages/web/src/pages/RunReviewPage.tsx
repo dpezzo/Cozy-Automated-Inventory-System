@@ -383,6 +383,21 @@ export default function RunReviewPage() {
     });
   }
 
+  async function approveAllNotTracked() {
+    if (
+      !window.confirm(
+        "Approve every row whose only warning is the blank tracked-flag (DROPSHIP_INVENTORY_MANAGEMENT)? This can be undone per-row until you generate a batch.",
+      )
+    )
+      return;
+    await withBusy(async () => {
+      const { approved } = await api.approveAllWarning(runId!, "MIVA_NOT_DROPSHIP_TRACKED");
+      if (approved === 0)
+        setInfo("No eligible rows to approve -- none had only the blank tracked-flag warning, or all were already decided or locked.");
+      await Promise.all([loadRun(), loadRows()]);
+    });
+  }
+
   async function bulkAction(decision: "APPROVED" | "REJECTED") {
     const verb = decision === "APPROVED" ? "Approve" : "Reject";
     if (!window.confirm(`${verb} the ${selected.size} selected row${selected.size === 1 ? "" : "s"}? This can be undone per-row until you generate a batch.`)) return;
@@ -582,6 +597,9 @@ export default function RunReviewPage() {
         <div className="toolbar">
           <button className="primary" onClick={approveAllClean} disabled={busy}>
             <CheckCheck size={16} /> Approve all clean
+          </button>
+          <button className="primary" onClick={approveAllNotTracked} disabled={busy} title="Approves only rows whose sole warning is the blank DROPSHIP_INVENTORY_MANAGEMENT flag -- rows with any other warning mixed in still need individual review.">
+            <CheckCheck size={16} /> Approve all (blank tracked-flag only)
           </button>
           <button className="success" onClick={() => bulkAction("APPROVED")} disabled={busy || selected.size === 0}>
             <Check size={16} /> Approve selected clean rows
