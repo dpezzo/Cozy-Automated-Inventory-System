@@ -195,6 +195,10 @@ function SiteSwitcher({ status, onChanged }: { status: MivaApiStatus | null; onC
     try {
       const updated = await api.setMivaActiveSite(pending);
       onChanged(updated);
+      // The sidebar's LIVE/Dev badge (App.tsx) only refetches on route navigation, which this
+      // save doesn't trigger -- broadcast the change so it updates immediately instead of
+      // staying stale until the admin navigates away or hard-refreshes.
+      window.dispatchEvent(new CustomEvent("miva-active-site-changed", { detail: updated.activeSite }));
     } catch (err) {
       console.error(err);
       setError(friendlyError(err, "Failed to switch site."));

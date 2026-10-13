@@ -2,6 +2,11 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-13 — Fix: sidebar LIVE/Dev badge not refreshing on same-page site switch
+
+### Fixed
+- Sidebar's "LIVE Miva store"/"Dev Miva store" badge only refetched on route navigation (`App.tsx`), so switching the active site on the Miva Connection page -- without navigating away -- left it showing the stale value until the admin left the page or hard-refreshed the browser. `MivaConnectionPage.tsx`'s `SiteSwitcher` now broadcasts a `miva-active-site-changed` window event right after a successful save, which the sidebar also listens for, so the badge updates immediately.
+
 ## 2026-10-13 — Catalog: CURRENT_STOCK_LEVEL column
 
 ### Added

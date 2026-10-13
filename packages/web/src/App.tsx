@@ -36,6 +36,15 @@ function Shell({ children }: { children: React.ReactNode }) {
       .then((s) => setActiveSite(s.activeSite))
       .catch(() => setActiveSite(null));
   }, [location.pathname]);
+  // Also updates immediately on a same-page site switch (Miva Connection page), which doesn't
+  // change location.pathname and so wouldn't otherwise be picked up by the effect above.
+  useEffect(() => {
+    function onSiteChanged(e: Event) {
+      setActiveSite((e as CustomEvent<"development" | "live">).detail);
+    }
+    window.addEventListener("miva-active-site-changed", onSiteChanged);
+    return () => window.removeEventListener("miva-active-site-changed", onSiteChanged);
+  }, []);
   // A run's review page (/runs/:runId) and a batch's detail page
   // (/batches/:batchId) are both reached either from Home (start a new
   // reconciliation) or from Run History (open an existing row) -- but
