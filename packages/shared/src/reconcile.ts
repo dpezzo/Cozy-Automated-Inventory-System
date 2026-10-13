@@ -298,6 +298,13 @@ export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], op
     if (dsInvMgt === "") warnings.push("MIVA_NOT_DROPSHIP_TRACKED");
     else if (dsInvMgt === "NLA") warnings.push("MIVA_CURRENTLY_NLA");
 
+    // Independent of the tracked-flag checks above: a product can be
+    // properly tracked ("1") and still have its separate status field
+    // already set to NO LONGER AVAILABLE (e.g. set by hand, or mid
+    // transition) -- without this, such a row resolves CLEAN with no
+    // indication Miva already shows it discontinued.
+    if ((current.simpleInventory ?? "").trim() === "NO LONGER AVAILABLE") warnings.push("MIVA_MARKED_DISCONTINUED");
+
     let dateResult: { date: string | null; sources: string[]; conflict: boolean } = { date: null, sources: [], conflict: false };
 
     // Only vendors with a per-location incoming-date breakdown (Olliix today)
@@ -509,6 +516,10 @@ function buildDualMatchedRow(
   const dsInvMgt = (current.dsInvMgt ?? "").trim();
   if (dsInvMgt === "") warnings.push("MIVA_NOT_DROPSHIP_TRACKED");
   else if (dsInvMgt === "NLA") warnings.push("MIVA_CURRENTLY_NLA");
+  // See the identical check + comment in reconcile()'s single-identifier
+  // path above -- independent of the tracked-flag checks, since a product
+  // can be tracked ("1") and still have this status set separately.
+  if ((current.simpleInventory ?? "").trim() === "NO LONGER AVAILABLE") warnings.push("MIVA_MARKED_DISCONTINUED");
 
   let dateResult: { date: string | null; sources: string[]; conflict: boolean } = { date: null, sources: [], conflict: false };
   if (row.warehouses) {

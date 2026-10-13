@@ -16,6 +16,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
     items: [
       "Manage Vendors: added a new matching option, \"Both (UPC + SKU)\", for vendors whose file reliably provides both -- checks each independently and only blocks for review if they disagree, instead of relying on just one.",
       "Run Review: added a \"Show all Miva products\" checkbox to browse every product under this vendor's brand, including ones not currently matched or flagged -- informational only, never approvable.",
+      "Added a new warning for a match where Miva's status already says a product is \"No longer available,\" even when its tracked flag is set correctly -- previously this could slip through as a plain, bulk-approvable match.",
     ],
   },
   {

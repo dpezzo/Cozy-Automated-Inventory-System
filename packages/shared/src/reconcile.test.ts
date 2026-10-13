@@ -78,7 +78,7 @@ describe("reconcile: Miva products missing from Olliix", () => {
     expect(rows[0]!.blockerCodes).toEqual(["MISSING_FROM_OLLIIX"]);
   });
 
-  it("still matches normally when the same product reappears in Olliix, regardless of its prior NLA status", () => {
+  it("still matches the same product when it reappears in Olliix, but flags it for review since Miva already shows it discontinued", () => {
     const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
     const miva = [mivaRow({ currentSimpleInventory: "NO LONGER AVAILABLE" })];
     const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
@@ -86,7 +86,11 @@ describe("reconcile: Miva products missing from Olliix", () => {
     expect(rows[0]!.matchOutcome).toBe("MATCHED");
     expect(rows[0]!.proposed.simpleInventory).toBe("IN STOCK");
     expect(rows[0]!.changed).toBe(true);
-    expect(rows[0]!.reviewClass).toBe("CLEAN");
+    // Was CLEAN (silently reactivatable) before MIVA_MARKED_DISCONTINUED
+    // was added -- a product already shown discontinued in Miva must never
+    // be bulk-approvable without a human looking at it first.
+    expect(rows[0]!.reviewClass).toBe("WARNING");
+    expect(rows[0]!.warningCodes).toContain("MIVA_MARKED_DISCONTINUED");
   });
 });
 
@@ -129,6 +133,17 @@ describe("reconcile: DS_INV_MGT tracked-flag warnings", () => {
     });
     expect(rows).toHaveLength(0);
   });
+
+  it("forces a genuine match to WARNING with MIVA_MARKED_DISCONTINUED when status already says NO LONGER AVAILABLE, even though DS_INV_MGT is properly tracked (\"1\")", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({ currentSimpleInventory: "NO LONGER AVAILABLE", currentDsInvMgt: "1" })];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.matchOutcome).toBe("MATCHED");
+    expect(rows[0]!.changed).toBe(true);
+    expect(rows[0]!.reviewClass).toBe("WARNING");
+    expect(rows[0]!.warningCodes).toEqual(["MIVA_MARKED_DISCONTINUED"]);
+  });
 });
 
 describe("reconcile: matchStrategy upc-or-sku", () => {
@@ -153,6 +168,15 @@ describe("reconcile: matchStrategy upc-or-sku", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.matchOutcome).toBe("MATCHED");
     expect(rows[0]!.productCode).toBe("P999");
+  });
+
+  it("forces WARNING with MIVA_MARKED_DISCONTINUED for a genuine dual-identifier match whose status already says NO LONGER AVAILABLE", () => {
+    const vendor = [dualVendorRow({ upcRaw: "000000000999", skuRaw: "MPN-999" })];
+    const miva = [mivaRow({ currentSimpleInventory: "NO LONGER AVAILABLE", currentDsInvMgt: "1" })];
+    const { rows } = reconcile(vendor, miva, { config: DUAL_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.reviewClass).toBe("WARNING");
+    expect(rows[0]!.warningCodes).toEqual(["MIVA_MARKED_DISCONTINUED"]);
   });
 
   it("blocks with IDENTIFIER_MISMATCH when UPC and SKU each cleanly resolve to different products", () => {

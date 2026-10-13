@@ -88,8 +88,10 @@ export type WarningCode =
   | "AMBIGUOUS_INCOMING_DATE"
   /** A genuine vendor match against a Miva product whose DROPSHIP_INVENTORY_MANAGEMENT is blank -- forced to WARNING so it can't be bulk-approved as CLEAN. */
   | "MIVA_NOT_DROPSHIP_TRACKED"
-  /** A genuine vendor match against a Miva product currently flagged NLA -- approving would reactivate a deliberately-discontinued product. */
-  | "MIVA_CURRENTLY_NLA";
+  /** A genuine vendor match against a Miva product currently flagged NLA (the DROPSHIP_INVENTORY_MANAGEMENT field's literal value) -- approving would reactivate a deliberately-discontinued product. */
+  | "MIVA_CURRENTLY_NLA"
+  /** A genuine vendor match against a Miva product whose *status* field (simpleInventory) already says "NO LONGER AVAILABLE" -- a separate field from DROPSHIP_INVENTORY_MANAGEMENT/MIVA_CURRENTLY_NLA, and not implied by it: a product can be tracked ("1") and still have this status set. Without this check such a row resolves CLEAN (eligible for bulk approval) with no indication Miva already shows it discontinued. */
+  | "MIVA_MARKED_DISCONTINUED";
 
 export type BlockerCode =
   | "BLANK_UPC"

@@ -80,15 +80,19 @@ const REJECTED_PRODUCT_CODES = new Set(["P002"]);
 const KNOWN_FIXTURE_DIVERGENCES: Record<string, { reviewClass?: string; warningCodes?: string }> = {
   // Previously CLEAN: a vendor re-shipping a blank-tracked-flag "NO LONGER
   // AVAILABLE" product is now exactly the silent-reactivation case the new
-  // warning exists to catch.
-  "SYN-001": { reviewClass: "WARNING", warningCodes: "MIVA_NOT_DROPSHIP_TRACKED" },
-  "SYN-004": { reviewClass: "WARNING", warningCodes: "MIVA_NOT_DROPSHIP_TRACKED" },
-  // Already WARNING for an unrelated reason; the blank tracked-flag now adds
-  // a second code alongside the original one (pushed first -- see reconcile.ts).
-  "SYN-012": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,WAREHOUSE_TOTAL_MISMATCH" },
-  "SYN-014": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,EXPECTED_DATE_CONFLICT" },
-  "SYN-016": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,DATE_WITH_NONPOSITIVE_INCOMING_QTY" },
-  "SYN-017": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,INCOMING_QTY_WITHOUT_DATE" },
+  // warnings exist to catch -- both MIVA_NOT_DROPSHIP_TRACKED (blank flag)
+  // and MIVA_MARKED_DISCONTINUED (status already says NO LONGER AVAILABLE)
+  // apply to every one of these rows, since this fixture's "NO LONGER
+  // AVAILABLE" products are all also blank-flagged (see reconcile.ts's
+  // push order: tracked-flag checks first, then the status check).
+  "SYN-001": { reviewClass: "WARNING", warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,MIVA_MARKED_DISCONTINUED" },
+  "SYN-004": { reviewClass: "WARNING", warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,MIVA_MARKED_DISCONTINUED" },
+  // Already WARNING for an unrelated reason; the two new codes are inserted
+  // ahead of the original one (pushed first -- see reconcile.ts).
+  "SYN-012": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,MIVA_MARKED_DISCONTINUED,WAREHOUSE_TOTAL_MISMATCH" },
+  "SYN-014": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,MIVA_MARKED_DISCONTINUED,EXPECTED_DATE_CONFLICT" },
+  "SYN-016": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,MIVA_MARKED_DISCONTINUED,DATE_WITH_NONPOSITIVE_INCOMING_QTY" },
+  "SYN-017": { warningCodes: "MIVA_NOT_DROPSHIP_TRACKED,MIVA_MARKED_DISCONTINUED,INCOMING_QTY_WITHOUT_DATE" },
 };
 
 describe("synthetic fixture suite (28 cases)", () => {

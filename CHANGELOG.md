@@ -2,6 +2,11 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-13 — New safety net: MIVA_MARKED_DISCONTINUED
+
+### Added
+- Third warning alongside `MIVA_NOT_DROPSHIP_TRACKED` and `MIVA_CURRENTLY_NLA`: a genuine match now also forces `WARNING` when Miva's *status* field (`simpleInventory`) already says "NO LONGER AVAILABLE" -- independent of the tracked-flag field, since a product can be properly tracked (`"1"`) and still have this status set separately (by hand, or mid-transition). Previously such a row resolved `CLEAN` -- eligible for "Approve all clean" -- with no indication Miva already showed it discontinued. Found by Darren asking whether a specific example (a blank-tracked-flag product he'd seen reactivated) was the only scenario this app catches; it wasn't.
+
 ## 2026-10-13 — Run Review: "Show all Miva products" browsing toggle
 
 ### Added
