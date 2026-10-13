@@ -242,11 +242,21 @@ export default function RunReviewPage() {
     setRows(data);
   }, [runId, reviewClassFilter, decisionFilter, matchOutcomeFilter, search, showAllBrand]);
 
-  /** Turning this on also ensures UNCHANGED is part of the Review class filter -- every synthesized "all Miva products" row is UNCHANGED, so without this the toggle would appear to do nothing. */
+  /**
+   * Turning this on also checks every Review class box. Review class isn't
+   * a meaningful filter for "show me this brand's whole Miva catalog" --
+   * a real missing-from-vendor product is BLOCKED unless it's already
+   * marked discontinued, a synthesized "not tracked" row is always
+   * UNCHANGED, and a genuine match could be CLEAN/WARNING/UNCHANGED. Only
+   * checking UNCHANGED (its own synthesized rows' class) silently drops
+   * most of the real missing-from-vendor population, which is confusing
+   * -- shows some but not all of the brand's products with no indication
+   * anything was left out.
+   */
   function toggleShowAllBrand() {
     setShowAllBrand((prev) => {
       const next = !prev;
-      if (next && !reviewClassFilter.includes("UNCHANGED")) setReviewClassFilter([...reviewClassFilter, "UNCHANGED"]);
+      if (next) setReviewClassFilter(REVIEW_CLASS_FILTERS);
       return next;
     });
   }
@@ -777,7 +787,7 @@ export default function RunReviewPage() {
           </label>
           <label
             style={{ marginLeft: 16 }}
-            title="Adds every Miva product under this vendor's brand that this run has nothing to say about -- not matched, not already flagged missing -- almost always because its tracked flag is blank. Purely informational: these rows are never blocked and can never be approved. Also turns on the UNCHANGED review class, since that's what all of these are."
+            title="Shows this vendor's entire Miva brand catalog: every Matched and Missing product regardless of review class, plus products this run has nothing to say about at all (almost always a blank tracked flag) -- those are purely informational and can never be approved. Also checks every Review class box, since review class isn't a meaningful filter for 'show me everything in this brand.'"
           >
             <input type="checkbox" checked={showAllBrand} onChange={toggleShowAllBrand} /> Show all Miva products
           </label>
