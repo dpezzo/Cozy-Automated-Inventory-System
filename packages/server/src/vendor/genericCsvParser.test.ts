@@ -77,6 +77,28 @@ describe("parseGenericCsv", () => {
       }),
     ).toThrowError(/zero usable data rows/i);
   });
+
+  it("populates both upcRaw and skuRaw when a secondaryIdentifierColumn is configured", () => {
+    const bothCsv = ["UPC,SKU,Qty", "012345678905,ABC-1,10"].join("\n");
+    const { rows } = parseGenericCsv(Buffer.from(bothCsv, "utf8"), {
+      identifierColumn: "UPC",
+      identifierType: "upc",
+      secondaryIdentifierColumn: "SKU",
+      quantityColumn: "Qty",
+    });
+    expect(rows[0]).toMatchObject({ upcRaw: "012345678905", skuRaw: "ABC-1" });
+  });
+
+  it("throws REQUIRED_COLUMNS_MISSING when the secondaryIdentifierColumn is absent", () => {
+    expect(() =>
+      parseGenericCsv(Buffer.from(CSV, "utf8"), {
+        identifierColumn: "UPC",
+        identifierType: "upc",
+        secondaryIdentifierColumn: "SKU",
+        quantityColumn: "Qty",
+      }),
+    ).toThrowError(/missing required columns/i);
+  });
 });
 
 describe("parseGenericVendorFile", () => {

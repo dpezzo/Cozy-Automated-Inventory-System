@@ -14,6 +14,8 @@ import { XlsxDocument } from "./xlsxReader";
 export interface GenericCsvColumnMapping {
   identifierColumn: string;
   identifierType: "upc" | "sku";
+  /** Only used when the vendor's matchStrategy is "upc-or-sku" -- the column holding the OTHER identifier (sku if identifierType is "upc", upc if identifierType is "sku"). Required by vendorConfigService's validation whenever that strategy is selected, otherwise must be absent. */
+  secondaryIdentifierColumn?: string;
   descriptionColumn?: string;
   quantityColumn: string;
 }
@@ -49,6 +51,7 @@ export function parseGenericCsv(buffer: Buffer, mapping: GenericCsvColumnMapping
   const headerRow = Object.keys(records[0]!);
   const requiredColumns = [mapping.identifierColumn, mapping.quantityColumn];
   if (mapping.descriptionColumn) requiredColumns.push(mapping.descriptionColumn);
+  if (mapping.secondaryIdentifierColumn) requiredColumns.push(mapping.secondaryIdentifierColumn);
   const missing = requiredColumns.filter((c) => !headerRow.includes(c));
   if (missing.length > 0) {
     throw new ValidationError(
@@ -61,13 +64,20 @@ export function parseGenericCsv(buffer: Buffer, mapping: GenericCsvColumnMapping
   const rows: VendorRawRow[] = records.map((record, i) => ({
     sourceRowNumber: i + 1,
     itemNoRaw: null,
-    upcRaw: mapping.identifierType === "upc" ? (record[mapping.identifierColumn] ?? null) : null,
-    skuRaw: mapping.identifierType === "sku" ? (record[mapping.identifierColumn] ?? null) : null,
+    upcRaw: identifierValue(record, mapping, "upc"),
+    skuRaw: identifierValue(record, mapping, "sku"),
     descriptionRaw: mapping.descriptionColumn ? (record[mapping.descriptionColumn] ?? null) : null,
     totalQtyRaw: record[mapping.quantityColumn] ?? null,
   }));
 
   return { rows };
+}
+
+/** Resolves one identifier type's value for a row: the primary column if its type matches, the secondary column if present and the OTHER type matches, otherwise null (this vendor's mapping doesn't carry that identifier type at all). */
+function identifierValue(record: Record<string, string>, mapping: GenericCsvColumnMapping, type: "upc" | "sku"): string | null {
+  if (mapping.identifierType === type) return record[mapping.identifierColumn] ?? null;
+  if (mapping.secondaryIdentifierColumn) return record[mapping.secondaryIdentifierColumn] ?? null;
+  return null;
 }
 
 /** Every real .xlsx (a zip archive) starts with the "PK" local-file-header signature -- cheap, reliable way to tell it apart from a text CSV before committing to either parser. */
@@ -94,11 +104,13 @@ async function parseGenericXlsx(buffer: Buffer, mapping: GenericCsvColumnMapping
   const identifierIndex = header.indexOf(mapping.identifierColumn);
   const quantityIndex = header.indexOf(mapping.quantityColumn);
   const descriptionIndex = mapping.descriptionColumn ? header.indexOf(mapping.descriptionColumn) : -1;
+  const secondaryIdentifierIndex = mapping.secondaryIdentifierColumn ? header.indexOf(mapping.secondaryIdentifierColumn) : -1;
 
   const missing: string[] = [];
   if (identifierIndex < 0) missing.push(mapping.identifierColumn);
   if (quantityIndex < 0) missing.push(mapping.quantityColumn);
   if (mapping.descriptionColumn && descriptionIndex < 0) missing.push(mapping.descriptionColumn);
+  if (mapping.secondaryIdentifierColumn && secondaryIdentifierIndex < 0) missing.push(mapping.secondaryIdentifierColumn);
   if (missing.length > 0) {
     throw new ValidationError(
       "REQUIRED_COLUMNS_MISSING",
@@ -113,6 +125,7 @@ async function parseGenericXlsx(buffer: Buffer, mapping: GenericCsvColumnMapping
     const cellText = (index: number): string | null => (index >= 0 ? (dataRow[index] ?? null) : null);
 
     const identifierRaw = cellText(identifierIndex);
+    const secondaryIdentifierRaw = cellText(secondaryIdentifierIndex);
     const descriptionRaw = cellText(descriptionIndex);
     const totalQtyRaw = cellText(quantityIndex);
 
@@ -122,8 +135,8 @@ async function parseGenericXlsx(buffer: Buffer, mapping: GenericCsvColumnMapping
     rows.push({
       sourceRowNumber: rowNumber - 1,
       itemNoRaw: null,
-      upcRaw: mapping.identifierType === "upc" ? identifierRaw : null,
-      skuRaw: mapping.identifierType === "sku" ? identifierRaw : null,
+      upcRaw: mapping.identifierType === "upc" ? identifierRaw : secondaryIdentifierRaw,
+      skuRaw: mapping.identifierType === "sku" ? identifierRaw : secondaryIdentifierRaw,
       descriptionRaw: mapping.descriptionColumn ? descriptionRaw : null,
       totalQtyRaw,
     });

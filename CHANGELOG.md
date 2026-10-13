@@ -2,6 +2,17 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-13 — New vendor match strategy: UPC + SKU together ("upc-or-sku")
+
+### Added
+
+**Dual-identifier matching**
+- New `matchStrategy` option, "Both (UPC + SKU)", alongside the existing UPC-to-GTIN and SKU-to-MPN. Checks a vendor row's UPC-to-GTIN and SKU-to-MPN independently rather than picking one identifier pair for the whole vendor: whichever one resolves to a confident, unique, brand-eligible Miva product is used (so a blank or stale value in either column doesn't lose the row); if both resolve and agree, nothing changes; if both resolve to two *different* products, the row is hard-blocked with a new `IDENTIFIER_MISMATCH` code rather than silently trusting either one. A uniquely-resolving identifier can also disambiguate the *other* identifier when it's ambiguous (e.g. a UPC duplicated across two Miva products) -- if only one of the ambiguous candidates also matches the SKU, that one wins instead of staying blocked.
+- Vendor-file-side duplicate detection and the "missing from vendor" scan both now consider both identifiers independently for a "both"-strategy vendor: a row can be blocked for a duplicated SKU even with a unique UPC (or vice versa), and a Miva product only counts as missing from the vendor's file once neither its GTIN nor its MPN appears anywhere in it.
+- Implemented as a fully separate code path (`reconcileDual` in `reconcile.ts`) rather than a refactor of the existing single-identifier matching, which is exercised byte-for-byte by the frozen bake-off fixture bundle -- zero behavior change for any vendor still on a single-identifier strategy.
+- Olliix's parser now also populates `skuRaw` from its "Item No" column (confirmed to correspond to Miva's MPN field) -- previously display-only, needed for this vendor to actually use the new strategy. Verified against a real production Olliix file + Miva snapshot locally: identical match/missing/duplicate counts to the existing UPC-only strategy, zero identifier mismatches found.
+- Manage Vendors: a vendor configured via the generic CSV/XLSX form can now specify a second identifier column when "Both" is selected.
+
 ## 2026-10-12 — Run Review: summary stat, filter-row cleanup, source tooltips, NLA rename
 
 ### Added

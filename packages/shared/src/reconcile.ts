@@ -106,6 +106,14 @@ export interface ReconcileResult {
  * regardless of vendor.
  */
 export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], options: ReconcileOptions): ReconcileResult {
+  // "upc-or-sku" is handled entirely separately (see reconcileDual below),
+  // deliberately NOT woven into the single-identifier logic that follows --
+  // that logic is exercised byte-for-byte by the frozen bake-off fixture
+  // bundle (fixture.test.ts), so it's left completely untouched rather than
+  // refactored to share code with the new, more intricate dual-identifier
+  // path. A little duplication here is the safer trade.
+  if (options.config.matchStrategy === "upc-or-sku") return reconcileDual(vendorRows, mivaRows, options);
+
   const { config, runDate } = options;
   const isSkuVendor = config.matchStrategy === "sku-to-mpn";
 
@@ -373,6 +381,300 @@ export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], op
       itemNo: null,
       rawUpc: getMivaIdentifierRaw(row),
       normalizedUpc: normalized.normalized,
+      description: null,
+      productCode: row.productCode,
+      matchOutcome: "MISSING - REVIEW REQUIRED",
+      reviewClass: alreadyDiscontinued ? "UNCHANGED" : "BLOCKED",
+      warningCodes: [],
+      blockerCodes: alreadyDiscontinued ? [] : [config.missingBlockerCode ?? "MISSING_FROM_VENDOR"],
+      totalQtyRaw: null,
+      expectedDate: null,
+      expectedDateSources: [],
+      current,
+      proposed: alreadyDiscontinued ? current : {},
+      changed: false,
+      isEligibleForApproval: false,
+    });
+  }
+
+  return { rows: results };
+}
+
+// ---------------------------------------------------------------------
+// matchStrategy "upc-or-sku": checks UPC-to-GTIN and SKU-to-MPN
+// independently on every row, rather than picking one identifier pair for
+// the whole vendor. See reconcile()'s branch above for why this is a
+// fully separate implementation instead of a refactor of the code above.
+// ---------------------------------------------------------------------
+
+type CombinedResolution =
+  | { kind: "matched"; product: MivaRawRow }
+  | { kind: "mismatch"; a: MivaRawRow; b: MivaRawRow }
+  | { kind: "ambiguous"; candidates: MivaRawRow[] }
+  | { kind: "excluded"; candidates: MivaRawRow[] }
+  | { kind: "none" };
+
+function candidatesOf(lookup: MivaLookup): MivaRawRow[] {
+  if (lookup.status === "unique") return [lookup.match];
+  if (lookup.status === "ambiguous" || lookup.status === "excluded") return lookup.matches;
+  return [];
+}
+
+/**
+ * Combines an independent UPC-to-GTIN lookup and SKU-to-MPN lookup for the
+ * same vendor row into one resolution. The guiding rule: a lookup that
+ * resolved to exactly one brand-eligible product is "confident" -- it wins
+ * over a blank/no-match/ambiguous/wrong-brand result from the other side,
+ * EXCEPT when both sides are independently confident and disagree, which is
+ * never silently resolved (see IDENTIFIER_MISMATCH). Two independently
+ * ambiguous results are combined by intersecting their candidate sets --
+ * this is what lets a SKU disambiguate a Miva catalog with a duplicated
+ * UPC (or vice versa) instead of leaving it blocked.
+ */
+function combineIdentifierLookups(a: MivaLookup, b: MivaLookup): CombinedResolution {
+  if (a.status === "unique" && b.status === "unique") {
+    return a.match.productCode === b.match.productCode ? { kind: "matched", product: a.match } : { kind: "mismatch", a: a.match, b: b.match };
+  }
+  if (a.status === "unique") return { kind: "matched", product: a.match };
+  if (b.status === "unique") return { kind: "matched", product: b.match };
+
+  if (a.status === "ambiguous" && b.status === "ambiguous") {
+    const bCodes = new Set(b.matches.map((m) => m.productCode));
+    const intersection = a.matches.filter((m) => bCodes.has(m.productCode));
+    if (intersection.length === 1) return { kind: "matched", product: intersection[0]! };
+    return { kind: "ambiguous", candidates: [...a.matches, ...b.matches] };
+  }
+
+  const candidates = [...candidatesOf(a), ...candidatesOf(b)];
+  if (candidates.length === 0) return { kind: "none" };
+  const anyAmbiguous = a.status === "ambiguous" || b.status === "ambiguous";
+  return anyAmbiguous ? { kind: "ambiguous", candidates } : { kind: "excluded", candidates };
+}
+
+function dualBlockedRow(
+  row: VendorRawRow,
+  rawUpc: string | null,
+  rawSku: string | null,
+  normalizedKey: string | null,
+  matchOutcome: MatchOutcome,
+  blockerCodes: BlockerCode[],
+  productCode: string | null = null,
+  current: Partial<ManagedValues> = {},
+): ReconciliationRow {
+  return {
+    sourceRowNumber: row.sourceRowNumber,
+    itemNo: row.itemNoRaw,
+    rawUpc: rawUpc ?? rawSku,
+    normalizedUpc: normalizedKey,
+    description: row.descriptionRaw,
+    productCode,
+    matchOutcome,
+    reviewClass: "BLOCKED",
+    warningCodes: [],
+    blockerCodes,
+    totalQtyRaw: formatTotalQtyDisplay(row.totalQtyRaw),
+    expectedDate: null,
+    expectedDateSources: [],
+    current,
+    proposed: {},
+    changed: false,
+    isEligibleForApproval: false,
+  };
+}
+
+/** Same quantity/date/warning tail as the single-identifier path's final "lookup.status === unique" branch (reconcile() above, lines ~249-336) -- intentionally duplicated rather than shared, per this section's header comment. */
+function buildDualMatchedRow(
+  row: VendorRawRow,
+  rawUpc: string | null,
+  rawSku: string | null,
+  normalizedKey: string | null,
+  product: MivaRawRow,
+  config: VendorRuleConfig,
+  runDate: ParsedCalendarDate,
+): ReconciliationRow {
+  const totalQtyRaw = formatTotalQtyDisplay(row.totalQtyRaw);
+  const productCode = product.productCode;
+  const current = currentValuesFromMiva(product);
+
+  const totalQty = parseTotalQty(row.totalQtyRaw);
+  if (totalQty.kind !== "valid") {
+    const blocker: BlockerCode =
+      totalQty.kind === "blank" ? "BLANK_TOTAL_QTY" : totalQty.kind === "negative" ? "NEGATIVE_TOTAL_QTY" : "INVALID_TOTAL_QTY";
+    return dualBlockedRow(row, rawUpc, rawSku, normalizedKey, "MATCHED", [blocker], productCode, current);
+  }
+
+  const status: "IN STOCK" | "SOLD OUT" = totalQty.value >= config.inStockThreshold ? "IN STOCK" : "SOLD OUT";
+  const warnings: WarningCode[] = [];
+
+  const dsInvMgt = (current.dsInvMgt ?? "").trim();
+  if (dsInvMgt === "") warnings.push("MIVA_NOT_DROPSHIP_TRACKED");
+  else if (dsInvMgt === "NLA") warnings.push("MIVA_CURRENTLY_NLA");
+
+  let dateResult: { date: string | null; sources: string[]; conflict: boolean } = { date: null, sources: [], conflict: false };
+  if (row.warehouses) {
+    const componentQtys = Object.values(row.warehouses).map((w) => parseWarehouseQty(w.invQtyRaw));
+    if (componentQtys.every((q) => q !== null)) {
+      const sum = componentQtys.reduce((acc, q) => acc + (q as number), 0);
+      if (sum !== totalQty.value) warnings.push("WAREHOUSE_TOTAL_MISMATCH");
+    }
+    const evaluated = selectExpectedDate(row.warehouses, runDate);
+    dateResult = evaluated;
+    warnings.push(...evaluated.warnings);
+  }
+
+  const proposed = computeProposedManagedValues(status, status === "SOLD OUT" ? dateResult.date : null);
+  const changed = !managedValuesEqual(current, proposed);
+
+  let reviewClass: ReviewClass;
+  if (!changed) reviewClass = "UNCHANGED";
+  else if (warnings.length > 0) reviewClass = "WARNING";
+  else reviewClass = "CLEAN";
+
+  return {
+    sourceRowNumber: row.sourceRowNumber,
+    itemNo: row.itemNoRaw,
+    rawUpc: rawUpc ?? rawSku,
+    normalizedUpc: normalizedKey,
+    description: row.descriptionRaw,
+    productCode,
+    matchOutcome: "MATCHED",
+    reviewClass,
+    warningCodes: warnings,
+    blockerCodes: [],
+    totalQtyRaw,
+    expectedDate: status === "SOLD OUT" ? dateResult.date : null,
+    expectedDateSources: status === "SOLD OUT" ? dateResult.sources : [],
+    current,
+    proposed,
+    changed,
+    isEligibleForApproval: reviewClass === "CLEAN" || reviewClass === "WARNING",
+  };
+}
+
+function reconcileDual(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], options: ReconcileOptions): ReconcileResult {
+  const { config, runDate } = options;
+
+  const upcIndex = buildMivaIndex(mivaRows, config.brandAllowlist, (r) => r.gtinRaw, normalizeGtin);
+  const skuIndex = buildMivaIndex(mivaRows, config.brandAllowlist, (r) => r.mpnRaw, normalizeSku);
+
+  // Vendor-file-side duplicate detection runs independently per identifier
+  // column -- a row can be blocked for a duplicated SKU even if its UPC is
+  // perfectly unique, and vice versa.
+  const upcCounts = new Map<string, number>();
+  const skuCounts = new Map<string, number>();
+  for (const row of vendorRows) {
+    const upcKey = normalizeUpc(row.upcRaw);
+    if (upcKey.valid && upcKey.normalized) upcCounts.set(upcKey.normalized, (upcCounts.get(upcKey.normalized) ?? 0) + 1);
+    const skuKey = normalizeSku(row.skuRaw ?? null);
+    if (skuKey.valid && skuKey.normalized) skuCounts.set(skuKey.normalized, (skuCounts.get(skuKey.normalized) ?? 0) + 1);
+  }
+
+  const results: ReconciliationRow[] = [];
+  const usedProductCodes = new Set<string>();
+
+  for (const row of vendorRows) {
+    const upcKey = normalizeUpc(row.upcRaw);
+    const skuKey = normalizeSku(row.skuRaw ?? null);
+    const upcPresent = upcKey.valid && upcKey.normalized !== null;
+    const skuPresent = skuKey.valid && skuKey.normalized !== null;
+
+    if (!upcPresent && !skuPresent) {
+      const reasons = [upcKey.invalidReason, skuKey.invalidReason].filter(Boolean) as BlockerCode[];
+      results.push(dualBlockedRow(row, row.upcRaw, row.skuRaw ?? null, null, "BLOCKED IDENTIFIER", reasons));
+      continue;
+    }
+
+    const dupBlockers: BlockerCode[] = [];
+    if (upcPresent && (upcCounts.get(upcKey.normalized!) ?? 0) > 1) dupBlockers.push("DUPLICATE_VENDOR_UPC");
+    if (skuPresent && (skuCounts.get(skuKey.normalized!) ?? 0) > 1) dupBlockers.push("DUPLICATE_VENDOR_SKU");
+
+    const upcLookup: MivaLookup = upcPresent ? resolveMiva(upcIndex, upcKey.normalized!) : { status: "none" };
+    const skuLookup: MivaLookup = skuPresent ? resolveMiva(skuIndex, skuKey.normalized!) : { status: "none" };
+    const combined = combineIdentifierLookups(upcLookup, skuLookup);
+    const normalizedKey = upcPresent ? upcKey.normalized : skuKey.normalized;
+
+    // Every Miva product either lookup touched -- matched, disagreeing,
+    // ambiguous, or wrong-brand -- counts as "referenced by this run" for
+    // pass 2's missing-scan, regardless of whether the row itself ends up
+    // blocked (e.g. for a duplicate vendor key below). Matches the
+    // single-identifier path's precedent: it marks usedMivaKeys from the
+    // lookup before ever checking for a duplicate vendor key.
+    for (const candidate of [...candidatesOf(upcLookup), ...candidatesOf(skuLookup)]) {
+      usedProductCodes.add(candidate.productCode);
+    }
+
+    if (dupBlockers.length > 0) {
+      const display = combined.kind === "matched" ? combined.product : undefined;
+      results.push(
+        dualBlockedRow(
+          row,
+          row.upcRaw,
+          row.skuRaw ?? null,
+          normalizedKey,
+          "BLOCKED DUPLICATE VENDOR KEY",
+          dupBlockers,
+          display?.productCode ?? null,
+          display ? currentValuesFromMiva(display) : {},
+        ),
+      );
+      continue;
+    }
+
+    if (combined.kind === "matched") {
+      results.push(buildDualMatchedRow(row, row.upcRaw, row.skuRaw ?? null, normalizedKey, combined.product, config, runDate));
+      continue;
+    }
+
+    if (combined.kind === "mismatch") {
+      results.push(
+        dualBlockedRow(
+          row,
+          row.upcRaw,
+          row.skuRaw ?? null,
+          normalizedKey,
+          "BLOCKED IDENTIFIER MISMATCH",
+          ["IDENTIFIER_MISMATCH"],
+          joinCodes([combined.a, combined.b]),
+        ),
+      );
+      continue;
+    }
+
+    if (combined.kind === "ambiguous") {
+      results.push(
+        dualBlockedRow(row, row.upcRaw, row.skuRaw ?? null, normalizedKey, "BLOCKED AMBIGUOUS MIVA KEY", ["DUPLICATE_MIVA_GTIN"], joinCodes(combined.candidates)),
+      );
+      continue;
+    }
+
+    const blocker: BlockerCode = combined.kind === "excluded" ? "UNKNOWN_MIVA_BRAND" : "NO_MIVA_MATCH";
+    const productCode = combined.kind === "excluded" ? joinCodes(combined.candidates) : null;
+    const current = combined.kind === "excluded" && combined.candidates.length === 1 ? currentValuesFromMiva(combined.candidates[0]!) : {};
+    results.push(
+      dualBlockedRow(row, row.upcRaw, row.skuRaw ?? null, normalizedKey, "UNMATCHED - BRAND ELIGIBILITY UNKNOWN", [blocker], productCode, current),
+    );
+  }
+
+  // Pass 2: a Miva product only counts as missing if it was never touched
+  // by any vendor row via EITHER identifier -- stricter than the
+  // single-identifier path by necessity, since there are now two ways a
+  // row could have referenced it.
+  for (const row of mivaRows) {
+    if (row.currentDsInvMgt.trim() === "") continue;
+    if (!isBrandAllowed(row.brandRaw, config.brandAllowlist)) continue;
+    const gtinValid = normalizeGtin(row.gtinRaw).valid;
+    const mpnValid = normalizeSku(row.mpnRaw).valid;
+    if (!gtinValid && !mpnValid) continue;
+    if (usedProductCodes.has(row.productCode)) continue;
+
+    const current = currentValuesFromMiva(row);
+    const alreadyDiscontinued = (current.simpleInventory ?? "").trim() === "NO LONGER AVAILABLE";
+
+    results.push({
+      sourceRowNumber: null,
+      itemNo: null,
+      rawUpc: row.gtinRaw ?? row.mpnRaw,
+      normalizedUpc: (normalizeGtin(row.gtinRaw).normalized ?? normalizeSku(row.mpnRaw).normalized) ?? null,
       description: null,
       productCode: row.productCode,
       matchOutcome: "MISSING - REVIEW REQUIRED",

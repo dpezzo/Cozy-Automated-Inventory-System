@@ -126,6 +126,53 @@ describe("vendorConfigService", () => {
       expect(insertAuditLog).toHaveBeenCalledWith(expect.objectContaining({ action: "VENDOR_CONFIG_CREATED", actorId: "actor-1" }));
     });
 
+    it("rejects matchStrategy upc-or-sku without a secondaryIdentifierColumn", async () => {
+      findVendorConfigByKey.mockResolvedValue(null);
+      const { createVendorConfig } = await import("./vendorConfigService");
+      await expect(
+        createVendorConfig(
+          baseSimpleCsvRequest({
+            matchStrategy: "upc-or-sku",
+            columnMapping: { identifierColumn: "UPC", identifierType: "upc", quantityColumn: "Qty" },
+          }),
+          "actor-1",
+        ),
+      ).rejects.toMatchObject({ code: "INVALID_COLUMN_MAPPING" });
+    });
+
+    it("rejects a secondaryIdentifierColumn when matchStrategy is not upc-or-sku", async () => {
+      findVendorConfigByKey.mockResolvedValue(null);
+      const { createVendorConfig } = await import("./vendorConfigService");
+      await expect(
+        createVendorConfig(
+          baseSimpleCsvRequest({
+            columnMapping: { identifierColumn: "UPC", identifierType: "upc", secondaryIdentifierColumn: "SKU", quantityColumn: "Qty" },
+          }),
+          "actor-1",
+        ),
+      ).rejects.toMatchObject({ code: "INVALID_COLUMN_MAPPING" });
+    });
+
+    it("creates an upc-or-sku vendor with a secondaryIdentifierColumn", async () => {
+      findVendorConfigByKey.mockResolvedValue(null);
+      insertVendorConfig.mockResolvedValue(
+        existingRecord({
+          matchStrategy: "upc-or-sku",
+          columnMapping: { identifierColumn: "UPC", identifierType: "upc", secondaryIdentifierColumn: "SKU", quantityColumn: "Qty" },
+        }),
+      );
+      const { createVendorConfig } = await import("./vendorConfigService");
+      const record = await createVendorConfig(
+        baseSimpleCsvRequest({
+          matchStrategy: "upc-or-sku",
+          columnMapping: { identifierColumn: "UPC", identifierType: "upc", secondaryIdentifierColumn: "SKU", quantityColumn: "Qty" },
+        }),
+        "actor-1",
+      );
+      expect(record.matchStrategy).toBe("upc-or-sku");
+      expect(insertVendorConfig).toHaveBeenCalledWith(expect.objectContaining({ matchStrategy: "upc-or-sku" }));
+    });
+
     it("rejects registering a plugin file that isn't available on disk", async () => {
       findVendorConfigByKey.mockResolvedValue(null);
       listAvailablePluginFiles.mockReturnValue(["other.js"]);
@@ -192,6 +239,26 @@ describe("vendorConfigService", () => {
       await expect(
         updateVendorConfig("acme", { columnMapping: { identifierColumn: "UPC", identifierType: "upc", quantityColumn: "Qty" } }, "actor-1"),
       ).rejects.toMatchObject({ code: "COLUMN_MAPPING_NOT_APPLICABLE" });
+    });
+
+    it("allows a 'custom'-shape vendor (e.g. Olliix) to switch to upc-or-sku without needing a columnMapping", async () => {
+      findVendorConfigByKey.mockResolvedValue(existingRecord({ fileShape: "custom", columnMapping: null }));
+      updateVendorConfigMock.mockResolvedValue(existingRecord({ fileShape: "custom", columnMapping: null, matchStrategy: "upc-or-sku" }));
+      const { updateVendorConfig } = await import("./vendorConfigService");
+      const record = await updateVendorConfig("acme", { matchStrategy: "upc-or-sku" }, "actor-1");
+      expect(record.matchStrategy).toBe("upc-or-sku");
+    });
+
+    it("rejects switching a simple_csv vendor to upc-or-sku without supplying a secondaryIdentifierColumn", async () => {
+      findVendorConfigByKey.mockResolvedValue(existingRecord());
+      const { updateVendorConfig } = await import("./vendorConfigService");
+      await expect(
+        updateVendorConfig(
+          "acme",
+          { matchStrategy: "upc-or-sku", columnMapping: { identifierColumn: "UPC", identifierType: "upc", quantityColumn: "Qty" } },
+          "actor-1",
+        ),
+      ).rejects.toMatchObject({ code: "INVALID_COLUMN_MAPPING" });
     });
 
     it("updates a vendor and logs an audit entry, never touching vendor_key", async () => {

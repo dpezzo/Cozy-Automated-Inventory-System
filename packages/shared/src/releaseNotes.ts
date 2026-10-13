@@ -12,6 +12,12 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-13",
+    items: [
+      "Manage Vendors: added a new matching option, \"Both (UPC + SKU)\", for vendors whose file reliably provides both -- checks each independently and only blocks for review if they disagree, instead of relying on just one.",
+    ],
+  },
+  {
     date: "2026-10-12",
     items: [
       "Run Review: added a new summary tile showing how many Miva products exist under this vendor's brand, regardless of tracked status.",

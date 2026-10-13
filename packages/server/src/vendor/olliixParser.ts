@@ -142,6 +142,11 @@ export async function parseOlliixWorkbook(buffer: Buffer): Promise<ParsedOlliixW
       sourceRowNumber: rowNumber,
       itemNoRaw,
       upcRaw,
+      // Item No is Olliix's own SKU, confirmed to correspond to Miva's MPN
+      // field -- only actually used for matching when the vendor's
+      // matchStrategy is "upc-or-sku" (see reconcile.ts's reconcileDual);
+      // itemNoRaw above remains the display-only field for every strategy.
+      skuRaw: itemNoRaw,
       descriptionRaw,
       totalQtyRaw,
       warehouses,

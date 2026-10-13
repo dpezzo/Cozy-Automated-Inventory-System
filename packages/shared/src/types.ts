@@ -72,7 +72,9 @@ export type MatchOutcome =
   | "BLOCKED DUPLICATE VENDOR KEY"
   | "BLOCKED AMBIGUOUS MIVA KEY"
   | "UNMATCHED - BRAND ELIGIBILITY UNKNOWN"
-  | "MISSING - REVIEW REQUIRED";
+  | "MISSING - REVIEW REQUIRED"
+  /** matchStrategy "upc-or-sku" only: UPC and SKU each resolved to exactly one Miva product, but not the same one. */
+  | "BLOCKED IDENTIFIER MISMATCH";
 
 export type ReviewClass = "CLEAN" | "WARNING" | "BLOCKED" | "UNCHANGED";
 
@@ -102,7 +104,9 @@ export type BlockerCode =
   | "UNKNOWN_MIVA_BRAND"
   | "MISSING_FROM_VENDOR"
   /** Olliix's historical name for this same code, kept only because it's baked into the immutable, read-only bake-off fixture bundle -- new vendors use MISSING_FROM_VENDOR. */
-  | "MISSING_FROM_OLLIIX";
+  | "MISSING_FROM_OLLIIX"
+  /** matchStrategy "upc-or-sku" only: a vendor row's UPC and SKU each cleanly resolve to exactly one Miva product, but to two DIFFERENT products -- never silently trust one over the other. */
+  | "IDENTIFIER_MISMATCH";
 
 export interface ManagedValues {
   simpleInventory: string;
@@ -152,8 +156,8 @@ export interface VendorRuleConfig {
   timezone: string;
   /** Miva-side filter: only Miva products in one of these brands are eligible matches. */
   brandAllowlist: string[];
-  /** Which identifier pair this vendor matches on. "upc-to-gtin" reads row.upcRaw against Miva gtinRaw; "sku-to-mpn" reads row.skuRaw against Miva mpnRaw. */
-  matchStrategy: "upc-to-gtin" | "sku-to-mpn";
+  /** Which identifier pair this vendor matches on. "upc-to-gtin" reads row.upcRaw against Miva gtinRaw; "sku-to-mpn" reads row.skuRaw against Miva mpnRaw; "upc-or-sku" checks both independently (see reconcile.ts's reconcileDual) -- whichever resolves confidently is used, and a clean match on both to two different products is a hard block rather than a silent pick. */
+  matchStrategy: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";
   /** Blocker code for "Miva product missing from this vendor's file". Defaults to MISSING_FROM_VENDOR; Olliix pins its historical MISSING_FROM_OLLIIX to stay byte-identical with the immutable bake-off fixture bundle. */
   missingBlockerCode?: BlockerCode;
 }

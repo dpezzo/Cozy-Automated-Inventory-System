@@ -264,6 +264,8 @@ export interface FileRecord {
 export interface GenericCsvColumnMapping {
   identifierColumn: string;
   identifierType: "upc" | "sku";
+  /** Only used when matchStrategy is "upc-or-sku" -- the column for the OTHER identifier. */
+  secondaryIdentifierColumn?: string;
   descriptionColumn?: string;
   quantityColumn: string;
 }
@@ -274,7 +276,7 @@ export interface VendorConfig {
   inStockThreshold: number;
   timezone: string;
   brandAllowlist: string[];
-  matchStrategy: "upc-to-gtin" | "sku-to-mpn";
+  matchStrategy: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";
   missingBlockerCode: string | null;
   fileShape: "custom" | "simple_csv" | "plugin";
   columnMapping: GenericCsvColumnMapping | null;
@@ -298,7 +300,7 @@ interface CreateVendorCommon {
   inStockThreshold: number;
   timezone: string;
   brandAllowlist: string[];
-  matchStrategy: "upc-to-gtin" | "sku-to-mpn";
+  matchStrategy: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";
 }
 
 export type CreateVendorInput =
@@ -310,7 +312,7 @@ export interface UpdateVendorInput {
   inStockThreshold?: number;
   timezone?: string;
   brandAllowlist?: string[];
-  matchStrategy?: "upc-to-gtin" | "sku-to-mpn";
+  matchStrategy?: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";
   columnMapping?: GenericCsvColumnMapping;
 }
 

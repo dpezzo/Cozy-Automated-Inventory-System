@@ -4,6 +4,7 @@ import { vendorConfigByRuleId } from "./vendorRegistry";
 const MATCH_METHOD_BY_STRATEGY = {
   "upc-to-gtin": "EXACT_UPC_TO_GTIN",
   "sku-to-mpn": "EXACT_SKU_TO_MPN",
+  "upc-or-sku": "EXACT_UPC_OR_SKU",
 } as const;
 
 /** Deterministic display order: natural vendor source-row order, Miva-only rows last. */
@@ -59,7 +60,7 @@ export function toExceptionRows(rows: ReconciliationRow[]): ExceptionRowView[] {
  * caused or can fix.
  */
 export const VENDOR_EXCEPTION_CATEGORIES = {
-  DUPLICATE_IDENTIFIER: ["DUPLICATE_VENDOR_UPC", "DUPLICATE_VENDOR_SKU"],
+  DUPLICATE_IDENTIFIER: ["DUPLICATE_VENDOR_UPC", "DUPLICATE_VENDOR_SKU", "IDENTIFIER_MISMATCH"],
   MISSING_OR_INVALID_IDENTIFIER: ["BLANK_UPC", "NONNUMERIC_UPC", "BLANK_VENDOR_SKU"],
   MISSING_OR_INVALID_QUANTITY: ["BLANK_TOTAL_QTY", "NEGATIVE_TOTAL_QTY", "INVALID_TOTAL_QTY"],
   MISSING_FROM_VENDOR_FILE: ["MISSING_FROM_VENDOR", "MISSING_FROM_OLLIIX"],

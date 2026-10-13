@@ -16,6 +16,7 @@ function parseAllowlist(text: string): string[] {
 const MATCH_STRATEGY_LABELS: Record<string, string> = {
   "upc-to-gtin": "UPC to GTIN",
   "sku-to-mpn": "SKU to MPN",
+  "upc-or-sku": "Both (UPC + SKU)",
 };
 
 const FILE_SHAPE_LABELS: Record<string, string> = {
@@ -25,7 +26,7 @@ const FILE_SHAPE_LABELS: Record<string, string> = {
 };
 
 const MATCH_STRATEGY_HINT =
-  "Which vendor-file identifier is matched against which Miva catalog field. Use UPC to GTIN unless the vendor only provides SKUs, not UPCs -- then use SKU to MPN instead.";
+  "Which vendor-file identifier is matched against which Miva catalog field. Use UPC to GTIN unless the vendor only provides SKUs, not UPCs -- then use SKU to MPN instead. \"Both\" checks UPC and SKU independently on every row (using whichever one resolves, and blocking for review if they disagree) -- use it when the vendor's file reliably provides both and you want the extra cross-check.";
 const IN_STOCK_THRESHOLD_HINT =
   "Minimum vendor quantity to be treated as in-stock. E.g. 6 means any vendor quantity below 6 is treated as out of stock in the proposed Miva update.";
 const TIMEZONE_HINT = "Used to determine this vendor's \"business day\" cutoff when comparing file dates. Format: America/New_York, America/Chicago, etc.";
@@ -43,6 +44,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
   const [matchStrategy, setMatchStrategy] = useState(vendor.matchStrategy);
   const [identifierColumn, setIdentifierColumn] = useState(vendor.columnMapping?.identifierColumn ?? "");
   const [identifierType, setIdentifierType] = useState<"upc" | "sku">(vendor.columnMapping?.identifierType ?? "upc");
+  const [secondaryIdentifierColumn, setSecondaryIdentifierColumn] = useState(vendor.columnMapping?.secondaryIdentifierColumn ?? "");
   const [descriptionColumn, setDescriptionColumn] = useState(vendor.columnMapping?.descriptionColumn ?? "");
   const [quantityColumn, setQuantityColumn] = useState(vendor.columnMapping?.quantityColumn ?? "");
   const [saving, setSaving] = useState(false);
@@ -60,7 +62,15 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
         brandAllowlist: parseAllowlist(brandAllowlist),
         matchStrategy,
         ...(vendor.fileShape === "simple_csv"
-          ? { columnMapping: { identifierColumn, identifierType, descriptionColumn: descriptionColumn || undefined, quantityColumn } }
+          ? {
+              columnMapping: {
+                identifierColumn,
+                identifierType,
+                secondaryIdentifierColumn: matchStrategy === "upc-or-sku" ? secondaryIdentifierColumn : undefined,
+                descriptionColumn: descriptionColumn || undefined,
+                quantityColumn,
+              },
+            }
           : {}),
       });
       onDone();
@@ -109,9 +119,14 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
         <label>
           Match strategy
           <br />
-          <select value={matchStrategy} onChange={(e) => setMatchStrategy(e.target.value as VendorConfig["matchStrategy"])} style={{ width: "100%" }}>
+          <select
+            value={matchStrategy}
+            onChange={(e) => setMatchStrategy(e.target.value as VendorConfig["matchStrategy"])}
+            style={{ width: "100%" }}
+          >
             <option value="upc-to-gtin">UPC to GTIN</option>
             <option value="sku-to-mpn">SKU to MPN</option>
+            <option value="upc-or-sku">Both (UPC + SKU)</option>
           </select>
           <FieldHint>{MATCH_STRATEGY_HINT}</FieldHint>
         </label>
@@ -142,6 +157,19 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
               <option value="sku">SKU</option>
             </select>
           </label>
+          {matchStrategy === "upc-or-sku" && (
+            <label>
+              Second identifier column name ({identifierType === "upc" ? "SKU" : "UPC"})
+              <br />
+              <input
+                value={secondaryIdentifierColumn}
+                onChange={(e) => setSecondaryIdentifierColumn(e.target.value)}
+                style={{ width: "100%" }}
+                required
+              />
+              <FieldHint>The column holding the other identifier -- checked independently alongside the one above.</FieldHint>
+            </label>
+          )}
           <label>
             Description column name (optional)
             <br />
@@ -184,9 +212,10 @@ function AddVendorForm({
   const [inStockThreshold, setInStockThreshold] = useState("6");
   const [timezone, setTimezone] = useState("America/New_York");
   const [brandAllowlist, setBrandAllowlist] = useState("");
-  const [matchStrategy, setMatchStrategy] = useState<"upc-to-gtin" | "sku-to-mpn">("upc-to-gtin");
+  const [matchStrategy, setMatchStrategy] = useState<"upc-to-gtin" | "sku-to-mpn" | "upc-or-sku">("upc-to-gtin");
   const [identifierColumn, setIdentifierColumn] = useState("");
   const [identifierType, setIdentifierType] = useState<"upc" | "sku">("upc");
+  const [secondaryIdentifierColumn, setSecondaryIdentifierColumn] = useState("");
   const [descriptionColumn, setDescriptionColumn] = useState("");
   const [quantityColumn, setQuantityColumn] = useState("");
   const [pluginFilename, setPluginFilename] = useState("");
@@ -211,7 +240,13 @@ function AddVendorForm({
           ? {
               ...common,
               fileShape: "simple_csv",
-              columnMapping: { identifierColumn, identifierType, descriptionColumn: descriptionColumn || undefined, quantityColumn },
+              columnMapping: {
+                identifierColumn,
+                identifierType,
+                secondaryIdentifierColumn: matchStrategy === "upc-or-sku" ? secondaryIdentifierColumn : undefined,
+                descriptionColumn: descriptionColumn || undefined,
+                quantityColumn,
+              },
             }
           : { ...common, fileShape: "plugin", pluginFilename };
       await api.createVendor(input);
@@ -220,6 +255,7 @@ function AddVendorForm({
       setInStockThreshold("6");
       setBrandAllowlist("");
       setIdentifierColumn("");
+      setSecondaryIdentifierColumn("");
       setDescriptionColumn("");
       setQuantityColumn("");
       setPluginFilename("");
@@ -273,9 +309,14 @@ function AddVendorForm({
         <label>
           Match strategy
           <br />
-          <select value={matchStrategy} onChange={(e) => setMatchStrategy(e.target.value as "upc-to-gtin" | "sku-to-mpn")} style={{ width: "100%" }}>
+          <select
+            value={matchStrategy}
+            onChange={(e) => setMatchStrategy(e.target.value as "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku")}
+            style={{ width: "100%" }}
+          >
             <option value="upc-to-gtin">UPC to GTIN</option>
             <option value="sku-to-mpn">SKU to MPN</option>
+            <option value="upc-or-sku">Both (UPC + SKU)</option>
           </select>
           <FieldHint>{MATCH_STRATEGY_HINT}</FieldHint>
         </label>
@@ -317,6 +358,19 @@ function AddVendorForm({
                 <option value="sku">SKU</option>
               </select>
             </label>
+            {matchStrategy === "upc-or-sku" && (
+              <label>
+                Second identifier column name ({identifierType === "upc" ? "SKU" : "UPC"})
+                <br />
+                <input
+                  value={secondaryIdentifierColumn}
+                  onChange={(e) => setSecondaryIdentifierColumn(e.target.value)}
+                  style={{ width: "100%" }}
+                  required
+                />
+                <FieldHint>The column holding the other identifier -- checked independently alongside the one above.</FieldHint>
+              </label>
+            )}
             <label>
               Description column name (optional)
               <br />

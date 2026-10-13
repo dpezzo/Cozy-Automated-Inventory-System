@@ -4,7 +4,7 @@ import { listAvailablePluginFiles as listPluginFilesOnDisk, reloadPlugins as rel
 import { ValidationError } from "../errors";
 
 const VENDOR_KEY_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const VALID_MATCH_STRATEGIES: VendorMatchStrategy[] = ["upc-to-gtin", "sku-to-mpn"];
+const VALID_MATCH_STRATEGIES: VendorMatchStrategy[] = ["upc-to-gtin", "sku-to-mpn", "upc-or-sku"];
 
 function assertValidTimezone(timezone: string): void {
   try {
@@ -36,7 +36,10 @@ function assertCommonFields(input: {
   assertValidTimezone(input.timezone);
 }
 
-function assertValidColumnMapping(mapping: GenericCsvColumnMapping | undefined): asserts mapping is GenericCsvColumnMapping {
+function assertValidColumnMapping(
+  mapping: GenericCsvColumnMapping | undefined,
+  matchStrategy: VendorMatchStrategy,
+): asserts mapping is GenericCsvColumnMapping {
   if (
     !mapping ||
     !mapping.identifierColumn?.trim() ||
@@ -46,6 +49,19 @@ function assertValidColumnMapping(mapping: GenericCsvColumnMapping | undefined):
     throw new ValidationError(
       "INVALID_COLUMN_MAPPING",
       "columnMapping requires identifierColumn, quantityColumn, and identifierType ('upc' or 'sku').",
+    );
+  }
+  const hasSecondary = Boolean(mapping.secondaryIdentifierColumn?.trim());
+  if (matchStrategy === "upc-or-sku" && !hasSecondary) {
+    throw new ValidationError(
+      "INVALID_COLUMN_MAPPING",
+      "columnMapping requires secondaryIdentifierColumn when matchStrategy is 'upc-or-sku'.",
+    );
+  }
+  if (matchStrategy !== "upc-or-sku" && hasSecondary) {
+    throw new ValidationError(
+      "INVALID_COLUMN_MAPPING",
+      "secondaryIdentifierColumn only applies when matchStrategy is 'upc-or-sku'.",
     );
   }
 }
@@ -133,7 +149,7 @@ export async function createVendorConfig(input: CreateVendorConfigRequest, actor
 
   let record: VendorConfigRecord;
   if (input.fileShape === "simple_csv") {
-    assertValidColumnMapping(input.columnMapping);
+    assertValidColumnMapping(input.columnMapping, input.matchStrategy);
     record = await repo.insertVendorConfig({
       vendorKey: input.vendorKey,
       vendorLabel: input.vendorLabel,
@@ -212,7 +228,7 @@ export async function updateVendorConfig(
     if (existing.fileShape !== "simple_csv") {
       throw new ValidationError("COLUMN_MAPPING_NOT_APPLICABLE", "columnMapping only applies to 'simple_csv' vendors.");
     }
-    assertValidColumnMapping(patch.columnMapping);
+    assertValidColumnMapping(patch.columnMapping, patch.matchStrategy ?? existing.matchStrategy);
   }
 
   const record = await repo.updateVendorConfig(vendorKey, patch);

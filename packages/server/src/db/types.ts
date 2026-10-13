@@ -81,7 +81,7 @@ export interface InsertFileInput {
 // ---------- Vendor configs ----------
 
 export type VendorFileShape = "custom" | "simple_csv" | "plugin";
-export type VendorMatchStrategy = "upc-to-gtin" | "sku-to-mpn";
+export type VendorMatchStrategy = "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";
 
 export interface VendorConfigRecord {
   vendorKey: string;
