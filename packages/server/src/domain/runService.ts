@@ -209,14 +209,20 @@ export async function listUntrackedBrandRows(runId: string, filter: RowFilter = 
   const vendorConfig = await repo.findVendorConfigByKey(vendorSlugFromRuleId(run.ruleId));
   if (!vendorConfig) return [];
 
-  // A row's productCode is pipe-joined (see reconcile.ts's joinCodes) when it
-  // resolved ambiguously -- e.g. two Miva products sharing one GTIN -- so
-  // splitting on "|" is required here, otherwise every product on the
-  // "wrong" side of an ambiguous/excluded match would incorrectly show up
-  // again as a synthetic "not tracked" row despite already being accounted
-  // for (just ambiguously) by a real BLOCKED row.
+  // Only MATCHED/MISSING rows count as "already shown" -- a product whose
+  // only row is e.g. BLOCKED DUPLICATE VENDOR KEY (the vendor's own file
+  // reuses that identifier elsewhere, unrelated to this product itself)
+  // still needs its own synthetic row here, or it's invisible to the "show
+  // all Miva products" view entirely despite genuinely being one of this
+  // brand's products. A row's productCode is pipe-joined (see reconcile.ts's
+  // joinCodes) when it resolved ambiguously -- e.g. two Miva products
+  // sharing one GTIN -- so splitting on "|" is required too.
   const existingRows = await repo.listRunRows(runId);
-  const coveredProductCodes = new Set(existingRows.flatMap((v) => (v.row.productCode ? v.row.productCode.split("|") : [])));
+  const coveredProductCodes = new Set(
+    existingRows
+      .filter((v) => v.row.matchOutcome === "MATCHED" || v.row.matchOutcome === "MISSING - REVIEW REQUIRED")
+      .flatMap((v) => (v.row.productCode ? v.row.productCode.split("|") : [])),
+  );
 
   const { rows: mivaRows } = parseMivaSnapshotCsv(readStoredFileText(mivaFile.storagePath));
   const results: ReviewRowView[] = [];

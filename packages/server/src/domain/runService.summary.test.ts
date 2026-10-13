@@ -96,11 +96,18 @@ describe("listUntrackedBrandRows", () => {
     }
   });
 
-  it("excludes a product already covered by a real reconciliation row", async () => {
-    listRunRows.mockResolvedValue([{ row: { productCode: "P001" }, decision: {} }]);
+  it("excludes a product already covered by a MATCHED or MISSING reconciliation row", async () => {
+    listRunRows.mockResolvedValue([{ row: { productCode: "P001", matchOutcome: "MATCHED" }, decision: {} }]);
     const { listUntrackedBrandRows } = await import("./runService");
     const results = await listUntrackedBrandRows("run-1");
     expect(results.map((r) => r.row.productCode).sort()).toEqual(["P002", "P003"]);
+  });
+
+  it("still synthesizes a row for a product whose only existing row is a blocked one (e.g. a duplicate vendor key), not just MATCHED/MISSING", async () => {
+    listRunRows.mockResolvedValue([{ row: { productCode: "P001", matchOutcome: "BLOCKED DUPLICATE VENDOR KEY" }, decision: {} }]);
+    const { listUntrackedBrandRows } = await import("./runService");
+    const results = await listUntrackedBrandRows("run-1");
+    expect(results.map((r) => r.row.productCode).sort()).toEqual(["P001", "P002", "P003"]);
   });
 
   it("applies the same filter semantics as the real row list (e.g. search)", async () => {
