@@ -17,6 +17,7 @@ import { importStatusPillClass, runStatusPillClass, IMPORT_STATUS_TOOLTIPS, RUN_
 import { friendlyError } from "../lib/errors";
 
 const REVIEW_CLASS_FILTERS = ["CLEAN", "WARNING", "BLOCKED", "UNCHANGED"];
+const DEFAULT_REVIEW_CLASS_FILTER = ["CLEAN", "WARNING"];
 const REVIEW_CLASS_TOOLTIPS: Record<string, string> = {
   CLEAN: "No issues -- can be approved directly.",
   WARNING: "Unusual data -- review before approving.",
@@ -148,7 +149,7 @@ export default function RunReviewPage() {
   // in reconcile.ts), so this single set of checkboxes replaces what used
   // to be two overlapping controls (review class + a separate "changed
   // only" toggle) without losing any filtering capability.
-  const [reviewClassFilter, setReviewClassFilter] = useState<string[]>(["CLEAN", "WARNING"]);
+  const [reviewClassFilter, setReviewClassFilter] = useState<string[]>(DEFAULT_REVIEW_CLASS_FILTER);
   const [decisionFilter, setDecisionFilter] = useState<string[]>([]);
   const [matchOutcomeFilter, setMatchOutcomeFilter] = useState<string[]>([]);
   const [highlightDiff, setHighlightDiff] = useState(false);
@@ -246,16 +247,20 @@ export default function RunReviewPage() {
   }, [runId, reviewClassFilter, decisionFilter, matchOutcomeFilter, search, showAllBrand]);
 
   /**
-   * Turning this on also checks every Review class box and scopes the
-   * outcome to exactly the three Miva-anchored ones. Review class isn't a
-   * meaningful filter for "show me this brand's whole Miva catalog" -- a
-   * real missing-from-vendor product is BLOCKED unless it's already marked
-   * discontinued, a synthesized "not tracked" row is always UNCHANGED, and
-   * a genuine match could be CLEAN/WARNING/UNCHANGED -- leaving any class
-   * unchecked silently drops part of the brand's real population. And
-   * without the outcome restriction, every vendor-file-only row (wrong
-   * brand, bad identifier, etc. -- never anchored to a Miva product at
-   * all) floods back in too, since those also span every review class.
+   * A real toggle, not just an additive checkbox: turning it on checks
+   * every Review class box and scopes the outcome to exactly the three
+   * Miva-anchored ones; turning it back off restores both to their normal
+   * defaults, rather than leaving whatever state they were forced into.
+   *
+   * Review class isn't a meaningful filter for "show me this brand's whole
+   * Miva catalog" -- a real missing-from-vendor product is BLOCKED unless
+   * it's already marked discontinued, a synthesized "not tracked" row is
+   * always UNCHANGED, and a genuine match could be CLEAN/WARNING/UNCHANGED
+   * -- leaving any class unchecked silently drops part of the brand's real
+   * population. And without the outcome restriction, every vendor-file-only
+   * row (wrong brand, bad identifier, etc. -- never anchored to a Miva
+   * product at all) floods back in too, since those also span every review
+   * class.
    */
   function toggleShowAllBrand() {
     setShowAllBrand((prev) => {
@@ -263,6 +268,9 @@ export default function RunReviewPage() {
       if (next) {
         setReviewClassFilter(REVIEW_CLASS_FILTERS);
         setMatchOutcomeFilter(MIVA_ANCHORED_OUTCOMES);
+      } else {
+        setReviewClassFilter(DEFAULT_REVIEW_CLASS_FILTER);
+        setMatchOutcomeFilter([]);
       }
       return next;
     });
@@ -772,29 +780,12 @@ export default function RunReviewPage() {
               {c}
             </label>
           ))}
-          <span style={{ marginLeft: 16, fontWeight: 700 }}>Match:</span>
-          <label title="Rows whose UPC/SKU resolved to exactly one Miva product (matchOutcome MATCHED) -- present in both the vendor file and Miva.">
-            <input
-              type="checkbox"
-              checked={matchOutcomeFilter.includes("MATCHED")}
-              onChange={() => toggleFilter(matchOutcomeFilter, setMatchOutcomeFilter, "MATCHED")}
-            />{" "}
-            Matched
-          </label>
-          <label title="Miva products not referenced by any vendor file row this run (matchOutcome MISSING - REVIEW REQUIRED) -- not in the vendor file at all, so possibly discontinued.">
-            <input
-              type="checkbox"
-              checked={matchOutcomeFilter.includes("MISSING - REVIEW REQUIRED")}
-              onChange={() => toggleFilter(matchOutcomeFilter, setMatchOutcomeFilter, "MISSING - REVIEW REQUIRED")}
-            />{" "}
-            Miva only
-          </label>
-          <label style={{ marginLeft: 16 }} title="Adds a 'Changed fields' column listing which of the six managed fields actually differ -- Current/Proposed status only shows one of them.">
+          <label title="Adds a 'Changed fields' column listing which of the six managed fields actually differ -- Current/Proposed status only shows one of them.">
             <input type="checkbox" checked={highlightDiff} onChange={(e) => setHighlightDiff(e.target.checked)} /> Highlight differences
           </label>
           <label
             style={{ marginLeft: 16 }}
-            title="Shows this vendor's entire Miva brand catalog, and only that -- every Matched and Missing product regardless of review class, plus products this run has nothing to say about at all (almost always a blank tracked flag; purely informational, can never be approved). Also checks every Review class box and restricts Outcome to just these three, so vendor-file-only rows (wrong brand, bad identifier, etc.) don't flood back in."
+            title="Shows this vendor's entire Miva brand catalog, and only that -- every Matched and Missing product regardless of review class, plus products this run has nothing to say about at all (almost always a blank tracked flag; purely informational, can never be approved). Also checks every Review class box and restricts the list to just these, so vendor-file-only rows (wrong brand, bad identifier, etc.) don't flood back in. Unchecking restores the default Review class view."
           >
             <input type="checkbox" checked={showAllBrand} onChange={toggleShowAllBrand} /> Show all Miva products
           </label>
