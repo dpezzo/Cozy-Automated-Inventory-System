@@ -74,7 +74,9 @@ export type MatchOutcome =
   | "UNMATCHED - BRAND ELIGIBILITY UNKNOWN"
   | "MISSING - REVIEW REQUIRED"
   /** matchStrategy "upc-or-sku" only: UPC and SKU each resolved to exactly one Miva product, but not the same one. */
-  | "BLOCKED IDENTIFIER MISMATCH";
+  | "BLOCKED IDENTIFIER MISMATCH"
+  /** Only ever synthesized on demand by Run Review's "Show all Miva products" toggle (runService.ts's listUntrackedBrandRows), never persisted to reconciliation_rows -- a brand-eligible Miva product with a blank tracked flag, not referenced by any vendor row this run. Purely informational: never blocked, never eligible for approval. */
+  | "IN MIVA - NOT TRACKED";
 
 export type ReviewClass = "CLEAN" | "WARNING" | "BLOCKED" | "UNCHANGED";
 

@@ -76,6 +76,7 @@ const CLASS_TOOLTIP =
 const MATCH_OUTCOME_LABELS: Record<string, string> = {
   MATCHED: "Matched",
   "MISSING - REVIEW REQUIRED": "Miva only",
+  "IN MIVA - NOT TRACKED": "Not tracked",
 };
 
 const ITEM_NO_TOOLTIP =
@@ -148,6 +149,7 @@ export default function RunReviewPage() {
   const [decisionFilter, setDecisionFilter] = useState<string[]>([]);
   const [matchOutcomeFilter, setMatchOutcomeFilter] = useState<string[]>([]);
   const [highlightDiff, setHighlightDiff] = useState(false);
+  const [showAllBrand, setShowAllBrand] = useState(false);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [columnFilterValues, setColumnFilterValues] = useState<Record<string, Set<string>>>({});
@@ -235,9 +237,19 @@ export default function RunReviewPage() {
     }
     if (matchOutcomeFilter.length) params.matchOutcome = matchOutcomeFilter.join(",");
     if (search) params.search = search;
+    if (showAllBrand) params.includeAllBrand = "true";
     const data = await api.getRunRows(runId, params);
     setRows(data);
-  }, [runId, reviewClassFilter, decisionFilter, matchOutcomeFilter, search]);
+  }, [runId, reviewClassFilter, decisionFilter, matchOutcomeFilter, search, showAllBrand]);
+
+  /** Turning this on also ensures UNCHANGED is part of the Review class filter -- every synthesized "all Miva products" row is UNCHANGED, so without this the toggle would appear to do nothing. */
+  function toggleShowAllBrand() {
+    setShowAllBrand((prev) => {
+      const next = !prev;
+      if (next && !reviewClassFilter.includes("UNCHANGED")) setReviewClassFilter([...reviewClassFilter, "UNCHANGED"]);
+      return next;
+    });
+  }
 
   useEffect(() => {
     loadRun();
@@ -762,6 +774,12 @@ export default function RunReviewPage() {
           </label>
           <label style={{ marginLeft: 16 }} title="Adds a 'Changed fields' column listing which of the six managed fields actually differ -- Current/Proposed status only shows one of them.">
             <input type="checkbox" checked={highlightDiff} onChange={(e) => setHighlightDiff(e.target.checked)} /> Highlight differences
+          </label>
+          <label
+            style={{ marginLeft: 16 }}
+            title="Adds every Miva product under this vendor's brand that this run has nothing to say about -- not matched, not already flagged missing -- almost always because its tracked flag is blank. Purely informational: these rows are never blocked and can never be approved. Also turns on the UNCHANGED review class, since that's what all of these are."
+          >
+            <input type="checkbox" checked={showAllBrand} onChange={toggleShowAllBrand} /> Show all Miva products
           </label>
           <div className="search-input" style={{ marginLeft: 16 }}>
             <Search size={14} />

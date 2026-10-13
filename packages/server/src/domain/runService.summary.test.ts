@@ -67,3 +67,51 @@ describe("getRunSummary mivaBrandTotal", () => {
     expect(summary.mivaBrandTotal).toBeNull();
   });
 });
+
+describe("listUntrackedBrandRows", () => {
+  beforeEach(() => {
+    listRunRows.mockReset();
+    findRunById.mockReset();
+    findFileById.mockReset();
+    findVendorConfigByKey.mockReset();
+
+    listRunRows.mockResolvedValue([]);
+    findRunById.mockResolvedValue({ id: "run-1", ruleId: "acme-inventory-v1", mivaFileId: "m1" });
+    findFileById.mockResolvedValue({ id: "m1", kind: "miva_snapshot", storagePath: "irrelevant" });
+    findVendorConfigByKey.mockResolvedValue({
+      vendorKey: "acme",
+      brandAllowlist: ["Acme"],
+    });
+  });
+
+  it("synthesizes one informational row per brand-matched product, excluding other brands", async () => {
+    const { listUntrackedBrandRows } = await import("./runService");
+    const results = await listUntrackedBrandRows("run-1");
+    expect(results.map((r) => r.row.productCode).sort()).toEqual(["P001", "P002", "P003"]);
+    for (const r of results) {
+      expect(r.row.matchOutcome).toBe("IN MIVA - NOT TRACKED");
+      expect(r.row.reviewClass).toBe("UNCHANGED");
+      expect(r.row.isEligibleForApproval).toBe(false);
+      expect(r.decision.status).toBe("PENDING");
+    }
+  });
+
+  it("excludes a product already covered by a real reconciliation row", async () => {
+    listRunRows.mockResolvedValue([{ row: { productCode: "P001" }, decision: {} }]);
+    const { listUntrackedBrandRows } = await import("./runService");
+    const results = await listUntrackedBrandRows("run-1");
+    expect(results.map((r) => r.row.productCode).sort()).toEqual(["P002", "P003"]);
+  });
+
+  it("applies the same filter semantics as the real row list (e.g. search)", async () => {
+    const { listUntrackedBrandRows } = await import("./runService");
+    const results = await listUntrackedBrandRows("run-1", { search: "P002" });
+    expect(results.map((r) => r.row.productCode)).toEqual(["P002"]);
+  });
+
+  it("returns an empty list instead of throwing when the run no longer exists", async () => {
+    findRunById.mockResolvedValue(null);
+    const { listUntrackedBrandRows } = await import("./runService");
+    expect(await listUntrackedBrandRows("run-1")).toEqual([]);
+  });
+});

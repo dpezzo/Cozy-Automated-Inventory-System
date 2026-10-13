@@ -15,6 +15,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
     date: "2026-10-13",
     items: [
       "Manage Vendors: added a new matching option, \"Both (UPC + SKU)\", for vendors whose file reliably provides both -- checks each independently and only blocks for review if they disagree, instead of relying on just one.",
+      "Run Review: added a \"Show all Miva products\" checkbox to browse every product under this vendor's brand, including ones not currently matched or flagged -- informational only, never approvable.",
     ],
   },
   {

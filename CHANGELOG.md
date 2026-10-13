@@ -2,6 +2,13 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-13 — Run Review: "Show all Miva products" browsing toggle
+
+### Added
+- New Run Review checkbox, "Show all Miva products": fills in every brand-eligible Miva product this run's reconciliation has nothing to say about -- not matched, not already flagged "Missing" -- almost always because its tracked flag is blank. Previously completely invisible (deliberately excluded from the real "missing from vendor" scan to avoid flooding it before the tracked-flag backfill). New matchOutcome `IN MIVA - NOT TRACKED` ("Not tracked" in the UI), shown with the same full current-value detail as any other row.
+- Computed on demand (`listUntrackedBrandRows` in `runService.ts`), never persisted to `reconciliation_rows` -- purely a browsing aid. These rows are always `UNCHANGED` and never eligible for approval, so there's no path for one to end up in a batch. Deliberately kept separate from the still-open question of whether this population should ever become real, actionable "missing" rows -- that's parked pending a live walkthrough, not decided by this toggle.
+- Verified against real production data that every brand-eligible Miva product is accounted for exactly once across Matched / Missing / Not tracked / already-referenced-by-a-duplicate-blocked-row, reconciling exactly to the existing "Miva catalog (this brand)" summary count.
+
 ## 2026-10-13 — New vendor match strategy: UPC + SKU together ("upc-or-sku")
 
 ### Added

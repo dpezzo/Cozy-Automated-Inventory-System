@@ -22,6 +22,7 @@ vi.mock("./domain/runService", () => ({
   setRowDecision: () => undefined,
   bulkDecision: () => ({ applied: 0, skipped: [] }),
   getBatchableRows: () => [],
+  listUntrackedBrandRows: () => [],
 }));
 vi.mock("./domain/batchService", () => ({ generateBatch: () => ({}) }));
 vi.mock("./domain/legacyService", () => ({ runLegacyComparison: () => "" }));

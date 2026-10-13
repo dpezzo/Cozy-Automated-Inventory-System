@@ -2,7 +2,7 @@ import { getVendorFileAdapter, getDynamicVendorFileAdapter } from "../vendor/ven
 import { parseMivaSnapshotCsv } from "../vendor/mivaCsv";
 import { readStoredFile, readStoredFileText, storedFileExists } from "../storage/fileStorage";
 import { ValidationError, ForbiddenError, NotFoundError } from "../errors";
-import { getRepository, type RunRecord, type ReviewRowView } from "../db";
+import { getRepository, type RunRecord, type ReviewRowView, type RowFilter, type ReconciliationRowRecord, type DecisionRecord } from "../db";
 import { runReconciliation } from "./runPipeline";
 import { vendorSlugFromRuleId } from "./batchService";
 import { isBrandAllowed, type ParsedCalendarDate, type WarningCode } from "@cozywinters/shared";
@@ -172,6 +172,102 @@ async function computeMivaBrandTotal(runId: string): Promise<number | null> {
 
   const { rows: mivaRows } = parseMivaSnapshotCsv(readStoredFileText(mivaFile.storagePath));
   return mivaRows.filter((r) => isBrandAllowed(r.brandRaw, vendorConfig.brandAllowlist)).length;
+}
+
+function rowMatchesFilter(row: ReconciliationRowRecord, decisionStatus: string, filter: RowFilter): boolean {
+  if (filter.reviewClass && filter.reviewClass.length > 0 && !filter.reviewClass.includes(row.reviewClass)) return false;
+  if (filter.changed !== undefined && row.changed !== filter.changed) return false;
+  if (filter.decisionStatus && filter.decisionStatus.length > 0 && !filter.decisionStatus.includes(decisionStatus)) return false;
+  if (filter.matchOutcome && filter.matchOutcome.length > 0 && !filter.matchOutcome.includes(row.matchOutcome)) return false;
+  if (filter.search) {
+    const term = filter.search.toLowerCase();
+    const haystack = [row.itemNo, row.productCode, row.rawUpc].map((v) => (v ?? "").toLowerCase());
+    if (!haystack.some((v) => v.includes(term))) return false;
+  }
+  return true;
+}
+
+/**
+ * Synthesizes (never persists) one informational row per brand-eligible
+ * Miva product this run's reconciliation_rows has nothing to say about --
+ * neither matched nor already flagged "missing" -- almost always because
+ * its DROPSHIP_INVENTORY_MANAGEMENT flag is blank, the same population
+ * pass 2 (reconcile.ts) deliberately excludes from the real "missing from
+ * vendor" scan to avoid flooding it. Backs Run Review's "Show all Miva
+ * products" toggle: purely a browsing aid, deliberately kept separate from
+ * the still-undecided question of whether these should ever become real,
+ * actionable reconciliation_rows (see CHANGELOG 2026-10-13 and project
+ * notes -- parked pending a live walkthrough). Always UNCHANGED/never
+ * eligible for approval, so there's no path for one to end up in a batch.
+ */
+export async function listUntrackedBrandRows(runId: string, filter: RowFilter = {}): Promise<ReviewRowView[]> {
+  const repo = getRepository();
+  const run = await repo.findRunById(runId);
+  if (!run) return [];
+  const mivaFile = await repo.findFileById(run.mivaFileId);
+  if (!mivaFile || !storedFileExists(mivaFile.storagePath)) return [];
+  const vendorConfig = await repo.findVendorConfigByKey(vendorSlugFromRuleId(run.ruleId));
+  if (!vendorConfig) return [];
+
+  // A row's productCode is pipe-joined (see reconcile.ts's joinCodes) when it
+  // resolved ambiguously -- e.g. two Miva products sharing one GTIN -- so
+  // splitting on "|" is required here, otherwise every product on the
+  // "wrong" side of an ambiguous/excluded match would incorrectly show up
+  // again as a synthetic "not tracked" row despite already being accounted
+  // for (just ambiguously) by a real BLOCKED row.
+  const existingRows = await repo.listRunRows(runId);
+  const coveredProductCodes = new Set(existingRows.flatMap((v) => (v.row.productCode ? v.row.productCode.split("|") : [])));
+
+  const { rows: mivaRows } = parseMivaSnapshotCsv(readStoredFileText(mivaFile.storagePath));
+  const results: ReviewRowView[] = [];
+  for (const mivaRow of mivaRows) {
+    if (!isBrandAllowed(mivaRow.brandRaw, vendorConfig.brandAllowlist)) continue;
+    if (coveredProductCodes.has(mivaRow.productCode)) continue;
+    coveredProductCodes.add(mivaRow.productCode); // defensive: never emit two synthetic rows for the same product_code
+
+    const current = {
+      simpleInventory: mivaRow.currentSimpleInventory,
+      availability: mivaRow.currentAvailability,
+      restockMessage: mivaRow.currentRestockMessage,
+      dataFeed: mivaRow.currentDataFeed,
+      shoppingFeed: mivaRow.currentShoppingFeed,
+      dsInvMgt: mivaRow.currentDsInvMgt,
+    };
+    const row: ReconciliationRowRecord = {
+      id: `untracked:${runId}:${mivaRow.productCode}`,
+      runId,
+      sourceRowNumber: null,
+      itemNo: null,
+      rawUpc: mivaRow.gtinRaw ?? mivaRow.mpnRaw,
+      normalizedUpc: null,
+      description: null,
+      productCode: mivaRow.productCode,
+      matchOutcome: "IN MIVA - NOT TRACKED",
+      reviewClass: "UNCHANGED",
+      warningCodes: [],
+      blockerCodes: [],
+      totalQtyRaw: null,
+      expectedDate: null,
+      expectedDateSources: [],
+      current,
+      proposed: current,
+      changed: false,
+      isEligibleForApproval: false,
+    };
+    const decision: DecisionRecord = {
+      id: `untracked-decision:${runId}:${mivaRow.productCode}`,
+      reconciliationRowId: row.id,
+      runId,
+      status: "PENDING",
+      warningsAtDecision: [],
+      decidedAt: null,
+      batchId: null,
+      locked: false,
+    };
+    if (!rowMatchesFilter(row, decision.status, filter)) continue;
+    results.push({ row, decision });
+  }
+  return results;
 }
 
 /** Approve-all-clean: only eligible, changed, CLEAN, unlocked rows. Never touches warnings or blocked rows. */

@@ -16,7 +16,16 @@ import { uploadFile, uploadVendorFileAutoDetect } from "./domain/uploadService";
 import { pullMivaSnapshotFromApi } from "./miva/mivaProducts";
 import { isMivaApiConfigured } from "./miva/mivaApiClient";
 import { parseMivaSnapshotCsv } from "./vendor/mivaCsv";
-import { createRun, getRunSummary, approveAllClean, approveAllSingleWarning, setRowDecision, bulkDecision, getBatchableRows } from "./domain/runService";
+import {
+  createRun,
+  getRunSummary,
+  approveAllClean,
+  approveAllSingleWarning,
+  setRowDecision,
+  bulkDecision,
+  getBatchableRows,
+  listUntrackedBrandRows,
+} from "./domain/runService";
 import { generateBatch } from "./domain/batchService";
 import { runLegacyComparison } from "./domain/legacyService";
 import { generateVendorExceptionReport } from "./domain/vendorExceptionReportService";
@@ -426,6 +435,11 @@ router.get(
     if (req.query.changed !== undefined) filter.changed = req.query.changed === "true";
     if (req.query.search) filter.search = String(req.query.search);
     const rows = await getRepository().listRunRows(req.params.id!, filter);
+    if (req.query.includeAllBrand === "true") {
+      const untracked = await listUntrackedBrandRows(req.params.id!, filter);
+      res.json([...rows, ...untracked]);
+      return;
+    }
     res.json(rows);
   }),
 );
