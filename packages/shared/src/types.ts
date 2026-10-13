@@ -59,6 +59,8 @@ export interface MivaRawRow {
   thumbnailUrl?: string;
   /** Miva's native on-hand stock quantity (CURRENT_STOCK_LEVEL), as text. Informational only -- not used by matching or the rule engine. */
   currentStockLevel?: string;
+  /** Miva's native inventory-tracking flag (product_inventory_active via the API; "1"/"0" in a manual CSV export), as text. Informational only -- not used by matching or the rule engine. */
+  trackInventory?: string;
 }
 
 export interface NormalizedIdentifier {

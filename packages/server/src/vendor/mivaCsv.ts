@@ -21,6 +21,11 @@ export const MIVA_HEADER_MAP: Record<string, keyof MivaLogicalRow> = {
   PRODUCT_THUMBNAIL: "thumbnailUrl",
   // Miva's native on-hand stock quantity. Informational only -- not used by matching or the rule engine.
   CURRENT_STOCK_LEVEL: "currentStockLevel",
+  // Miva's native inventory-tracking flag. Informational only -- not used by matching or the
+  // rule engine. Like ACTIVE/PARENT_CODE below, always present via the API "Pull latest
+  // catalog" button; this header name is an unconfirmed placeholder for a manually-exported
+  // Miva CSV -- confirm against a real manual export if that upload path is ever used for it.
+  TRACK_INVENTORY: "trackInventory",
   // These two are always present when pulled via the Miva API "Pull latest catalog" button
   // (mivaProducts.ts writes them itself as ACTIVE/PARENT_CODE). The header names below are
   // placeholders for a manually-exported Miva CSV specifically -- confirm against a real
@@ -47,6 +52,7 @@ interface MivaLogicalRow {
   active: string;
   parentCode: string;
   currentStockLevel: string;
+  trackInventory: string;
 }
 
 const REQUIRED_LOGICAL_FIELDS: (keyof MivaLogicalRow)[] = [
@@ -142,6 +148,7 @@ export function parseMivaSnapshotCsv(fileContent: string): ParsedMivaCsv {
     active: get(record, "active"),
     parentCode: get(record, "parentCode"),
     currentStockLevel: get(record, "currentStockLevel"),
+    trackInventory: get(record, "trackInventory"),
   }));
 
   return { rows };

@@ -10,15 +10,16 @@ interface MivaApiProduct {
   name: string;
   thumbnail?: string;
   image?: string;
-  // UNCONFIRMED key name -- Miva's JSON API returns a native active/inactive flag on every
-  // product record; confirm the exact key (likely "active") against a real
-  // ProductList_Load_Query response before trusting this for a real pull.
+  // Confirmed against Miva's JSON API docs: a top-level Boolean field, always present (not an
+  // on-demand column).
   active?: boolean | string;
-  // UNCONFIRMED key name -- Miva's JSON API returns the on-hand stock quantity as a native
-  // field on every product record (CURRENT_STOCK_LEVEL in a manual CSV export); confirm the
-  // exact key (likely "product_inventory" or "inventory") against a real ProductList_Load_Query
-  // response before trusting this for a real pull.
+  // Confirmed against Miva's JSON API docs: a Number field (on-hand inventory count,
+  // CURRENT_STOCK_LEVEL in a manual CSV export) plus a sibling Boolean field,
+  // product_inventory_active (whether inventory tracking is turned on for this product). Both
+  // are returned only when "product_inventory" is requested as an ondemandcolumn (see the
+  // Filter below) -- otherwise silently omitted.
   product_inventory?: number | string;
+  product_inventory_active?: boolean | string;
   CustomField_Values?: Record<string, Record<string, unknown>>;
 }
 
@@ -86,6 +87,8 @@ function toPhysicalRow(product: MivaApiProduct, mountPath: string): PhysicalMiva
     ACTIVE: product.active === undefined ? "" : String(product.active),
     PARENT_CODE: get("parentCode"),
     CURRENT_STOCK_LEVEL: product.product_inventory === undefined ? "" : String(product.product_inventory),
+    TRACK_INVENTORY:
+      product.product_inventory_active === undefined ? "" : String(product.product_inventory_active),
   };
 }
 
@@ -107,7 +110,11 @@ export async function fetchAllMivaProductsAsPhysicalRows(): Promise<PhysicalMiva
       Filter: [
         {
           name: "ondemandcolumns",
-          value: ["CustomField_Values:*"],
+          // "product_inventory" is also an on-demand column (confirmed against Miva's JSON API
+          // docs) -- without it, Miva silently omits product_inventory/product_inventory_active
+          // from every record rather than erroring, which is why requesting it unconditionally
+          // previously returned blank stock levels for every row.
+          value: ["CustomField_Values:*", "product_inventory"],
         },
       ],
     })) as unknown as ProductListLoadQueryResponse;

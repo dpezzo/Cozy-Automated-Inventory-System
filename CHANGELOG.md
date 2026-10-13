@@ -2,6 +2,14 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-13 — Fix: Catalog stock-level/tracking columns blank on API pull; new Track inventory column
+
+### Fixed
+- "Pull latest catalog" populated the Stock level column with the Miva API, but every row came back blank even on products confirmed to have stock in Miva. Root cause: `product_inventory` is an on-demand column in Miva's JSON API (confirmed against the official docs), so it must be explicitly requested in `ProductList_Load_Query`'s `Filter` the same way `CustomField_Values:*` already is -- without it, Miva silently omits the field from every record rather than erroring. `mivaProducts.ts` now requests `["CustomField_Values:*", "product_inventory"]`.
+
+### Added
+- New "Track inventory" Catalog column: Miva's `product_inventory_active` flag (whether inventory tracking is turned on for this product), returned by the same `product_inventory` on-demand column fixed above. Informational only, like Stock level -- not used by matching/the rule engine, not pushed back to Miva. The manual-CSV-upload header (`TRACK_INVENTORY`) is an unconfirmed placeholder, same caveat as `ACTIVE`/`PARENT_CODE`.
+
 ## 2026-10-13 — Fix: sidebar LIVE/Dev badge not refreshing on same-page site switch
 
 ### Fixed

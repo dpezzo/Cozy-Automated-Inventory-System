@@ -230,6 +230,7 @@ export interface MivaCatalogRow {
   active?: string;
   parentCode?: string;
   currentStockLevel?: string;
+  trackInventory?: string;
 }
 
 export interface AuthUserView {
