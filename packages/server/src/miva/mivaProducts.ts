@@ -14,6 +14,11 @@ interface MivaApiProduct {
   // product record; confirm the exact key (likely "active") against a real
   // ProductList_Load_Query response before trusting this for a real pull.
   active?: boolean | string;
+  // UNCONFIRMED key name -- Miva's JSON API returns the on-hand stock quantity as a native
+  // field on every product record (CURRENT_STOCK_LEVEL in a manual CSV export); confirm the
+  // exact key (likely "product_inventory" or "inventory") against a real ProductList_Load_Query
+  // response before trusting this for a real pull.
+  product_inventory?: number | string;
   CustomField_Values?: Record<string, Record<string, unknown>>;
 }
 
@@ -80,6 +85,7 @@ function toPhysicalRow(product: MivaApiProduct, mountPath: string): PhysicalMiva
     PRODUCT_THUMBNAIL: thumbnailUrl,
     ACTIVE: product.active === undefined ? "" : String(product.active),
     PARENT_CODE: get("parentCode"),
+    CURRENT_STOCK_LEVEL: product.product_inventory === undefined ? "" : String(product.product_inventory),
   };
 }
 

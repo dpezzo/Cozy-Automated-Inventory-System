@@ -2,6 +2,12 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-13 — Catalog: CURRENT_STOCK_LEVEL column
+
+### Added
+- New "Stock level" column on the Catalog page, sourced from Miva's native `CURRENT_STOCK_LEVEL` field (on-hand stock quantity). Informational only -- not used by matching or the rule engine, and not pushed back to Miva (read-only, like Active/Product type/URL/thumbnail).
+- Wired through the manual-CSV-upload path (`MIVA_HEADER_MAP` in `mivaCsv.ts`) end to end. The "Pull latest catalog" API path (`mivaProducts.ts`) also populates it, but the Miva JSON API field name (`product_inventory`) is an unconfirmed guess pending verification against a real `ProductList_Load_Query` response -- same caveat already flagged on the `active` field.
+
 ## 2026-10-13 — New safety net: MIVA_MARKED_DISCONTINUED
 
 ### Added

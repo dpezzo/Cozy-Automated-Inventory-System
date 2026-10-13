@@ -229,6 +229,7 @@ export interface MivaCatalogRow {
   thumbnailUrl?: string;
   active?: string;
   parentCode?: string;
+  currentStockLevel?: string;
 }
 
 export interface AuthUserView {

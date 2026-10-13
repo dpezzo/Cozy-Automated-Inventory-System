@@ -160,6 +160,13 @@ const COLUMNS: ColumnDef[] = [
   { key: "mpn", label: "MPN", get: (r) => r.mpnRaw ?? "", defaultWidth: 110, title: "Manufacturer Part Number" },
   { key: "brand", label: "Brand", get: (r) => r.brandRaw ?? "", defaultWidth: 130 },
   {
+    key: "currentStockLevel",
+    label: "Stock level",
+    get: (r) => r.currentStockLevel ?? "",
+    defaultWidth: 100,
+    title: "This product's current on-hand stock quantity in Miva.",
+  },
+  {
     key: "simpleInventory",
     label: "Simple inventory",
     get: (r) => r.currentSimpleInventory ?? "",

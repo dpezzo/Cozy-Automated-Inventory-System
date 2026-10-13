@@ -57,6 +57,8 @@ export interface MivaRawRow {
   productUrl?: string;
   /** Small preview image URL. Informational only. */
   thumbnailUrl?: string;
+  /** Miva's native on-hand stock quantity (CURRENT_STOCK_LEVEL), as text. Informational only -- not used by matching or the rule engine. */
+  currentStockLevel?: string;
 }
 
 export interface NormalizedIdentifier {
