@@ -12,6 +12,14 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-12",
+    items: [
+      "Run Review: added a new summary tile showing how many Miva products exist under this vendor's brand, regardless of tracked status.",
+      "Run Review: simplified the filter row -- \"Changed only\" is gone (Review class now defaults to Clean+Warning instead), and the Decision filter is down to Pending/Approved/Rejected. Added tooltips throughout, including on the Decision and Item No/UPC-SKU columns.",
+      "Renamed \"NLA (Miva only)\" to \"Miva only\" to stop it being confused with Miva's own NLA field value -- now explained separately in the Glossary.",
+    ],
+  },
+  {
     date: "2026-10-09",
     items: [
       "Manage Vendors: added the Acme Test Brand test vendor and the TechNiche International (Occunomix) placeholder vendor, available in every environment.",

@@ -2,6 +2,18 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-12 — Run Review: summary stat, filter-row cleanup, source tooltips, NLA rename
+
+### Added
+- New Run Review summary tile, "Miva catalog (this brand)": total Miva rows under the vendor's brand allowlist regardless of tracked flag/active status, computed by re-reading the run's stored Miva snapshot -- a denominator independent of what the run actually matched or missed.
+- Tooltips on every Review class and Decision filter checkbox (previously zero on Decision, and Review class only had one combined tooltip on the "Class" column header). Added the four Decision states (Pending/Approved/Approved (ack)/Rejected) to the in-app Glossary -- a real content gap before, not just a discoverability one.
+- Tooltips on the Item No and UPC/SKU column headers explaining their source varies by row (vendor file for a Matched row, Miva's own GTIN/MPN for a "Miva only" row with no vendor counterpart).
+
+### Changed
+- Removed the standalone "Changed only" checkbox -- verified in `reconcile.ts` that it's mathematically identical to "Review class = CLEAN or WARNING" (every BLOCKED/UNCHANGED row is `changed: false`, every CLEAN/WARNING row is `changed: true`), so folding it into the Review class checkboxes (now defaulting to CLEAN+WARNING checked) loses no capability.
+- Collapsed the Decision filter from 4 checkboxes to 3 (Pending/Approved/Rejected) -- "Approved" now covers both `APPROVED` and `APPROVED_WARNING_ACK` as a filter, since reviewing whether a row needed warning acknowledgement isn't a distinction anyone filters by day to day. The underlying statuses, and `setRowDecision`'s enforcement of them, are unchanged -- this only simplifies the filter.
+- Renamed "NLA (Miva only)" to "Miva only" throughout Run Review (Outcome column, Match filter, summary tile). "NLA" was being used for two different things on the same page -- this match-outcome label, and the literal value of Miva's Dropship Inventory Management field (what `MIVA_CURRENTLY_NLA` checks) -- now it means only the latter. Also matches the wording Legacy Comparison already used for this same concept.
+
 ## 2026-10-09 — DS_INV_MGT tracked-flag safety nets, Legacy Comparison fix
 
 ### Added

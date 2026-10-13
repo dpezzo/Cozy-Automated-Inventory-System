@@ -191,10 +191,11 @@ a { color: var(--blue); }
 .grid.cols-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 .grid.cols-9 { grid-template-columns: repeat(9, minmax(0, 1fr)); }
 .grid.cols-10 { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+.grid.cols-11 { grid-template-columns: repeat(11, minmax(0, 1fr)); }
 @media (max-width: 900px) {
   .grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   .grid.cols-5 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .grid.cols-8, .grid.cols-9, .grid.cols-10 { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .grid.cols-8, .grid.cols-9, .grid.cols-10, .grid.cols-11 { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
 }
 
 .stat {

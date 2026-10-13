@@ -17,14 +17,31 @@ import { importStatusPillClass, runStatusPillClass, IMPORT_STATUS_TOOLTIPS, RUN_
 import { friendlyError } from "../lib/errors";
 
 const REVIEW_CLASS_FILTERS = ["CLEAN", "WARNING", "BLOCKED", "UNCHANGED"];
-const DECISION_FILTERS = ["PENDING", "APPROVED", "APPROVED_WARNING_ACK", "REJECTED"];
+const REVIEW_CLASS_TOOLTIPS: Record<string, string> = {
+  CLEAN: "No issues -- can be approved directly.",
+  WARNING: "Unusual data -- review before approving.",
+  BLOCKED: "Has a data problem and can't be approved (see Warnings/Blockers) -- contact an admin.",
+  UNCHANGED: "Nothing to update -- no action needed.",
+};
+
+/** Filter-only grouping: "Approved" represents both underlying decision
+ * statuses (APPROVED and APPROVED_WARNING_ACK) together -- see loadRows'
+ * expansion of this into both query values. The distinction between a
+ * plain approval and a warning-acknowledged one still shows per row in the
+ * Decision column; it's just not useful as its own top-level filter. */
+const DECISION_FILTERS = ["PENDING", "APPROVED", "REJECTED"];
+const DECISION_TOOLTIPS: Record<string, string> = {
+  PENDING: "No decision made yet.",
+  APPROVED: "Approved -- includes both a plain approval (no warnings) and one approved after acknowledging a warning (shown as \"Approved (ack)\" in the Decision column).",
+  REJECTED: "Marked not to be included in a generated batch.",
+};
 
 /** Mirrors packages/shared/src/reports.ts's VENDOR_EXCEPTION_CATEGORIES keys/labels -- kept in sync by hand since the label text (plain language, not code names) belongs in the UI layer, not the shared row-shaping logic. */
 const VENDOR_EXCEPTION_CATEGORY_LABELS: Record<string, string> = {
   DUPLICATE_IDENTIFIER: "Duplicate UPC/SKU in vendor file",
   MISSING_OR_INVALID_IDENTIFIER: "Missing or invalid identifier",
   MISSING_OR_INVALID_QUANTITY: "Missing or invalid quantity",
-  MISSING_FROM_VENDOR_FILE: "Missing from vendor file (NLA candidates)",
+  MISSING_FROM_VENDOR_FILE: "Missing from vendor file (possible discontinuation)",
   DATA_WARNINGS: "Data warnings (mismatched totals, date conflicts)",
   UNMATCHED_IN_MIVA: "Unmatched -- UPC not found in Miva",
 };
@@ -55,22 +72,27 @@ interface ColumnDef {
 const CLASS_TOOLTIP =
   "CLEAN: no issues, can be approved directly. WARNING: unusual data -- review before approving. BLOCKED: has a data problem and can't be approved (see Warnings/Blockers) -- contact an admin. UNCHANGED: nothing to update, no action needed.";
 
-/** Friendly label for a row's matchOutcome, matching the wording already used by the filter checkboxes/stat tiles above the table -- the raw "MISSING - REVIEW REQUIRED" enum string never appears to the user. */
+/** Friendly label for a row's matchOutcome, matching the wording already used by the filter checkboxes/stat tiles above the table -- the raw "MISSING - REVIEW REQUIRED" enum string never appears to the user. "Miva only" (not "NLA") deliberately: "NLA" is reserved for the literal value of Miva's DROPSHIP_INVENTORY_MANAGEMENT field (see MIVA_CURRENTLY_NLA) -- using it here too was a real, confusing double meaning. Matches the identical wording Legacy Comparison already uses for this same concept (AuditsReviewsPage.tsx's rowOrigin()). */
 const MATCH_OUTCOME_LABELS: Record<string, string> = {
   MATCHED: "Matched",
-  "MISSING - REVIEW REQUIRED": "NLA (Miva only)",
+  "MISSING - REVIEW REQUIRED": "Miva only",
 };
+
+const ITEM_NO_TOOLTIP =
+  "For a Matched row, the vendor file's own Item No. For a Miva only row (no vendor file counterpart), this is blank -- Miva doesn't have an equivalent field.";
+const UPC_SKU_TOOLTIP =
+  "For a Matched row, the vendor file's own identifier. For a Miva only row (no vendor file counterpart), this is Miva's own identifier instead -- GTIN for a barcode-matched vendor, MPN for a SKU-matched one, so it won't always literally be a UPC despite the column name. See the Outcome column to tell which case you're looking at.";
 
 const BASE_COLUMNS: ColumnDef[] = [
   { key: "productCode", label: "Product code", get: (v) => v.row.productCode ?? "" },
-  { key: "itemNo", label: "Item No", get: (v) => v.row.itemNo ?? "" },
-  { key: "upc", label: "UPC / SKU", get: (v) => v.row.rawUpc ?? "" },
+  { key: "itemNo", label: "Item No", get: (v) => v.row.itemNo ?? "", title: ITEM_NO_TOOLTIP },
+  { key: "upc", label: "UPC / SKU", get: (v) => v.row.rawUpc ?? "", title: UPC_SKU_TOOLTIP },
   {
     key: "outcome",
     label: "Outcome",
     get: (v) => MATCH_OUTCOME_LABELS[v.row.matchOutcome] ?? v.row.matchOutcome,
     title:
-      "Matched: present in both the vendor file and Miva. NLA (Miva only): a Miva product not referenced by any vendor file row this run (NLA candidate).",
+      "Matched: present in both the vendor file and Miva. Miva only: a Miva product not referenced by any vendor file row this run (possible discontinuation candidate).",
   },
   { key: "class", label: "Class", get: (v) => v.row.reviewClass, title: CLASS_TOOLTIP },
   { key: "warnings", label: "Warnings/Blockers", get: (v) => [...v.row.warningCodes, ...v.row.blockerCodes].join(", ") },
@@ -117,10 +139,14 @@ export default function RunReviewPage() {
   const [runBatches, setRunBatches] = useState<BatchRecord[]>([]);
   const [vendors, setVendors] = useState<VendorSummary[]>([]);
   const [rows, setRows] = useState<ReviewRowView[]>([]);
-  const [reviewClassFilter, setReviewClassFilter] = useState<string[]>([]);
+  // Defaults to CLEAN+WARNING -- every CLEAN/WARNING row is `changed: true`
+  // and every BLOCKED/UNCHANGED row is `changed: false` (verified directly
+  // in reconcile.ts), so this single set of checkboxes replaces what used
+  // to be two overlapping controls (review class + a separate "changed
+  // only" toggle) without losing any filtering capability.
+  const [reviewClassFilter, setReviewClassFilter] = useState<string[]>(["CLEAN", "WARNING"]);
   const [decisionFilter, setDecisionFilter] = useState<string[]>([]);
   const [matchOutcomeFilter, setMatchOutcomeFilter] = useState<string[]>([]);
-  const [changedOnly, setChangedOnly] = useState(true);
   const [highlightDiff, setHighlightDiff] = useState(false);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -199,13 +225,19 @@ export default function RunReviewPage() {
     if (!runId) return;
     const params: Record<string, string> = {};
     if (reviewClassFilter.length) params.reviewClass = reviewClassFilter.join(",");
-    if (decisionFilter.length) params.decisionStatus = decisionFilter.join(",");
+    if (decisionFilter.length) {
+      // The "Approved" filter checkbox represents both underlying decision
+      // statuses (APPROVED and APPROVED_WARNING_ACK) -- the distinction
+      // still lives in the Decision column/tooltip per row, it's just not
+      // its own top-level filter.
+      const expanded = decisionFilter.flatMap((d) => (d === "APPROVED" ? ["APPROVED", "APPROVED_WARNING_ACK"] : [d]));
+      params.decisionStatus = expanded.join(",");
+    }
     if (matchOutcomeFilter.length) params.matchOutcome = matchOutcomeFilter.join(",");
-    if (changedOnly) params.changed = "true";
     if (search) params.search = search;
     const data = await api.getRunRows(runId, params);
     setRows(data);
-  }, [runId, reviewClassFilter, decisionFilter, matchOutcomeFilter, changedOnly, search]);
+  }, [runId, reviewClassFilter, decisionFilter, matchOutcomeFilter, search]);
 
   useEffect(() => {
     loadRun();
@@ -545,7 +577,14 @@ export default function RunReviewPage() {
       {summary && (
         <div className="card">
           <h3>Summary</h3>
-          <div className="grid cols-10">
+          <div className="grid cols-11">
+            <div
+              className="stat"
+              title="Every Miva catalog row under this vendor's brand(s), regardless of tracked flag or active status -- independent of what this run actually matched or missed. Blank when the Miva snapshot file is no longer available (predates a server restart)."
+            >
+              <div className="value">{summary.mivaBrandTotal ?? "—"}</div>
+              <div className="label">Miva catalog (this brand)</div>
+            </div>
             <div className="stat">
               <div className="value">{summary.total}</div>
               <div className="label">Total rows</div>
@@ -556,10 +595,10 @@ export default function RunReviewPage() {
             </div>
             <div
               className="stat"
-              title="Miva products not referenced by any vendor file row this run (matchOutcome MISSING - REVIEW REQUIRED) -- NLA candidates, not in the vendor file at all."
+              title="Miva products not referenced by any vendor file row this run (matchOutcome MISSING - REVIEW REQUIRED) -- not in the vendor file at all, so possibly discontinued."
             >
               <div className="value">{summary.byMatchOutcome?.["MISSING - REVIEW REQUIRED"] ?? 0}</div>
-              <div className="label">NLA (Miva only)</div>
+              <div className="label">Miva only</div>
             </div>
             <div className="stat">
               <div className="value">{summary.changed}</div>
@@ -684,7 +723,7 @@ export default function RunReviewPage() {
         <div className="filters">
           <span style={{ fontWeight: 700 }}>Review class:</span>
           {REVIEW_CLASS_FILTERS.map((c) => (
-            <label key={c}>
+            <label key={c} title={REVIEW_CLASS_TOOLTIPS[c]}>
               <input
                 type="checkbox"
                 checked={reviewClassFilter.includes(c)}
@@ -695,7 +734,7 @@ export default function RunReviewPage() {
           ))}
           <span style={{ marginLeft: 16, fontWeight: 700 }}>Decision:</span>
           {DECISION_FILTERS.map((c) => (
-            <label key={c}>
+            <label key={c} title={DECISION_TOOLTIPS[c]}>
               <input
                 type="checkbox"
                 checked={decisionFilter.includes(c)}
@@ -704,9 +743,6 @@ export default function RunReviewPage() {
               {c}
             </label>
           ))}
-          <label style={{ marginLeft: 16 }}>
-            <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} /> Changed only
-          </label>
           <span style={{ marginLeft: 16, fontWeight: 700 }}>Match:</span>
           <label title="Rows whose UPC/SKU resolved to exactly one Miva product (matchOutcome MATCHED) -- present in both the vendor file and Miva.">
             <input
@@ -716,13 +752,13 @@ export default function RunReviewPage() {
             />{" "}
             Matched
           </label>
-          <label title="Miva products not referenced by any vendor file row this run (matchOutcome MISSING - REVIEW REQUIRED) -- NLA candidates, not in the vendor file at all.">
+          <label title="Miva products not referenced by any vendor file row this run (matchOutcome MISSING - REVIEW REQUIRED) -- not in the vendor file at all, so possibly discontinued.">
             <input
               type="checkbox"
               checked={matchOutcomeFilter.includes("MISSING - REVIEW REQUIRED")}
               onChange={() => toggleFilter(matchOutcomeFilter, setMatchOutcomeFilter, "MISSING - REVIEW REQUIRED")}
             />{" "}
-            NLA (Miva only)
+            Miva only
           </label>
           <label style={{ marginLeft: 16 }} title="Adds a 'Changed fields' column listing which of the six managed fields actually differ -- Current/Proposed status only shows one of them.">
             <input type="checkbox" checked={highlightDiff} onChange={(e) => setHighlightDiff(e.target.checked)} /> Highlight differences
@@ -868,9 +904,9 @@ export default function RunReviewPage() {
                     )}
                   </td>
                   <td>{row.productCode ?? "-"}</td>
-                  <td>{row.itemNo ?? "-"}</td>
-                  <td>{row.rawUpc ?? "-"}</td>
-                  <td title="Matched: present in both the vendor file and Miva. NLA (Miva only): a Miva product not referenced by any vendor file row this run.">
+                  <td title={ITEM_NO_TOOLTIP}>{row.itemNo ?? "-"}</td>
+                  <td title={UPC_SKU_TOOLTIP}>{row.rawUpc ?? "-"}</td>
+                  <td title="Matched: present in both the vendor file and Miva. Miva only: a Miva product not referenced by any vendor file row this run.">
                     {MATCH_OUTCOME_LABELS[row.matchOutcome] ?? row.matchOutcome}
                   </td>
                   <td>

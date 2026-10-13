@@ -4,7 +4,8 @@ import { readStoredFile, readStoredFileText, storedFileExists } from "../storage
 import { ValidationError, ForbiddenError, NotFoundError } from "../errors";
 import { getRepository, type RunRecord, type ReviewRowView } from "../db";
 import { runReconciliation } from "./runPipeline";
-import type { ParsedCalendarDate, WarningCode } from "@cozywinters/shared";
+import { vendorSlugFromRuleId } from "./batchService";
+import { isBrandAllowed, type ParsedCalendarDate, type WarningCode } from "@cozywinters/shared";
 
 export interface CreateRunInput {
   vendorFileId: string;
@@ -128,10 +129,13 @@ export interface RunSummary {
   byMatchOutcome: Record<string, number>;
   changed: number;
   unchanged: number;
+  /** Every Miva catalog row under this vendor's brand(s), regardless of tracked flag/active status -- a denominator independent of reconciliation_rows, which only ever reflects what actually got matched/missing this run. Null when the Miva snapshot file is no longer available on disk (predates a server restart). */
+  mivaBrandTotal: number | null;
 }
 
 export async function getRunSummary(runId: string): Promise<RunSummary> {
-  const rows = await getRepository().listRunRows(runId);
+  const repo = getRepository();
+  const rows = await repo.listRunRows(runId);
   const byReviewClass: Record<string, number> = {};
   const byDecisionStatus: Record<string, number> = {};
   const byMatchOutcome: Record<string, number> = {};
@@ -142,7 +146,32 @@ export async function getRunSummary(runId: string): Promise<RunSummary> {
     byMatchOutcome[row.matchOutcome] = (byMatchOutcome[row.matchOutcome] ?? 0) + 1;
     if (row.changed) changed++;
   }
-  return { total: rows.length, byReviewClass, byDecisionStatus, byMatchOutcome, changed, unchanged: rows.length - changed };
+
+  const mivaBrandTotal = await computeMivaBrandTotal(runId);
+
+  return {
+    total: rows.length,
+    byReviewClass,
+    byDecisionStatus,
+    byMatchOutcome,
+    changed,
+    unchanged: rows.length - changed,
+    mivaBrandTotal,
+  };
+}
+
+/** Re-reads the run's stored Miva snapshot (not reconciliation_rows, which only ever holds what this run actually matched/missed) and counts every row under the vendor's brand allowlist, independent of DS_INV_MGT. Returns null rather than throwing when the snapshot file or vendor config is no longer available, so a stat tile can't take down the whole summary. */
+async function computeMivaBrandTotal(runId: string): Promise<number | null> {
+  const repo = getRepository();
+  const run = await repo.findRunById(runId);
+  if (!run) return null;
+  const mivaFile = await repo.findFileById(run.mivaFileId);
+  if (!mivaFile || !storedFileExists(mivaFile.storagePath)) return null;
+  const vendorConfig = await repo.findVendorConfigByKey(vendorSlugFromRuleId(run.ruleId));
+  if (!vendorConfig) return null;
+
+  const { rows: mivaRows } = parseMivaSnapshotCsv(readStoredFileText(mivaFile.storagePath));
+  return mivaRows.filter((r) => isBrandAllowed(r.brandRaw, vendorConfig.brandAllowlist)).length;
 }
 
 /** Approve-all-clean: only eligible, changed, CLEAN, unlocked rows. Never touches warnings or blocked rows. */

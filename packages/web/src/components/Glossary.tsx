@@ -17,7 +17,21 @@ const TERMS: { term: string; definition: string }[] = [
     definition:
       "CLEAN: no issues, can be approved directly. WARNING: unusual data -- review before approving. BLOCKED: has a data problem and can't be approved. UNCHANGED: nothing to update.",
   },
-  { term: "NLA", definition: "\"No longer available\" -- a product Miva has that the vendor file doesn't mention, so it may no longer be sold." },
+  {
+    term: "Decision",
+    definition:
+      "PENDING: no decision made yet. APPROVED: approved, no warnings to review. APPROVED (ack): approved after reviewing and acknowledging a warning on the row. REJECTED: won't be included in a batch.",
+  },
+  {
+    term: "NLA",
+    definition:
+      "\"No longer available\" -- the literal value of a product's Dropship Inventory Management field in Miva, meaning the business has marked it discontinued.",
+  },
+  {
+    term: "Miva only",
+    definition:
+      "A product Miva has under one of your vendors' brands that the vendor's current file doesn't mention at all -- a candidate for being discontinued, not itself a statement that it is.",
+  },
   { term: "Frozen / locked", definition: "A decision can't be changed anymore because it's already part of a generated batch." },
   { term: "Legacy comparison", definition: "A one-time check comparing this app's results against the old spreadsheet-based process, to confirm they agree." },
   { term: "Verification", definition: "Uploading a fresh Miva export after an import to confirm the approved changes actually landed." },

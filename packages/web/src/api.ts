@@ -334,6 +334,7 @@ export interface RunSummary {
   byMatchOutcome: Record<string, number>;
   changed: number;
   unchanged: number;
+  mivaBrandTotal: number | null;
 }
 
 export interface ManagedValuesView {
