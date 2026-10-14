@@ -2,6 +2,11 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-14 — Eastern-pinned timestamps everywhere
+
+### Changed
+- Extended the Eastern-pinned "ET"-suffixed timestamp formatting (added earlier today for Catalog/Run History/Run Review) to every remaining timestamp in the app: Home page's vendor-file and Miva-snapshot selectors, Activity Log, Audits & Reviews, and Batch Detail's "Created" line. Every timestamp in the app now consistently reads in Eastern time for all viewers.
+
 ## 2026-10-14 — Eastern-pinned timestamps, MIVA_PARENT_INACTIVE warning, Run Review toolbar cleanup
 
 ### Added

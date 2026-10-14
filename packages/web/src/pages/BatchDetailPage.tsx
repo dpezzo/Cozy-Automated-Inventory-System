@@ -23,7 +23,7 @@ import {
 import { UploadBox } from "../components/UploadBox";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { importStatusPillClass, IMPORT_STATUS_TOOLTIPS } from "../lib/format";
+import { importStatusPillClass, IMPORT_STATUS_TOOLTIPS, formatEastern } from "../lib/format";
 
 const IMPORT_STATUSES = ["GENERATED", "DOWNLOADED", "IMPORT_REPORTED", "IMPORT_FAILED"];
 const IMPORT_STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -158,7 +158,7 @@ export default function BatchDetailPage() {
             </span>
           </div>
           <div>
-            <strong>Created:</strong> {new Date(batch.createdAt).toLocaleString()}
+            <strong>Created:</strong> {formatEastern(batch.createdAt)}
           </div>
         </div>
       </div>

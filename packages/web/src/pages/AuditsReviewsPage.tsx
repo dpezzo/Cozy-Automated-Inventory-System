@@ -8,6 +8,7 @@ import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { loadFromStorage, saveToStorage } from "../lib/storage";
 import { friendlyError } from "../lib/errors";
+import { formatEastern } from "../lib/format";
 
 const DIFF_HIDDEN_COLUMNS_KEY = "cw-legacydiff-hidden-columns-v1";
 
@@ -351,7 +352,7 @@ function LegacyComparisonSection() {
                   <td>
                     <input type="radio" checked={selectedRun === r.id} onChange={() => selectRun(r.id)} />
                   </td>
-                  <td>{new Date(r.createdAt).toLocaleString()}</td>
+                  <td>{formatEastern(r.createdAt)}</td>
                   <td title={r.id}>{r.id.slice(0, 8)}</td>
                   <td>{r.status}</td>
                   <td title={r.ruleConfigHash}>

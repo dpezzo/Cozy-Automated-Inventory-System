@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Activity, Inbox } from "lucide-react";
 import { api, type AuditLogRecord } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
+import { formatEastern } from "../lib/format";
 
 /** Turns a raw SNAKE_CASE constant (e.g. an activity-log action or entity type) into readable text -- "RUN_CREATED" -> "Run created". Not a curated per-value map since new action types get added on the server over time; this keeps every value at least readable without needing to keep a list in sync. */
 function humanize(value: string): string {
@@ -98,7 +99,7 @@ export default function ActivityLogPage() {
             <tbody>
               {filtered.map((e) => (
                 <tr key={e.id}>
-                  <td>{new Date(e.createdAt).toLocaleString()}</td>
+                  <td>{formatEastern(e.createdAt)}</td>
                   <td>{e.actorEmail ?? "—"}</td>
                   <td title={e.action}>{humanize(e.action)}</td>
                   <td title={e.entityId ?? e.entityType}>{humanize(e.entityType)}</td>

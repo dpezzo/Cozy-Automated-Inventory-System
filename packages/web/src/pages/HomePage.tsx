@@ -13,6 +13,7 @@ import {
 } from "../api";
 import { useUploadControl, UploadControlView, WholeCardDropzone } from "../components/UploadBox";
 import { friendlyError } from "../lib/errors";
+import { formatEastern } from "../lib/format";
 import { StepBadge } from "../components/StepBadge";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -379,7 +380,7 @@ export default function HomePage() {
               {vendorFiles.map((f) => (
                 <option key={f.id} value={f.id}>
                   {vendorLabelForFile(f, vendors)} — {f.originalFilename} (
-                  {f.rowCount} rows, {new Date(f.uploadedAt).toLocaleString()})
+                  {f.rowCount} rows, {formatEastern(f.uploadedAt)})
                 </option>
               ))}
             </select>
@@ -391,7 +392,7 @@ export default function HomePage() {
               <option value="">Select a file...</option>
               {mivaFiles.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.originalFilename} ({f.rowCount} rows, {new Date(f.uploadedAt).toLocaleString()})
+                  {f.originalFilename} ({f.rowCount} rows, {formatEastern(f.uploadedAt)})
                 </option>
               ))}
             </select>
