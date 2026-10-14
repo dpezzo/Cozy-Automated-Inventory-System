@@ -2,6 +2,11 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-13 — Delutti favicon
+
+### Added
+- App favicon (browser tab icon), from the Delutti brand favicon set (`favicon.ico`, `favicon.svg`, `favicon-16x16.png`, `favicon-32x32.png`) -- previously none was set. Files live in `packages/web/public/` (Vite's static-assets convention) and are linked from `index.html`.
+
 ## 2026-10-13 — Fix: Catalog stock-level/tracking columns blank on API pull; new Track inventory column
 
 ### Fixed
