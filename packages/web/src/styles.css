@@ -302,6 +302,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .pill.rejected { background: var(--red-soft); color: var(--red); }
 .pill.pending { background: var(--panel-2); color: var(--muted); }
 
+/* Wraps multiple warning/blocker code pills in a single Warnings/Blockers table cell -- a bare comma-joined string was unreadable once a row carried 2+ codes. */
+.warning-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+
 input[type="text"], input[type="password"], input[type="email"], select {
   font: inherit;
   padding: 6px 8px;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { CheckCheck, Check, X, FileOutput, Download, Search, Undo2, ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
+import { CheckCheck, Check, FileOutput, Download, Search, Undo2, ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   api,
   type RunRecord,
@@ -13,7 +13,7 @@ import {
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { InfoBanner } from "../components/InfoBanner";
-import { importStatusPillClass, runStatusPillClass, IMPORT_STATUS_TOOLTIPS, RUN_STATUS_TOOLTIPS } from "../lib/format";
+import { importStatusPillClass, runStatusPillClass, IMPORT_STATUS_TOOLTIPS, RUN_STATUS_TOOLTIPS, formatEastern } from "../lib/format";
 import { friendlyError } from "../lib/errors";
 
 const REVIEW_CLASS_FILTERS = ["CLEAN", "WARNING", "BLOCKED", "UNCHANGED"];
@@ -452,30 +452,13 @@ export default function RunReviewPage() {
     });
   }
 
-  async function approveAllNotTracked() {
-    if (
-      !window.confirm(
-        "Approve every row whose only warning is the blank tracked-flag (DROPSHIP_INVENTORY_MANAGEMENT)? This can be undone per-row until you generate a batch.",
-      )
-    )
-      return;
-    await withBusy(async () => {
-      const { approved } = await api.approveAllWarning(runId!, "MIVA_NOT_DROPSHIP_TRACKED");
-      if (approved === 0)
-        setInfo("No eligible rows to approve -- none had only the blank tracked-flag warning, or all were already decided or locked.");
-      await Promise.all([loadRun(), loadRows()]);
-    });
-  }
-
-  async function bulkAction(decision: "APPROVED" | "REJECTED") {
-    const verb = decision === "APPROVED" ? "Approve" : "Reject";
-    if (!window.confirm(`${verb} the ${selected.size} selected row${selected.size === 1 ? "" : "s"}? This can be undone per-row until you generate a batch.`)) return;
+  async function bulkAction(decision: "APPROVED") {
+    if (!window.confirm(`Approve the ${selected.size} selected row${selected.size === 1 ? "" : "s"}? This can be undone per-row until you generate a batch.`)) return;
     await withBusy(async () => {
       const { applied, skipped } = await api.bulkDecision(runId!, [...selected], decision);
       if (skipped.length > 0) {
-        const pastTense = decision === "APPROVED" ? "Approved" : "Rejected";
         setInfo(
-          `${pastTense} ${applied} of ${applied + skipped.length} selected row${applied + skipped.length === 1 ? "" : "s"} (${skipped.length} ${skipped.length === 1 ? "was" : "were"} ineligible -- not clean, locked, or already decided).`,
+          `Approved ${applied} of ${applied + skipped.length} selected row${applied + skipped.length === 1 ? "" : "s"} (${skipped.length} ${skipped.length === 1 ? "was" : "were"} ineligible -- not clean, locked, or already decided).`,
         );
       }
       setSelected(new Set());
@@ -577,7 +560,7 @@ export default function RunReviewPage() {
             <tbody>
               {runBatches.map((b) => (
                 <tr key={b.id}>
-                  <td>{new Date(b.createdAt).toLocaleString()}</td>
+                  <td>{formatEastern(b.createdAt)}</td>
                   <td title={b.id}>
                     <Link to={`/batches/${b.id}`}>{b.id.slice(0, 8)}</Link>
                   </td>
@@ -587,7 +570,7 @@ export default function RunReviewPage() {
                     </span>
                     {b.rolledBackAt && (
                       <span
-                        title={`Rolled back ${new Date(b.rolledBackAt).toLocaleString()}`}
+                        title={`Rolled back ${formatEastern(b.rolledBackAt)}`}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -674,16 +657,12 @@ export default function RunReviewPage() {
           <button className="primary" onClick={approveAllClean} disabled={busy}>
             <CheckCheck size={16} /> Approve all clean
           </button>
-          <button className="primary" onClick={approveAllNotTracked} disabled={busy} title="Approves only rows whose sole warning is the blank DROPSHIP_INVENTORY_MANAGEMENT flag -- rows with any other warning mixed in still need individual review.">
-            <CheckCheck size={16} /> Approve all (blank tracked-flag only)
-          </button>
-          <button className="success" onClick={() => bulkAction("APPROVED")} disabled={busy || selected.size === 0}>
-            <Check size={16} /> Approve selected clean rows
-          </button>
-          <button className="danger" onClick={() => bulkAction("REJECTED")} disabled={busy || selected.size === 0}>
-            <X size={16} /> Reject selected
-          </button>
-          <button className="primary" onClick={generateBatch} disabled={busy}>
+          {selected.size > 0 && (
+            <button className="success" onClick={() => bulkAction("APPROVED")} disabled={busy}>
+              <Check size={16} /> Approve selected clean rows
+            </button>
+          )}
+          <button className="charcoal" onClick={generateBatch} disabled={busy}>
             <FileOutput size={16} /> Generate batch
           </button>
           <div className="vendor-report-menu-wrap" style={{ position: "relative" }}>
@@ -940,7 +919,24 @@ export default function RunReviewPage() {
                       {row.reviewClass}
                     </span>
                   </td>
-                  <td>{[...row.warningCodes, ...row.blockerCodes].join(", ") || "-"}</td>
+                  <td>
+                    {row.warningCodes.length === 0 && row.blockerCodes.length === 0 ? (
+                      "-"
+                    ) : (
+                      <div className="warning-pills">
+                        {row.warningCodes.map((code) => (
+                          <span key={code} className="pill warning">
+                            {code}
+                          </span>
+                        ))}
+                        {row.blockerCodes.map((code) => (
+                          <span key={code} className="pill blocked">
+                            {code}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td>{row.totalQtyRaw ?? "-"}</td>
                   <td>{row.current.simpleInventory ?? "-"}</td>
                   <td style={changedFieldsForRow.includes("simpleInventory") ? highlightStyle : undefined}>
@@ -960,24 +956,14 @@ export default function RunReviewPage() {
                   </td>
                   <td>
                     {!decision.locked && row.reviewClass === "CLEAN" && (
-                      <>
-                        <button className="success-soft" onClick={() => singleDecision(row.id, "APPROVED")} disabled={busy}>
-                          Approve
-                        </button>{" "}
-                        <button className="danger-soft" onClick={() => singleDecision(row.id, "REJECTED")} disabled={busy}>
-                          Reject
-                        </button>
-                      </>
+                      <button className="success-soft" onClick={() => singleDecision(row.id, "APPROVED")} disabled={busy}>
+                        Approve
+                      </button>
                     )}
                     {!decision.locked && row.reviewClass === "WARNING" && (
-                      <>
-                        <button className="success-soft" onClick={() => singleDecision(row.id, "APPROVED_WARNING_ACK")} disabled={busy}>
-                          Acknowledge &amp; approve
-                        </button>{" "}
-                        <button className="danger-soft" onClick={() => singleDecision(row.id, "REJECTED")} disabled={busy}>
-                          Reject
-                        </button>
-                      </>
+                      <button className="success-soft" onClick={() => singleDecision(row.id, "APPROVED_WARNING_ACK")} disabled={busy}>
+                        Acknowledge &amp; approve
+                      </button>
                     )}
                     {!decision.locked && decision.status !== "PENDING" && (
                       <>

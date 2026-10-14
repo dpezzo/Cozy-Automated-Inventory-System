@@ -94,6 +94,53 @@ describe("reconcile: Miva products missing from Olliix", () => {
   });
 });
 
+describe("reconcile: parent-inactive warning", () => {
+  it("flags a matched variant with MIVA_PARENT_INACTIVE when its parent product is inactive", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [
+      mivaRow({ parentCode: "PARENT1" }),
+      mivaRow({
+        sourceRowNumber: 2,
+        productCode: "PARENT1",
+        gtinRaw: "",
+        mpnRaw: "",
+        currentDsInvMgt: "",
+        active: "false",
+      }),
+    ];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.matchOutcome).toBe("MATCHED");
+    expect(rows[0]!.warningCodes).toContain("MIVA_PARENT_INACTIVE");
+  });
+
+  it("does not flag a matched variant whose parent is active", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [
+      mivaRow({ parentCode: "PARENT1" }),
+      mivaRow({
+        sourceRowNumber: 2,
+        productCode: "PARENT1",
+        gtinRaw: "",
+        mpnRaw: "",
+        currentDsInvMgt: "",
+        active: "true",
+      }),
+    ];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.warningCodes).not.toContain("MIVA_PARENT_INACTIVE");
+  });
+
+  it("does not flag a matched product with no parentCode (not a variant)", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({})];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.warningCodes).not.toContain("MIVA_PARENT_INACTIVE");
+  });
+});
+
 describe("reconcile: DS_INV_MGT tracked-flag warnings", () => {
   it("forces a genuine match against a blank-DS_INV_MGT Miva row to WARNING with MIVA_NOT_DROPSHIP_TRACKED", () => {
     const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];

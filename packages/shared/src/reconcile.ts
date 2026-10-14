@@ -37,6 +37,25 @@ function joinCodes(rows: MivaRawRow[]): string {
     .join("|");
 }
 
+function isMivaRowInactive(row: MivaRawRow): boolean {
+  const v = (row.active ?? "").trim().toLowerCase();
+  return v === "false" || v === "0";
+}
+
+function buildProductCodeIndex(mivaRows: MivaRawRow[]): Map<string, MivaRawRow> {
+  const index = new Map<string, MivaRawRow>();
+  for (const row of mivaRows) index.set(row.productCode, row);
+  return index;
+}
+
+/** Variant/parent families: a matched row whose PARENT product (by parentCode) is inactive, even though this specific variant may still show stock -- see MIVA_PARENT_INACTIVE's doc comment in types.ts. */
+function hasInactiveParent(row: MivaRawRow, productCodeIndex: Map<string, MivaRawRow>): boolean {
+  const parentCode = (row.parentCode ?? "").trim();
+  if (!parentCode) return false;
+  const parent = productCodeIndex.get(parentCode);
+  return parent !== undefined && isMivaRowInactive(parent);
+}
+
 type MivaLookup =
   | { status: "none" }
   | { status: "unique"; match: MivaRawRow }
@@ -125,6 +144,7 @@ export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], op
   const duplicateMivaCode: BlockerCode = isSkuVendor ? "DUPLICATE_MIVA_MPN" : "DUPLICATE_MIVA_GTIN";
 
   const index = buildMivaIndex(mivaRows, config.brandAllowlist, getMivaIdentifierRaw, mivaNormalize);
+  const productCodeIndex = buildProductCodeIndex(mivaRows);
   const usedMivaKeys = new Set<string>();
 
   // Pass 1: normalize vendor identifiers and find vendor-side duplicates.
@@ -304,6 +324,8 @@ export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], op
     // transition) -- without this, such a row resolves CLEAN with no
     // indication Miva already shows it discontinued.
     if ((current.simpleInventory ?? "").trim() === "NO LONGER AVAILABLE") warnings.push("MIVA_MARKED_DISCONTINUED");
+
+    if (hasInactiveParent(lookup.match, productCodeIndex)) warnings.push("MIVA_PARENT_INACTIVE");
 
     let dateResult: { date: string | null; sources: string[]; conflict: boolean } = { date: null, sources: [], conflict: false };
 
@@ -498,6 +520,7 @@ function buildDualMatchedRow(
   product: MivaRawRow,
   config: VendorRuleConfig,
   runDate: ParsedCalendarDate,
+  productCodeIndex: Map<string, MivaRawRow>,
 ): ReconciliationRow {
   const totalQtyRaw = formatTotalQtyDisplay(row.totalQtyRaw);
   const productCode = product.productCode;
@@ -520,6 +543,8 @@ function buildDualMatchedRow(
   // path above -- independent of the tracked-flag checks, since a product
   // can be tracked ("1") and still have this status set separately.
   if ((current.simpleInventory ?? "").trim() === "NO LONGER AVAILABLE") warnings.push("MIVA_MARKED_DISCONTINUED");
+
+  if (hasInactiveParent(product, productCodeIndex)) warnings.push("MIVA_PARENT_INACTIVE");
 
   let dateResult: { date: string | null; sources: string[]; conflict: boolean } = { date: null, sources: [], conflict: false };
   if (row.warehouses) {
@@ -565,6 +590,7 @@ function buildDualMatchedRow(
 function reconcileDual(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], options: ReconcileOptions): ReconcileResult {
   const { config, runDate } = options;
 
+  const productCodeIndex = buildProductCodeIndex(mivaRows);
   const upcIndex = buildMivaIndex(mivaRows, config.brandAllowlist, (r) => r.gtinRaw, normalizeGtin);
   const skuIndex = buildMivaIndex(mivaRows, config.brandAllowlist, (r) => r.mpnRaw, normalizeSku);
 
@@ -632,7 +658,7 @@ function reconcileDual(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], optio
     }
 
     if (combined.kind === "matched") {
-      results.push(buildDualMatchedRow(row, row.upcRaw, row.skuRaw ?? null, normalizedKey, combined.product, config, runDate));
+      results.push(buildDualMatchedRow(row, row.upcRaw, row.skuRaw ?? null, normalizedKey, combined.product, config, runDate, productCodeIndex));
       continue;
     }
 

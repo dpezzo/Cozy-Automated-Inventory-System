@@ -95,7 +95,9 @@ export type WarningCode =
   /** A genuine vendor match against a Miva product currently flagged NLA (the DROPSHIP_INVENTORY_MANAGEMENT field's literal value) -- approving would reactivate a deliberately-discontinued product. */
   | "MIVA_CURRENTLY_NLA"
   /** A genuine vendor match against a Miva product whose *status* field (simpleInventory) already says "NO LONGER AVAILABLE" -- a separate field from DROPSHIP_INVENTORY_MANAGEMENT/MIVA_CURRENTLY_NLA, and not implied by it: a product can be tracked ("1") and still have this status set. Without this check such a row resolves CLEAN (eligible for bulk approval) with no indication Miva already shows it discontinued. */
-  | "MIVA_MARKED_DISCONTINUED";
+  | "MIVA_MARKED_DISCONTINUED"
+  /** This row's matched Miva product is a Variant whose PARENT product is inactive. Informational, not a data error: a parent can go inactive because every other variant in the family is NLA/discontinued, even while this specific variant still shows stock -- Cale's call (2026-10) is to stop selling the whole family once the parent is inactive, so this flags that decision for review rather than silently approving a restock on a product line the business has chosen to retire. */
+  | "MIVA_PARENT_INACTIVE";
 
 export type BlockerCode =
   | "BLANK_UPC"

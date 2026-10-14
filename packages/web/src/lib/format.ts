@@ -1,3 +1,8 @@
+/** Formats a timestamp pinned to America/New_York regardless of the viewer's own browser/system timezone, with a fixed "ET" suffix -- these are shared business timestamps (Miva catalog pulls, inventory runs), so everyone should see the same clock time for the same event instead of it shifting per viewer (e.g. a Mountain-time viewer seeing hours-earlier-looking values for the exact same instant). */
+export function formatEastern(iso: string): string {
+  return `${new Date(iso).toLocaleString("en-US", { timeZone: "America/New_York" })} ET`;
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];

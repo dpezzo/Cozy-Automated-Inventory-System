@@ -2,6 +2,16 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-14 — Eastern-pinned timestamps, MIVA_PARENT_INACTIVE warning, Run Review toolbar cleanup
+
+### Added
+- New warning `MIVA_PARENT_INACTIVE`: a matched variant whose parent product (`parentCode` lookup against the Miva catalog) is inactive now carries this warning, even when the variant itself still shows stock. Triggered by a real case (a Serta plush heated throw variant) where every other variant of the family was NLA/discontinued and Cale decided to stop selling the whole line, even though this one variant still had stock -- previously there was no way to see that decision reflected in the review table. Computed in `reconcile.ts` via a `productCode -> MivaRawRow` lookup built once per run, checked against both the single-identifier and dual-identifier (upc-or-sku) match paths.
+- Run Review's Warnings/Blockers column now renders each warning/blocker code as its own colored pill (amber for warnings, red for blockers) instead of one unreadable comma-joined string -- multi-warning rows are now scannable at a glance.
+
+### Changed
+- Catalog-pull and inventory-run timestamps (Catalog snapshot list, Miva Connection reference file, Run History, Run Review) now always render in `America/New_York` regardless of the viewer's own browser/system timezone, with a fixed " ET" suffix appended. Previously these used the browser's local timezone with no indicator of which zone was shown, so two people in different timezones viewing the exact same event (e.g. a catalog pull) would see different clock times with no label explaining why -- now everyone sees the same Eastern time for these shared business events.
+- Run Review toolbar: removed "Approve all (blank tracked-flag only)" (confirmed unused, confusing) and all reject functionality (the toolbar's "Reject selected" and both per-row "Reject" buttons) -- an already-approved row can still be reverted via the existing "Reset to pending" control, which was judged sufficient. "Approve selected clean rows" is now hidden entirely (not just disabled/dimmed) until at least one row is selected. "Generate batch" switched from the same red/brand color as "Approve all clean" to the existing neutral `charcoal` button style, so the two steps of the review workflow (approve, then batch) are visually distinguishable instead of looking identical.
+
 ## 2026-10-13 — Delutti favicon
 
 ### Added

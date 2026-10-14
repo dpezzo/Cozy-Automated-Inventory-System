@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Search, Undo2, History } from "lucide-react";
 import { api, type RunRecord, type BatchRecord, type VendorSummary } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
-import { importStatusPillClass, runStatusPillClass, IMPORT_STATUS_TOOLTIPS, RUN_STATUS_TOOLTIPS } from "../lib/format";
+import { importStatusPillClass, runStatusPillClass, IMPORT_STATUS_TOOLTIPS, RUN_STATUS_TOOLTIPS, formatEastern } from "../lib/format";
 
 /** ruleId is always "<vendorKey>-inventory-v1" (see runPipeline.ts's ruleIdFor) -- strips that fixed suffix to recover the vendorKey for a vendor label lookup. */
 function vendorKeyFromRuleId(ruleId: string): string {
@@ -152,7 +152,7 @@ export default function RunHistoryPage() {
                     : undefined;
                 return (
                   <tr key={r.id}>
-                    <td>{new Date(r.createdAt).toLocaleString()}</td>
+                    <td>{formatEastern(r.createdAt)}</td>
                     <td title={r.id}>
                       <Link to={`/runs/${r.id}`}>{r.id.slice(0, 8)}</Link>
                     </td>
@@ -190,7 +190,7 @@ export default function RunHistoryPage() {
                           </span>
                           {latestBatch.rolledBackAt && (
                             <span
-                              title={`Rolled back ${new Date(latestBatch.rolledBackAt).toLocaleString()}`}
+                              title={`Rolled back ${formatEastern(latestBatch.rolledBackAt)}`}
                               style={{ display: "inline-flex", verticalAlign: "middle", marginLeft: 4 }}
                             >
                               <Undo2 size={14} />
@@ -243,7 +243,7 @@ export default function RunHistoryPage() {
                 const run = runsById.get(b.runId);
                 return (
                   <tr key={b.id}>
-                    <td>{new Date(b.createdAt).toLocaleString()}</td>
+                    <td>{formatEastern(b.createdAt)}</td>
                     <td title={b.id}>
                       <Link to={`/batches/${b.id}`}>{b.id.slice(0, 8)}</Link>
                     </td>
@@ -253,7 +253,7 @@ export default function RunHistoryPage() {
                       </span>
                       {b.rolledBackAt && (
                         <span
-                          title={`Rolled back ${new Date(b.rolledBackAt).toLocaleString()}`}
+                          title={`Rolled back ${formatEastern(b.rolledBackAt)}`}
                           style={{ display: "inline-flex", verticalAlign: "middle", marginLeft: 4 }}
                         >
                           <Undo2 size={14} />

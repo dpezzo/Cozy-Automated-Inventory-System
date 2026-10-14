@@ -5,6 +5,7 @@ import { api, ApiRequestError, type FileRecord, type PushBatchResult } from "../
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { friendlyError } from "../lib/errors";
+import { formatEastern } from "../lib/format";
 
 interface MivaApiStatus {
   configured: boolean;
@@ -97,7 +98,7 @@ function DevResetSection({ activeSite }: { activeSite: "development" | "live" | 
         ) : referenceFile ? (
           <p style={{ fontSize: 13 }}>
             {referenceFile.originalFilename} · {referenceFile.rowCount ?? "?"} rows · uploaded{" "}
-            {new Date(referenceFile.uploadedAt).toLocaleString()}
+            {formatEastern(referenceFile.uploadedAt)}
           </p>
         ) : (
           <p style={{ fontSize: 13, color: "var(--red)" }}>No reference file uploaded yet.</p>

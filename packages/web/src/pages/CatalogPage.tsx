@@ -13,6 +13,7 @@ import { api, ApiRequestError, type FileRecord, type MivaCatalogRow } from "../a
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { loadFromStorage, saveToStorage } from "../lib/storage";
+import { formatEastern } from "../lib/format";
 
 interface ColumnDef {
   key: string;
@@ -548,7 +549,7 @@ export default function CatalogPage() {
               <option value="">Select a snapshot...</option>
               {files.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.originalFilename} ({f.rowCount} rows, {new Date(f.uploadedAt).toLocaleString()})
+                  {f.originalFilename} ({f.rowCount} rows, {formatEastern(f.uploadedAt)})
                 </option>
               ))}
             </select>
