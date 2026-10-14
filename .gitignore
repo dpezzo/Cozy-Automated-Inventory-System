@@ -4,3 +4,4 @@ dist/
 .fullsize-output/
 *.log
 data/
+SESSION_HANDOFF.md
