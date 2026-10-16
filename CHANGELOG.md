@@ -2,6 +2,13 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-16 — Email report: prominent Live/Dev banner, distinct CTA colors, per-section filter links
+
+### Changed
+- Batch push/rollback email now makes which Miva site it hit impossible to miss: a full-width colored banner (`#dc2626` bright red "⚠ LIVE STORE" / `#334155` slate "DEVELOPMENT STORE") sits right under the header, independent of the success/failure header color, and the subject line gets a leading "🔴 LIVE --" shout-prefix (instead of a trailing, easily-truncated "(Live)") so it survives inbox list truncation. `packages/server/src/mail/batchReportTemplate.ts`.
+- "View Run" and "View Batch" buttons now use two visually distinct colors (charcoal `#333333` / brand red `#9d1c20`), matching the app's own existing two-sequential-action button convention (Run Review's "Approve all clean" vs "Generate batch").
+- Each Clean/Updated/Warning/Skipped section now has a small "View these rows →" link that deep-links into Run Review pre-filtered to roughly that set: Clean/Warning map directly to `reviewClass`; Updated maps to `decisionStatus=APPROVED` (exactly the rows a generated batch locks and pushes); Skipped maps to `decisionStatus=PENDING,REJECTED` (everything not approved, matching how `skippedCount` itself is computed). `RunReviewPage.tsx` now reads `reviewClass`/`decisionStatus` query params once on first render to seed its filter checkboxes, so these are real, working deep links, not just decoration.
+
 ## 2026-10-16 — Idle-timeout sign-out, with a warning dialog; fixed stale-session UI
 
 ### Added

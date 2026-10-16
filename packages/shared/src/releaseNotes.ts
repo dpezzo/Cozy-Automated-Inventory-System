@@ -14,6 +14,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
     date: "2026-10-16",
     items: [
+      "Batch email report: the Live/Development store is now shown as a hard-to-miss colored banner (and in the subject line), the \"View Run\"/\"View Batch\" buttons are now different colors, and each Clean/Updated/Warning/Skipped line now has a \"View these rows\" link that opens Run Review pre-filtered to that set.",
       "Added an idle-timeout sign-out: after a set number of minutes of inactivity, you'll see a 60-second warning with a \"Stay signed in\" button before being signed out automatically. New Settings > Session Timeout page lets an admin change how many minutes that is.",
       "Fixed the app sometimes going \"stale\" after sitting open for a while -- it now notices right away when your session has ended and takes you to the sign-in page, instead of looking signed in but not working until you refresh.",
       "Fixed the batch email report's \"Skipped\" count sometimes showing a number larger than the total rows in the run.",

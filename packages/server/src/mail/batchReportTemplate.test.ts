@@ -89,4 +89,42 @@ describe("renderBatchReportSubject / renderBatchReportHtml / renderBatchReportTe
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).not.toContain("<b>bad</b>");
   });
+
+  it("puts a shout-prefix on the Live subject instead of a trailing parenthetical, so it survives inbox truncation", () => {
+    const liveSubject = renderBatchReportSubject(baseData({ activeSite: "live" }));
+    expect(liveSubject).toMatch(/^\u{1F534} LIVE --/u);
+    expect(liveSubject).not.toContain("(Live)");
+    const devSubject = renderBatchReportSubject(baseData({ activeSite: "development" }));
+    expect(devSubject).toContain("(Development)");
+    expect(devSubject).not.toMatch(/^\u{1F534}/u);
+  });
+
+  it("renders a full-width site banner with a distinct color for Live vs Development, independent of the push outcome", () => {
+    const liveHtml = renderBatchReportHtml(baseData({ activeSite: "live", action: "API_PUSH_FAILED" }));
+    expect(liveHtml).toContain("#dc2626");
+    expect(liveHtml).toMatch(/LIVE STORE/);
+    const devHtml = renderBatchReportHtml(baseData({ activeSite: "development", action: "API_PUSH_FAILED" }));
+    expect(devHtml).toContain("#334155");
+    expect(devHtml).toMatch(/DEVELOPMENT STORE/);
+    expect(devHtml).not.toContain("#dc2626");
+  });
+
+  it("gives View Run and View Batch visually distinct button colors, matching the app's own two-action convention", () => {
+    const html = renderBatchReportHtml(baseData());
+    const runButton = html.match(/background:(#[0-9a-f]+)[^>]*>\s*View Run/);
+    const batchButton = html.match(/background:(#[0-9a-f]+)[^>]*>\s*View Batch/);
+    expect(runButton?.[1]).toBeTruthy();
+    expect(batchButton?.[1]).toBeTruthy();
+    expect(runButton?.[1]).not.toBe(batchButton?.[1]);
+  });
+
+  it("adds a filter link next to Clean/Updated/Warning/Skipped that deep-links Run Review with the matching query params", () => {
+    const html = renderBatchReportHtml(baseData());
+    expect(html).toContain("https://app.example.com/runs/run-456?reviewClass=CLEAN\"");
+    expect(html).toContain("https://app.example.com/runs/run-456?reviewClass=CLEAN,WARNING&amp;decisionStatus=APPROVED");
+    expect(html).toContain("https://app.example.com/runs/run-456?reviewClass=WARNING\"");
+    expect(html).toContain(
+      "https://app.example.com/runs/run-456?reviewClass=CLEAN,WARNING,BLOCKED,UNCHANGED&amp;decisionStatus=PENDING,REJECTED",
+    );
+  });
 });

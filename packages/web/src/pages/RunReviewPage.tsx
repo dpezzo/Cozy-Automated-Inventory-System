@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { CheckCheck, Check, FileOutput, Download, Search, Undo2, ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   api,
@@ -137,8 +137,22 @@ const CHANGED_FIELDS_COLUMN: ColumnDef = {
     .join(", "),
 };
 
+/** Comma-separated query param -> the subset of `allowed` it names, case-insensitive. Unknown/malformed values are dropped rather than throwing, so a hand-edited or stale link degrades to "no filter" instead of breaking the page. */
+function filterFromQueryParam(value: string | null, allowed: readonly string[]): string[] | null {
+  if (!value) return null;
+  const requested = value.split(",").map((v) => v.trim().toUpperCase());
+  const matched = allowed.filter((a) => requested.includes(a));
+  return matched.length > 0 ? matched : null;
+}
+
 export default function RunReviewPage() {
   const { runId } = useParams<{ runId: string }>();
+  // Lets an external link (e.g. the batch push/rollback email's "Clean" /
+  // "Warning" / "Skipped" links) deep-link straight into a pre-filtered
+  // view -- read once on first render only, same as a bookmarked URL; the
+  // filter checkboxes below are the ongoing source of truth after that; they
+  // don't keep writing back to the URL as the admin keeps adjusting them.
+  const [initialSearchParams] = useSearchParams();
   const [run, setRun] = useState<RunRecord | null>(null);
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const [runBatches, setRunBatches] = useState<BatchRecord[]>([]);
@@ -149,8 +163,12 @@ export default function RunReviewPage() {
   // in reconcile.ts), so this single set of checkboxes replaces what used
   // to be two overlapping controls (review class + a separate "changed
   // only" toggle) without losing any filtering capability.
-  const [reviewClassFilter, setReviewClassFilter] = useState<string[]>(DEFAULT_REVIEW_CLASS_FILTER);
-  const [decisionFilter, setDecisionFilter] = useState<string[]>([]);
+  const [reviewClassFilter, setReviewClassFilter] = useState<string[]>(
+    () => filterFromQueryParam(initialSearchParams.get("reviewClass"), REVIEW_CLASS_FILTERS) ?? DEFAULT_REVIEW_CLASS_FILTER,
+  );
+  const [decisionFilter, setDecisionFilter] = useState<string[]>(
+    () => filterFromQueryParam(initialSearchParams.get("decisionStatus"), DECISION_FILTERS) ?? [],
+  );
   const [matchOutcomeFilter, setMatchOutcomeFilter] = useState<string[]>([]);
   const [highlightDiff, setHighlightDiff] = useState(false);
   const [showAllBrand, setShowAllBrand] = useState(false);

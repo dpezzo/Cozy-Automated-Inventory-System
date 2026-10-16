@@ -43,12 +43,23 @@ const COLOR = {
   muted: "#6b6560",
   brand: "#9d1c20",
   brandHover: "#7f1519",
+  // Matches the app's own two-button-color convention for sequential/distinct
+  // actions (Run Review's "Approve all clean" = brand red, "Generate batch" =
+  // charcoal) -- reused here so "View Run" and "View Batch" read as visually
+  // distinct, not duplicate, actions.
+  charcoal: "#333333",
   green: "#16a34a",
   greenSoft: "#dcfce7",
   amber: "#b45309",
   amberSoft: "#fef3c7",
   red: "#b3261e",
   redSoft: "#fde2e1",
+  // Deliberately NOT reused from the amber/red status palette above -- the
+  // Live-site banner needs to read as categorically different from any
+  // row-level warning/failure color in the same email, so a glance at the
+  // banner alone (regardless of success/failure) tells you which store it hit.
+  liveBanner: "#dc2626",
+  devBanner: "#334155",
 } as const;
 
 const FONT_STACK = "'Inter', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
@@ -67,9 +78,14 @@ function siteLabel(data: BatchReportEmailData): string {
 
 export function renderBatchReportSubject(data: BatchReportEmailData): string {
   const verb = data.target === "rollback" ? "Rollback" : "Batch push";
-  if (isSuccess(data)) return `${verb} succeeded -- ${data.vendorLabel} (${siteLabel(data)})`;
-  if (isPartial(data)) return `⚠ ${verb} partially failed -- ${data.vendorLabel} (${siteLabel(data)})`;
-  return `⚠ ${verb} failed -- ${data.vendorLabel} (${siteLabel(data)})`;
+  const outcome = isSuccess(data) ? `${verb} succeeded` : isPartial(data) ? `⚠ ${verb} partially failed` : `⚠ ${verb} failed`;
+  // Live gets a shout-prefix instead of a trailing parenthetical -- inbox
+  // list views often truncate the end of a subject line, so the one piece
+  // of information that must never be missed (this hit the real store) goes
+  // first. Development stays a quieter trailing tag, matching the original
+  // framing, since there's nothing urgent to flag about it.
+  if (data.activeSite === "live") return `\u{1F534} LIVE -- ${outcome} -- ${data.vendorLabel}`;
+  return `${outcome} -- ${data.vendorLabel} (Development)`;
 }
 
 function escapeHtml(value: string): string {
@@ -95,7 +111,8 @@ function statTile(label: string, value: string | number, color: string = COLOR.t
     </td>`;
 }
 
-function sectionHeader(label: string, count: number, bg: string, fg: string): string {
+/** `linkHref`, when given, adds a small "View these rows" text link right-aligned on the same row as the pill. */
+function sectionHeader(label: string, count: number, bg: string, fg: string, linkHref?: string): string {
   return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;">
       <tr>
@@ -104,8 +121,34 @@ function sectionHeader(label: string, count: number, bg: string, fg: string): st
             ${escapeHtml(label)} &middot; ${count}
           </span>
         </td>
+        ${
+          linkHref
+            ? `<td style="text-align:right;">
+                <a href="${escapeHtml(linkHref)}" style="font-family:${FONT_STACK};font-size:12px;color:${COLOR.brand};text-decoration:none;font-weight:600;">
+                  View these rows &rarr;
+                </a>
+              </td>`
+            : ""
+        }
       </tr>
     </table>`;
+}
+
+/** A full-width, impossible-to-miss color strip naming the Miva site this push/rollback hit -- deliberately separate from the (success/failure-colored) header band above it, so which store it was stays legible no matter the outcome color. */
+function siteBanner(data: BatchReportEmailData): string {
+  const live = data.activeSite === "live";
+  const bg = live ? COLOR.liveBanner : COLOR.devBanner;
+  const label = live
+    ? "⚠ LIVE STORE -- this affects the real, customer-facing site"
+    : "DEVELOPMENT STORE -- test site, not customer-facing";
+  return `
+    <tr>
+      <td style="background:${bg};padding:10px 28px;text-align:center;">
+        <span style="font-family:${FONT_STACK};color:#ffffff;font-size:13px;font-weight:800;letter-spacing:0.02em;">
+          ${escapeHtml(label)}
+        </span>
+      </td>
+    </tr>`;
 }
 
 function cappedList(items: string[], cap: number): string {
@@ -134,10 +177,10 @@ function warningBreakdownTable(data: BatchReportEmailData): string {
     </table>`;
 }
 
-function ctaButton(label: string, href: string): string {
+function ctaButton(label: string, href: string, bg: string): string {
   return `
     <td style="padding:6px 8px 0 0;">
-      <a href="${escapeHtml(href)}" style="display:inline-block;background:${COLOR.brand};color:#ffffff;font-family:${FONT_STACK};font-size:14px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:6px;">
+      <a href="${escapeHtml(href)}" style="display:inline-block;background:${bg};color:#ffffff;font-family:${FONT_STACK};font-size:14px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:6px;">
         ${escapeHtml(label)}
       </a>
     </td>`;
@@ -146,6 +189,17 @@ function ctaButton(label: string, href: string): string {
 export function renderBatchReportHtml(data: BatchReportEmailData): string {
   const runLink = `${data.appBaseUrl}/runs/${data.runId}`;
   const batchLink = `${data.appBaseUrl}/batches/${data.batchId}`;
+  // Run Review (RunReviewPage.tsx) reads `reviewClass`/`decisionStatus` query
+  // params once on first render to seed its filter checkboxes -- see
+  // filterFromQueryParam() there. "Updated" and "Skipped" aren't reviewClass
+  // values themselves, so they're approximated via decisionStatus: an
+  // approved row is exactly what a generated batch locks in and pushes, and
+  // "skipped" is everything that isn't (PENDING or REJECTED), matching how
+  // skippedCount itself is computed in sendBatchReportEmail.ts.
+  const cleanLink = `${runLink}?reviewClass=CLEAN`;
+  const updatedLink = `${runLink}?reviewClass=CLEAN,WARNING&decisionStatus=APPROVED`;
+  const warningLink = `${runLink}?reviewClass=WARNING`;
+  const skippedLink = `${runLink}?reviewClass=CLEAN,WARNING,BLOCKED,UNCHANGED&decisionStatus=PENDING,REJECTED`;
 
   const headerColor = isSuccess(data) ? COLOR.brand : isPartial(data) ? COLOR.amber : COLOR.red;
   const headline = isSuccess(data)
@@ -184,6 +238,7 @@ export function renderBatchReportHtml(data: BatchReportEmailData): string {
                 </div>
               </td>
             </tr>
+            ${siteBanner(data)}
             <tr>
               <td style="padding:20px 28px 4px;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -198,20 +253,20 @@ export function renderBatchReportHtml(data: BatchReportEmailData): string {
             </tr>
             <tr>
               <td style="padding:0 28px 8px;">
-                ${sectionHeader("Clean", cleanCount, COLOR.greenSoft, COLOR.green)}
+                ${sectionHeader("Clean", cleanCount, COLOR.greenSoft, COLOR.green, cleanLink)}
                 <p style="font-size:13px;color:${COLOR.muted};font-family:${FONT_STACK};margin:6px 0 0;">
                   ${cleanCount} row(s) classified clean this run.
                 </p>
 
-                ${sectionHeader("Updated", data.pushed, COLOR.greenSoft, COLOR.green)}
+                ${sectionHeader("Updated", data.pushed, COLOR.greenSoft, COLOR.green, updatedLink)}
                 <p style="font-size:13px;color:${COLOR.muted};font-family:${FONT_STACK};margin:6px 0 0;">
                   ${data.pushed} row(s) ${data.target === "rollback" ? "rolled back" : "applied"} to the ${escapeHtml(siteLabel(data))} site.
                 </p>
 
-                ${sectionHeader("Warning", warningCount, COLOR.amberSoft, COLOR.amber)}
+                ${sectionHeader("Warning", warningCount, COLOR.amberSoft, COLOR.amber, warningLink)}
                 ${warningBreakdownTable(data)}
 
-                ${sectionHeader("Skipped", data.skippedCount, COLOR.panel2, COLOR.muted)}
+                ${sectionHeader("Skipped", data.skippedCount, COLOR.panel2, COLOR.muted, skippedLink)}
                 ${cappedList([`${data.skippedCount} row(s) blocked or left undecided this run -- not included in this batch.`], 1)}
 
                 ${
@@ -229,8 +284,8 @@ export function renderBatchReportHtml(data: BatchReportEmailData): string {
               <td style="padding:12px 28px 24px;">
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
-                    ${ctaButton("View Run", runLink)}
-                    ${ctaButton("View Batch", batchLink)}
+                    ${ctaButton("View Run", runLink, COLOR.charcoal)}
+                    ${ctaButton("View Batch", batchLink, COLOR.brand)}
                   </tr>
                 </table>
                 <p style="font-size:12px;color:${COLOR.muted};font-family:${FONT_STACK};margin:10px 0 0;">
@@ -254,8 +309,14 @@ export function renderBatchReportHtml(data: BatchReportEmailData): string {
 }
 
 export function renderBatchReportText(data: BatchReportEmailData): string {
+  const runLink = `${data.appBaseUrl}/runs/${data.runId}`;
+  const live = data.activeSite === "live";
   const lines = [
     renderBatchReportSubject(data),
+    "",
+    live
+      ? "*** LIVE STORE -- this affects the real, customer-facing site ***"
+      : "Development store -- test site, not customer-facing.",
     "",
     `Vendor: ${data.vendorLabel}`,
     `Run date: ${data.runDate}`,
@@ -266,9 +327,10 @@ export function renderBatchReportText(data: BatchReportEmailData): string {
     `Failed: ${data.failed}`,
     `Verification mismatches: ${data.verificationMismatches}`,
     "",
-    `Clean: ${data.runSummary.byReviewClass.CLEAN ?? 0}`,
-    `Warning: ${data.runSummary.byReviewClass.WARNING ?? 0}`,
-    `Skipped: ${data.skippedCount}`,
+    `Clean: ${data.runSummary.byReviewClass.CLEAN ?? 0} -- ${runLink}?reviewClass=CLEAN`,
+    `Updated: ${data.pushed} -- ${runLink}?reviewClass=CLEAN,WARNING&decisionStatus=APPROVED`,
+    `Warning: ${data.runSummary.byReviewClass.WARNING ?? 0} -- ${runLink}?reviewClass=WARNING`,
+    `Skipped: ${data.skippedCount} -- ${runLink}?reviewClass=CLEAN,WARNING,BLOCKED,UNCHANGED&decisionStatus=PENDING,REJECTED`,
   ];
   if (data.warningBreakdown.length > 0) {
     lines.push("", "Warning breakdown:");
@@ -278,6 +340,6 @@ export function renderBatchReportText(data: BatchReportEmailData): string {
     lines.push("", "Failed rows (sample):");
     for (const r of data.failedRowSamples.slice(0, MAX_FAILED_SAMPLES)) lines.push(`  ${r.productCode} -- ${r.errorMessage}`);
   }
-  lines.push("", `View run: ${data.appBaseUrl}/runs/${data.runId}`, `View batch: ${data.appBaseUrl}/batches/${data.batchId}`);
+  lines.push("", `View run: ${runLink}`, `View batch: ${data.appBaseUrl}/batches/${data.batchId}`);
   return lines.join("\n");
 }
