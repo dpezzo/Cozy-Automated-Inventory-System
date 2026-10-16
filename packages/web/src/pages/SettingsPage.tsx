@@ -3,11 +3,29 @@ import { Link } from "react-router-dom";
 import { api, type ReleaseNoteEntry } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { useAuth } from "../AuthContext";
-import { Users, Truck, Trash2, Settings, Plug, Activity, Mail, Timer } from "lucide-react";
+import { Users, Truck, Trash2, Settings, Plug, Activity, Mail, Timer, ChevronRight, ChevronUp } from "lucide-react";
 
 /** "2026-10-07" -> "2026.10.07", matching the app's date-based version-number format. */
 function formatVersion(isoDate: string): string {
   return isoDate.replace(/-/g, ".");
+}
+
+/** Collapsed by default -- only expanded if the viewer has explicitly expanded it before. Keyed per user, like InstructionsCard. */
+function loadChangelogCollapsed(userId: string | undefined): boolean {
+  try {
+    const stored = localStorage.getItem(`cw-changelog-collapsed-${userId ?? "anon"}`);
+    return stored === null ? true : stored === "1";
+  } catch {
+    return true;
+  }
+}
+
+function saveChangelogCollapsed(userId: string | undefined, collapsed: boolean) {
+  try {
+    localStorage.setItem(`cw-changelog-collapsed-${userId ?? "anon"}`, collapsed ? "1" : "0");
+  } catch {
+    // per-viewer convenience only -- fine to silently skip if storage is unavailable
+  }
 }
 
 export default function SettingsPage() {
@@ -15,6 +33,15 @@ export default function SettingsPage() {
   const isAdmin = user?.role === "admin";
   const [commitSha, setCommitSha] = useState<string | null>(null);
   const [releaseNotes, setReleaseNotes] = useState<ReleaseNoteEntry[]>([]);
+  const [changelogCollapsed, setChangelogCollapsed] = useState(() => loadChangelogCollapsed(user?.id));
+
+  function toggleChangelog() {
+    setChangelogCollapsed((prev) => {
+      const next = !prev;
+      saveChangelogCollapsed(user?.id, next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     api
@@ -94,17 +121,35 @@ export default function SettingsPage() {
       )}
       {releaseNotes.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
-          <h3>Changelog</h3>
-          {releaseNotes.map((entry) => (
-            <div key={entry.date} style={{ marginBottom: 12 }}>
-              <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{formatVersion(entry.date)}</p>
-              <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13 }}>
-                {entry.items.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <button
+            type="button"
+            onClick={toggleChangelog}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              width: "100%",
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            <h3 style={{ margin: 0 }}>Changelog</h3>
+            {changelogCollapsed ? <ChevronRight size={14} /> : <ChevronUp size={14} />}
+          </button>
+          {!changelogCollapsed &&
+            releaseNotes.map((entry) => (
+              <div key={entry.date} style={{ marginTop: 12 }}>
+                <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{formatVersion(entry.date)}</p>
+                <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13 }}>
+                  {entry.items.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
         </div>
       )}
     </div>

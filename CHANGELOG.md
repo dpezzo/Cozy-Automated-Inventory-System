@@ -2,6 +2,12 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-16 — Instructions cards and Settings changelog now start collapsed
+
+### Changed
+- The "how this page works" instructions card (`InstructionsCard.tsx`, used on every page) now defaults to collapsed on first visit instead of expanded -- a viewer who's never touched it before sees the compact "Instructions" button, not the full walkthrough. Anyone who has already explicitly expanded or collapsed it (localStorage per user per page) keeps seeing their own choice; this only changes the *first-ever* default.
+- The Changelog section on the Settings page (`SettingsPage.tsx`) is now collapsible and also starts collapsed by default, same per-user-remembered pattern as the instructions cards.
+
 ## 2026-10-16 — Live/Dev banner colors swapped to green/red; admin quick-switch link
 
 ### Changed

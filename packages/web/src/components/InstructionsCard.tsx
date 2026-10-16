@@ -7,11 +7,13 @@ function storageKeyFor(pageKey: string, userId: string | undefined): string {
   return `cw-instructions-collapsed-${pageKey}-${userId ?? "anon"}`;
 }
 
+/** Collapsed by default -- only expanded if the viewer has explicitly expanded it before. */
 function loadCollapsed(pageKey: string, userId: string | undefined): boolean {
   try {
-    return localStorage.getItem(storageKeyFor(pageKey, userId)) === "1";
+    const stored = localStorage.getItem(storageKeyFor(pageKey, userId));
+    return stored === null ? true : stored === "1";
   } catch {
-    return false;
+    return true;
   }
 }
 
