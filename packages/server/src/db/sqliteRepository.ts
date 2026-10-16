@@ -218,8 +218,8 @@ export class SqliteRepository implements Repository {
     const uploadedAt = nowIso();
     this.conn()
       .prepare(
-        `INSERT INTO files (id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, uploaded_at, vendor_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO files (id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, uploaded_at, vendor_key, source_site)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -232,6 +232,7 @@ export class SqliteRepository implements Repository {
         input.uploadedBy,
         uploadedAt,
         input.vendorKey ?? null,
+        input.sourceSite ?? null,
       );
     return {
       id,
@@ -243,6 +244,7 @@ export class SqliteRepository implements Repository {
       rowCount: input.rowCount ?? null,
       uploadedAt,
       vendorKey: input.vendorKey ?? null,
+      sourceSite: input.sourceSite ?? null,
     };
   }
 
@@ -1070,6 +1072,7 @@ function mapFileRow(row: Record<string, unknown>): FileRecord {
     rowCount: row.row_count === null || row.row_count === undefined ? null : Number(row.row_count),
     uploadedAt: row.uploaded_at as string,
     vendorKey: (row.vendor_key as string | null) ?? null,
+    sourceSite: (row.source_site as "development" | "live" | null) ?? null,
   };
 }
 

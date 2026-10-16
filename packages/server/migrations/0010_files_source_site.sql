@@ -1,0 +1,14 @@
+-- Records which Miva site (development/live) a file was pulled from via the
+-- API, at the moment of the pull (see getMivaActiveSite() in mivaApiPush.ts).
+-- Previously this was known only transiently at pull time and then
+-- discarded -- the Home page / Catalog page snapshot dropdowns had no way
+-- to show whether a given miva_snapshot file came from Development or Live,
+-- which matters once the Live site has real credentials and both are in
+-- active use side by side.
+--
+-- Null for a manually-uploaded file or any file not pulled from Miva --
+-- never backfilled for existing rows, since the actual site used at past
+-- pull time is genuinely unknown and shouldn't be guessed at. Valid values
+-- ("development" | "live") are enforced by the TypeScript type, not a DB
+-- CHECK, matching the existing kind column's convention (see 0001_init.sql).
+ALTER TABLE files ADD COLUMN source_site TEXT;

@@ -138,19 +138,23 @@ const PHYSICAL_HEADERS = Object.keys(MIVA_HEADER_MAP);
  * reconciliation pipeline needs no changes to accept an API-sourced snapshot.
  */
 export async function pullMivaSnapshotFromApi(userId: string): Promise<UploadResult> {
+  // Captured up front -- the same value callMivaApi() itself reads to pick
+  // credentials for this pull -- and recorded on the file so the Home/Catalog
+  // page snapshot pickers can filter to only the currently active site.
+  const sourceSite = await getRepository().getMivaActiveSite();
   const physicalRows = await fetchAllMivaProductsAsPhysicalRows();
   const csv = rowsToCsv(physicalRows, PHYSICAL_HEADERS);
   const buffer = Buffer.from(csv, "utf8");
   const filename = `miva-api-pull-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
 
-  const result = await uploadFile(buffer, filename, "miva_snapshot", userId, false);
+  const result = await uploadFile(buffer, filename, "miva_snapshot", userId, false, sourceSite);
 
   await getRepository().insertAuditLog({
     actorId: userId,
     action: "MIVA_SNAPSHOT_PULLED_VIA_API",
     entityType: "file",
     entityId: result.file.id,
-    details: { rowCount: physicalRows.length },
+    details: { rowCount: physicalRows.length, sourceSite },
   });
 
   return result;

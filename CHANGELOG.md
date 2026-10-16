@@ -2,6 +2,14 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-15 — Miva snapshot pulls now carry their source site; dropdowns filter to the active one
+
+### Added
+- New nullable `files.source_site` column (migration `0010_files_source_site.sql`, both Postgres and SQLite) recording which Miva site (Development or Live) a `miva_snapshot` file was pulled from via the API, captured from `getMivaActiveSite()` at the moment of the pull (`pullMivaSnapshotFromApi()` in `packages/server/src/miva/mivaProducts.ts`). Null for manually-uploaded files and anything pulled before this migration -- that history is genuinely unrecoverable, not backfilled.
+
+### Changed
+- Home page's and Catalog page's Miva snapshot dropdowns now only show an API-pulled snapshot while its own site is the currently active one (manual uploads always show, since they're not attributable to either site) -- previously an API pull from Development and one from Live were visually indistinguishable and both always listed together, so switching the active site risked running a reconciliation or browsing a catalog view against the wrong store's data without any warning. Visible snapshots also show a "· Dev" / "· Live" tag in the dropdown for clarity.
+
 ## 2026-10-15 — Batch push/rollback email reports
 
 ### Added

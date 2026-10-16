@@ -48,6 +48,7 @@ async function finishUpload(
   userId: string,
   confirmDuplicate: boolean,
   vendorKey: string | null = null,
+  sourceSite: "development" | "live" | null = null,
 ): Promise<UploadResult> {
   const repo = getRepository();
 
@@ -73,6 +74,7 @@ async function finishUpload(
     rowCount,
     uploadedBy: userId,
     vendorKey,
+    sourceSite,
   });
 
   await repo.insertAuditLog({
@@ -92,11 +94,12 @@ export async function uploadFile(
   kind: FileKind,
   userId: string,
   confirmDuplicate: boolean,
+  sourceSite: "development" | "live" | null = null,
 ): Promise<UploadResult> {
   // Validate before persisting: block processing per
   // CozyWinters_Vendor_Inventory_Automation_Plan.md section 4.
   const rowCount = await validateAndCountRows(buffer, kind);
-  return finishUpload(buffer, originalFilename, kind, rowCount, userId, confirmDuplicate);
+  return finishUpload(buffer, originalFilename, kind, rowCount, userId, confirmDuplicate, null, sourceSite);
 }
 
 /**

@@ -65,6 +65,8 @@ export interface FileRecord {
   uploadedAt: string;
   /** Set only for kind === "vendor_dynamic"; null for every built-in FileKind. */
   vendorKey: string | null;
+  /** Which Miva site this file was pulled from via the API, at the moment of the pull (see getMivaActiveSite()). Null for a manually-uploaded file, or for any file not pulled from Miva. */
+  sourceSite: "development" | "live" | null;
 }
 
 export interface InsertFileInput {
@@ -76,6 +78,7 @@ export interface InsertFileInput {
   rowCount?: number;
   uploadedBy: string;
   vendorKey?: string | null;
+  sourceSite?: "development" | "live" | null;
 }
 
 // ---------- Vendor configs ----------

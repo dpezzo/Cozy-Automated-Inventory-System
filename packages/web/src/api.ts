@@ -263,6 +263,7 @@ export interface FileRecord {
   rowCount: number | null;
   uploadedAt: string;
   vendorKey: string | null;
+  sourceSite: "development" | "live" | null;
 }
 
 export interface GenericCsvColumnMapping {

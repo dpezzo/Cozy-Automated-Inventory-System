@@ -16,6 +16,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
     items: [
       "Added automatic email reports: whenever a batch is pushed or rolled back to Miva, an email summarizes what was clean, updated, flagged with a warning, or skipped, with links back to the run and the batch.",
       "New Settings > Email Reports page lets you choose who receives these emails and turn them on or off.",
+      "Home page and Catalog page now only show Miva snapshots pulled from the currently active site (Development or Live) in their dropdowns -- no more accidentally picking a Live pull while Development is active, or vice versa. Visible snapshots show a \"Dev\" or \"Live\" tag.",
     ],
   },
   {

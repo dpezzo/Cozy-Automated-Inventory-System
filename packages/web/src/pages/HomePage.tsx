@@ -234,6 +234,7 @@ export default function HomePage() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mivaApiConfigured, setMivaApiConfigured] = useState(false);
+  const [activeSite, setActiveSite] = useState<"development" | "live" | null>(null);
   const [vendors, setVendors] = useState<VendorSummary[]>([]);
 
   async function refresh() {
@@ -258,6 +259,13 @@ export default function HomePage() {
 
   const vendorFileKinds = new Set<string>(VENDOR_FILE_KINDS);
 
+  // Keep Development and Live catalog pulls fully separate: a manually
+  // uploaded snapshot (sourceSite null) always shows, but an API pull only
+  // shows while its own site is the active one -- picking the wrong
+  // snapshot for the active site would mean approving against the wrong
+  // store's data entirely.
+  const visibleMivaFiles = mivaFiles.filter((f) => f.sourceSite === null || f.sourceSite === activeSite);
+
   function handleFileChanged(file: FileRecord) {
     refresh();
     if (vendorFileKinds.has(file.kind)) setSelectedVendorFile(file.id);
@@ -266,7 +274,10 @@ export default function HomePage() {
 
   useEffect(() => {
     refresh();
-    api.getMivaApiStatus().then((s) => setMivaApiConfigured(s.configured));
+    api.getMivaApiStatus().then((s) => {
+      setMivaApiConfigured(s.configured);
+      setActiveSite(s.activeSite);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -390,9 +401,10 @@ export default function HomePage() {
             <br />
             <select value={selectedMiva} onChange={(e) => setSelectedMiva(e.target.value)} style={{ width: "100%" }}>
               <option value="">Select a file...</option>
-              {mivaFiles.map((f) => (
+              {visibleMivaFiles.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.originalFilename} ({f.rowCount} rows, {formatEastern(f.uploadedAt)})
+                  {f.originalFilename} ({f.rowCount} rows, {formatEastern(f.uploadedAt)}
+                  {f.sourceSite ? ` · ${f.sourceSite === "live" ? "Live" : "Dev"}` : ""})
                 </option>
               ))}
             </select>

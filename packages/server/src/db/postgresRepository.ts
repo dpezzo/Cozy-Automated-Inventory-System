@@ -158,9 +158,9 @@ export class PostgresRepository implements Repository {
 
   async insertFile(input: InsertFileInput): Promise<FileRecord> {
     const { rows } = await this.getPool().query(
-      `INSERT INTO files (kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, vendor_key)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_at, vendor_key`,
+      `INSERT INTO files (kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, vendor_key, source_site)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_at, vendor_key, source_site`,
       [
         input.kind,
         input.originalFilename,
@@ -170,6 +170,7 @@ export class PostgresRepository implements Repository {
         input.rowCount ?? null,
         input.uploadedBy,
         input.vendorKey ?? null,
+        input.sourceSite ?? null,
       ],
     );
     return mapFileRow(rows[0]);
@@ -936,6 +937,7 @@ function mapFileRow(row: Record<string, unknown>): FileRecord {
     rowCount: row.row_count === null ? null : Number(row.row_count),
     uploadedAt: (row.uploaded_at as Date).toISOString(),
     vendorKey: (row.vendor_key as string | null) ?? null,
+    sourceSite: (row.source_site as "development" | "live" | null) ?? null,
   };
 }
 

@@ -221,6 +221,7 @@ export default function CatalogPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mivaApiConfigured, setMivaApiConfigured] = useState(false);
+  const [activeSite, setActiveSite] = useState<"development" | "live" | null>(null);
   const [pulling, setPulling] = useState(false);
   const [pullMessage, setPullMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -283,20 +284,29 @@ export default function CatalogPage() {
     return () => window.removeEventListener("resize", recomputeHeight);
   }, []);
 
-  function loadFiles(selectId?: string) {
+  function loadFiles(selectId?: string, site: "development" | "live" | null = activeSite) {
     api.listFiles("miva_snapshot").then((f) => {
       setFiles(f);
+      const visible = f.filter((file) => file.sourceSite === null || file.sourceSite === site);
       if (selectId) setSelectedFile(selectId);
-      else if (f[0] && !selectedFile) setSelectedFile(f[0].id);
+      else if (visible[0] && !selectedFile) setSelectedFile(visible[0].id);
     });
   }
 
   useEffect(() => {
-    loadFiles();
-    api.getMivaApiStatus().then((s) => setMivaApiConfigured(s.configured));
+    api.getMivaApiStatus().then((s) => {
+      setMivaApiConfigured(s.configured);
+      setActiveSite(s.activeSite);
+      loadFiles(undefined, s.activeSite);
+    });
     api.listActiveVendorBrands().then(setActiveBrands).catch(() => setActiveBrands([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Same separation as the Home page's Miva snapshot picker: a manual
+  // upload (sourceSite null) always shows, but an API pull only shows while
+  // its own site is the currently active one.
+  const visibleFiles = files.filter((f) => f.sourceSite === null || f.sourceSite === activeSite);
 
   function toggleVendorBrandsOnly() {
     setVendorBrandsOnly((prev) => {
@@ -547,9 +557,10 @@ export default function CatalogPage() {
             Snapshot:{" "}
             <select value={selectedFile} onChange={(e) => setSelectedFile(e.target.value)} style={{ maxWidth: 320 }}>
               <option value="">Select a snapshot...</option>
-              {files.map((f) => (
+              {visibleFiles.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.originalFilename} ({f.rowCount} rows, {formatEastern(f.uploadedAt)})
+                  {f.originalFilename} ({f.rowCount} rows, {formatEastern(f.uploadedAt)}
+                  {f.sourceSite ? ` · ${f.sourceSite === "live" ? "Live" : "Dev"}` : ""})
                 </option>
               ))}
             </select>
