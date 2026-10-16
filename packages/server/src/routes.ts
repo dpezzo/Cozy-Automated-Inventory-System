@@ -269,6 +269,43 @@ router.put(
   }),
 );
 
+router.get(
+  "/admin/report-settings",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json({
+      email: await getRepository().getReportRecipientEmail(),
+      enabled: await getRepository().getReportEnabled(),
+    });
+  }),
+);
+
+router.put(
+  "/admin/report-settings",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { email, enabled } = req.body as { email?: string; enabled?: boolean };
+    if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ error: "INVALID_REQUEST", message: "email must be a valid email address." });
+      return;
+    }
+    if (typeof enabled !== "boolean") {
+      res.status(400).json({ error: "INVALID_REQUEST", message: "enabled must be a boolean." });
+      return;
+    }
+    await getRepository().setReportRecipientEmail(email);
+    await getRepository().setReportEnabled(enabled);
+    await getRepository().insertAuditLog({
+      actorId: req.session.userId!,
+      action: "REPORT_SETTINGS_CHANGED",
+      entityType: "system",
+      entityId: null,
+      details: { email, enabled },
+    });
+    res.json({ email, enabled });
+  }),
+);
+
 router.post(
   "/miva/pull-snapshot",
   asyncHandler(async (req, res) => {

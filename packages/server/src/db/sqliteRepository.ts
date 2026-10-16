@@ -55,6 +55,9 @@ function inClause(n: number): string {
 const DATA_SIZE_ALERT_SETTINGS_KEY = "data_size_alert_thresholds";
 const MIVA_ACTIVE_SITE_SETTINGS_KEY = "miva_active_site";
 const DEV_RESET_REFERENCE_FILE_SETTINGS_KEY = "dev_reset_reference_file_id";
+const REPORT_RECIPIENT_EMAIL_SETTINGS_KEY = "report_recipient_email";
+const REPORT_ENABLED_SETTINGS_KEY = "report_enabled";
+const DEFAULT_REPORT_RECIPIENT_EMAIL = "dev@delutti.com";
 
 /**
  * password_hash stays NOT NULL at the schema level (see
@@ -719,6 +722,38 @@ export class SqliteRepository implements Repository {
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
       )
       .run(DEV_RESET_REFERENCE_FILE_SETTINGS_KEY, fileId, nowIso());
+  }
+
+  async getReportRecipientEmail(): Promise<string> {
+    const row = this.conn()
+      .prepare("SELECT value FROM app_settings WHERE key = ?")
+      .get(REPORT_RECIPIENT_EMAIL_SETTINGS_KEY) as { value: string } | undefined;
+    return row?.value || DEFAULT_REPORT_RECIPIENT_EMAIL;
+  }
+
+  async setReportRecipientEmail(email: string): Promise<void> {
+    this.conn()
+      .prepare(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(REPORT_RECIPIENT_EMAIL_SETTINGS_KEY, email, nowIso());
+  }
+
+  async getReportEnabled(): Promise<boolean> {
+    const row = this.conn()
+      .prepare("SELECT value FROM app_settings WHERE key = ?")
+      .get(REPORT_ENABLED_SETTINGS_KEY) as { value: string } | undefined;
+    return row?.value !== "false";
+  }
+
+  async setReportEnabled(enabled: boolean): Promise<void> {
+    this.conn()
+      .prepare(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(REPORT_ENABLED_SETTINGS_KEY, String(enabled), nowIso());
   }
 
   async previewClearData(scope: ClearDataScope): Promise<ClearDataCounts> {

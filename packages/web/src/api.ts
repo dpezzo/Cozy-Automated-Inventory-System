@@ -145,6 +145,13 @@ export const api = {
   pullMivaSnapshot: () =>
     request<{ file: FileRecord; duplicateWarning: string | null }>("/miva/pull-snapshot", { method: "POST" }),
 
+  getReportSettings: () => request<{ email: string; enabled: boolean }>("/admin/report-settings"),
+  setReportSettings: (email: string, enabled: boolean) =>
+    request<{ email: string; enabled: boolean }>("/admin/report-settings", {
+      method: "PUT",
+      body: JSON.stringify({ email, enabled }),
+    }),
+
   getDevResetReference: () => request<{ file: FileRecord | null }>("/admin/dev-reset/reference"),
   uploadDevResetReference: async (file: File) => {
     const form = new FormData();

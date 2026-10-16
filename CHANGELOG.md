@@ -2,6 +2,13 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-15 — Batch push/rollback email reports
+
+### Added
+- Automatic HTML email report sent whenever a batch push or rollback to Miva finishes -- on success, partial failure, or full failure, for either the Development or Live site. Summarizes clean/updated/warning/skipped counts and a per-warning-code breakdown (not a full row dump), plus a capped sample of any failed rows, with "View Run" and "View Batch" links back into the app. Built with Resend; new server module `packages/server/src/mail/` (`resendClient.ts`, `batchReportTemplate.ts`, `sendBatchReportEmail.ts`), hooked into `pushBatchToMiva()` (`packages/server/src/miva/mivaApiPush.ts`). A failed or unconfigured email send never affects the push's own result -- it's swallowed and logged internally.
+- New Settings > Email Reports page (`packages/web/src/pages/EmailReportsPage.tsx`) lets an admin change the recipient (defaults to `dev@delutti.com`) and turn the reports on/off entirely. Backed by two new `app_settings` keys (`report_recipient_email`, `report_enabled`) via new `GET`/`PUT /admin/report-settings` routes.
+- New optional env vars (`.env.example`): `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `APP_BASE_URL` (used to build the run/batch links in the email). All optional -- leaving `RESEND_API_KEY` unset keeps the app in "no email" mode exactly as before.
+
 ## 2026-10-14 — Eastern-pinned timestamps everywhere
 
 ### Changed

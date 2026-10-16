@@ -160,6 +160,19 @@ export async function getRunSummary(runId: string): Promise<RunSummary> {
   };
 }
 
+/** Per-warning-code counts across a run's rows, sorted most-common first -- used by the batch push/rollback email report. Pure in-memory tally over the same rows getRunSummary() already loads, so it needs no dedicated query. */
+export async function getWarningCodeBreakdown(runId: string): Promise<{ code: string; count: number }[]> {
+  const repo = getRepository();
+  const rows = await repo.listRunRows(runId);
+  const counts: Record<string, number> = {};
+  for (const { row } of rows) {
+    for (const code of row.warningCodes) counts[code] = (counts[code] ?? 0) + 1;
+  }
+  return Object.entries(counts)
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
 /** Re-reads the run's stored Miva snapshot (not reconciliation_rows, which only ever holds what this run actually matched/missed) and counts every row under the vendor's brand allowlist, independent of DS_INV_MGT. Returns null rather than throwing when the snapshot file or vendor config is no longer available, so a stat tile can't take down the whole summary. */
 async function computeMivaBrandTotal(runId: string): Promise<number | null> {
   const repo = getRepository();

@@ -137,6 +137,14 @@ export interface Repository {
   getDevResetReferenceFileId(): Promise<string | null>;
   setDevResetReferenceFileId(fileId: string): Promise<void>;
 
+  /** Who receives the batch push/rollback summary email (Settings > Email Reports). Defaults to "dev@delutti.com" when never set. */
+  getReportRecipientEmail(): Promise<string>;
+  setReportRecipientEmail(email: string): Promise<void>;
+
+  /** Whether batch push/rollback summary emails are sent at all. Defaults to true when never set. */
+  getReportEnabled(): Promise<boolean>;
+  setReportEnabled(enabled: boolean): Promise<void>;
+
   // Vendor configs
   listVendorConfigs(): Promise<VendorConfigRecord[]>;
   findVendorConfigByKey(key: string): Promise<VendorConfigRecord | null>;

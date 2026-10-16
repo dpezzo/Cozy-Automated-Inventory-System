@@ -25,6 +25,7 @@
     "jszip": "^3.10.2",
     "multer": "^2.4.0",
     "pg": "^8.13.1",
+    "resend": "^4.8.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

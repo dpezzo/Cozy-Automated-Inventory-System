@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type ReleaseNoteEntry } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { useAuth } from "../AuthContext";
-import { Users, Truck, Trash2, Settings, Plug, Activity } from "lucide-react";
+import { Users, Truck, Trash2, Settings, Plug, Activity, Mail } from "lucide-react";
 
 /** "2026-10-07" -> "2026.10.07", matching the app's date-based version-number format. */
 function formatVersion(isoDate: string): string {
@@ -61,6 +61,13 @@ export default function SettingsPage() {
           </div>
           <h3>Miva Connection</h3>
           <p>Switch between the Development and Live Miva sites, and reset the dev store's products to a baseline.</p>
+        </Link>
+        <Link to="/settings/email-reports" className="card settings-tile">
+          <div className="settings-tile-icon">
+            <Mail size={24} />
+          </div>
+          <h3>Email Reports</h3>
+          <p>Choose who receives the summary email sent whenever a batch is pushed or rolled back on the live site.</p>
         </Link>
         {isAdmin && (
           <Link to="/settings/activity-log" className="card settings-tile">

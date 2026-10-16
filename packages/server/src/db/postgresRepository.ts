@@ -36,6 +36,9 @@ import { DEFAULT_DATA_SIZE_ALERT_THRESHOLDS } from "./types";
 const DATA_SIZE_ALERT_SETTINGS_KEY = "data_size_alert_thresholds";
 const MIVA_ACTIVE_SITE_SETTINGS_KEY = "miva_active_site";
 const DEV_RESET_REFERENCE_FILE_SETTINGS_KEY = "dev_reset_reference_file_id";
+const REPORT_RECIPIENT_EMAIL_SETTINGS_KEY = "report_recipient_email";
+const REPORT_ENABLED_SETTINGS_KEY = "report_enabled";
+const DEFAULT_REPORT_RECIPIENT_EMAIL = "dev@delutti.com";
 
 /**
  * Optional PostgreSQL/Docker persistence path. Implements the same
@@ -577,6 +580,36 @@ export class PostgresRepository implements Repository {
       `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       [DEV_RESET_REFERENCE_FILE_SETTINGS_KEY, fileId],
+    );
+  }
+
+  async getReportRecipientEmail(): Promise<string> {
+    const { rows } = await this.getPool().query("SELECT value FROM app_settings WHERE key = $1", [
+      REPORT_RECIPIENT_EMAIL_SETTINGS_KEY,
+    ]);
+    return rows[0]?.value || DEFAULT_REPORT_RECIPIENT_EMAIL;
+  }
+
+  async setReportRecipientEmail(email: string): Promise<void> {
+    await this.getPool().query(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [REPORT_RECIPIENT_EMAIL_SETTINGS_KEY, email],
+    );
+  }
+
+  async getReportEnabled(): Promise<boolean> {
+    const { rows } = await this.getPool().query("SELECT value FROM app_settings WHERE key = $1", [
+      REPORT_ENABLED_SETTINGS_KEY,
+    ]);
+    return rows[0]?.value !== "false";
+  }
+
+  async setReportEnabled(enabled: boolean): Promise<void> {
+    await this.getPool().query(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [REPORT_ENABLED_SETTINGS_KEY, String(enabled)],
     );
   }
 

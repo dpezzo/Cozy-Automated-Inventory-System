@@ -16,6 +16,7 @@ import ManageVendorsPage from "./pages/ManageVendorsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ClearDataPage from "./pages/ClearDataPage";
 import MivaConnectionPage from "./pages/MivaConnectionPage";
+import EmailReportsPage from "./pages/EmailReportsPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
 import { DataSizeAlert } from "./components/DataSizeAlert";
 import { Sun, Moon, RefreshCcw, History, Layers, ClipboardCheck, Settings, HelpCircle } from "lucide-react";
@@ -215,6 +216,14 @@ export default function App() {
           element={
             <RequireAuth>
               <MivaConnectionPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings/email-reports"
+          element={
+            <RequireAuth>
+              <EmailReportsPage />
             </RequireAuth>
           }
         />

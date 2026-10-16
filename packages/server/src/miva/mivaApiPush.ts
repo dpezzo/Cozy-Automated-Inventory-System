@@ -5,6 +5,7 @@ import { readBatchCsv } from "../domain/batchCsvIO";
 import { ValidationError } from "../errors";
 import { callMivaApi } from "./mivaApiClient";
 import { buildCustomFieldValuesPayload, readCustomFieldValue, type MivaLogicalField } from "./mivaFieldMap";
+import { sendBatchReportEmail } from "../mail/sendBatchReportEmail";
 
 export interface PushRowResult {
   productCode: string;
@@ -249,6 +250,12 @@ export async function pushBatchToMiva(
   } else {
     await repo.updateBatchImportStatus(batchId, action);
   }
+
+  // sendBatchReportEmail() swallows all of its own errors (unconfigured,
+  // disabled, or a real send failure alike), so it's intentionally called
+  // unguarded here -- it must never affect the chunkError rethrow below or
+  // this function's successful return value.
+  await sendBatchReportEmail({ batchId, target, action, pushResult: { pushed, failed, verificationMismatches, results } });
 
   if (chunkError !== undefined) throw chunkError;
 
