@@ -91,7 +91,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div style={{ marginTop: 32, fontSize: 12, color: "var(--muted)", display: "flex", flexDirection: "column", gap: 8 }}>
           {activeSite && (
             <div
-              className={`pill ${activeSite === "live" ? "blocked" : "clean"}`}
+              className={`pill ${activeSite === "live" ? "clean" : "blocked"}`}
               style={{ alignSelf: "flex-start" }}
               title={
                 activeSite === "live"
