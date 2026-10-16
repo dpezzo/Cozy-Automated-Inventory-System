@@ -17,8 +17,10 @@ import SettingsPage from "./pages/SettingsPage";
 import ClearDataPage from "./pages/ClearDataPage";
 import MivaConnectionPage from "./pages/MivaConnectionPage";
 import EmailReportsPage from "./pages/EmailReportsPage";
+import SessionTimeoutPage from "./pages/SessionTimeoutPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
 import { DataSizeAlert } from "./components/DataSizeAlert";
+import { IdleTimeoutGuard } from "./components/IdleTimeoutGuard";
 import { Sun, Moon, RefreshCcw, History, Layers, ClipboardCheck, Settings, HelpCircle } from "lucide-react";
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -111,6 +113,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       {glossaryOpen && <Glossary onClose={() => setGlossaryOpen(false)} />}
+      <IdleTimeoutGuard />
       <button
         className="theme-toggle-corner"
         onClick={toggleTheme}
@@ -229,6 +232,14 @@ export default function App() {
           element={
             <RequireAuth>
               <EmailReportsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings/session-timeout"
+          element={
+            <RequireAuth>
+              <SessionTimeoutPage />
             </RequireAuth>
           }
         />

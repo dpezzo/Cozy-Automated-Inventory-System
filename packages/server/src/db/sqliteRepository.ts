@@ -58,6 +58,8 @@ const DEV_RESET_REFERENCE_FILE_SETTINGS_KEY = "dev_reset_reference_file_id";
 const REPORT_RECIPIENT_EMAIL_SETTINGS_KEY = "report_recipient_email";
 const REPORT_ENABLED_SETTINGS_KEY = "report_enabled";
 const DEFAULT_REPORT_RECIPIENT_EMAIL = "dev@delutti.com";
+const IDLE_TIMEOUT_MINUTES_SETTINGS_KEY = "idle_timeout_minutes";
+const DEFAULT_IDLE_TIMEOUT_MINUTES = 30;
 
 /**
  * password_hash stays NOT NULL at the schema level (see
@@ -756,6 +758,23 @@ export class SqliteRepository implements Repository {
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
       )
       .run(REPORT_ENABLED_SETTINGS_KEY, String(enabled), nowIso());
+  }
+
+  async getIdleTimeoutMinutes(): Promise<number> {
+    const row = this.conn()
+      .prepare("SELECT value FROM app_settings WHERE key = ?")
+      .get(IDLE_TIMEOUT_MINUTES_SETTINGS_KEY) as { value: string } | undefined;
+    const parsed = row?.value ? Number(row.value) : NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_IDLE_TIMEOUT_MINUTES;
+  }
+
+  async setIdleTimeoutMinutes(minutes: number): Promise<void> {
+    this.conn()
+      .prepare(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(IDLE_TIMEOUT_MINUTES_SETTINGS_KEY, String(minutes), nowIso());
   }
 
   async previewClearData(scope: ClearDataScope): Promise<ClearDataCounts> {

@@ -26,6 +26,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       body = { error: "UNKNOWN", message: res.statusText };
     }
+    // Distinct from a failed login attempt (INVALID_CREDENTIALS, handled by
+    // LoginPage itself) -- this fires whenever requireAuth rejects an
+    // already-in-flight request because the session cookie expired or was
+    // destroyed server-side. AuthContext listens for it to clear `user`
+    // immediately, instead of the UI silently staying "logged in" until a
+    // manual refresh happens to notice. See also the idle-timeout warning,
+    // which proactively signs out before this would ever fire.
+    if (res.status === 401 && body.error === "AUTHENTICATION_REQUIRED") {
+      window.dispatchEvent(new Event("session-expired"));
+    }
     throw new ApiRequestError(res.status, body);
   }
   if (res.status === 204) return undefined as T;
@@ -150,6 +160,13 @@ export const api = {
     request<{ email: string; enabled: boolean }>("/admin/report-settings", {
       method: "PUT",
       body: JSON.stringify({ email, enabled }),
+    }),
+
+  getSessionConfig: () => request<{ idleTimeoutMinutes: number }>("/session-config"),
+  setIdleTimeoutMinutes: (idleTimeoutMinutes: number) =>
+    request<{ idleTimeoutMinutes: number }>("/admin/session-config", {
+      method: "PUT",
+      body: JSON.stringify({ idleTimeoutMinutes }),
     }),
 
   getDevResetReference: () => request<{ file: FileRecord | null }>("/admin/dev-reset/reference"),

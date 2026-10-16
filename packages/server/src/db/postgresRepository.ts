@@ -39,6 +39,8 @@ const DEV_RESET_REFERENCE_FILE_SETTINGS_KEY = "dev_reset_reference_file_id";
 const REPORT_RECIPIENT_EMAIL_SETTINGS_KEY = "report_recipient_email";
 const REPORT_ENABLED_SETTINGS_KEY = "report_enabled";
 const DEFAULT_REPORT_RECIPIENT_EMAIL = "dev@delutti.com";
+const IDLE_TIMEOUT_MINUTES_SETTINGS_KEY = "idle_timeout_minutes";
+const DEFAULT_IDLE_TIMEOUT_MINUTES = 30;
 
 /**
  * Optional PostgreSQL/Docker persistence path. Implements the same
@@ -611,6 +613,22 @@ export class PostgresRepository implements Repository {
       `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       [REPORT_ENABLED_SETTINGS_KEY, String(enabled)],
+    );
+  }
+
+  async getIdleTimeoutMinutes(): Promise<number> {
+    const { rows } = await this.getPool().query("SELECT value FROM app_settings WHERE key = $1", [
+      IDLE_TIMEOUT_MINUTES_SETTINGS_KEY,
+    ]);
+    const parsed = rows[0]?.value ? Number(rows[0].value) : NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_IDLE_TIMEOUT_MINUTES;
+  }
+
+  async setIdleTimeoutMinutes(minutes: number): Promise<void> {
+    await this.getPool().query(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [IDLE_TIMEOUT_MINUTES_SETTINGS_KEY, String(minutes)],
     );
   }
 

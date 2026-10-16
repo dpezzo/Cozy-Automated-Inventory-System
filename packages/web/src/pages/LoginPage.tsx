@@ -3,7 +3,24 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { useTheme } from "../ThemeContext";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { InfoBanner } from "../components/InfoBanner";
 import { api, ApiRequestError } from "../api";
+
+const SIGNOUT_MESSAGES: Record<string, string> = {
+  idle: "You were signed out after a period of inactivity. Sign in again to continue.",
+  expired: "Your session expired. Sign in again to continue.",
+};
+
+/** Read once per page load (not per render) -- the key is removed immediately so a later manual "Sign out" or page refresh never resurfaces a stale message. */
+function readAndClearSignoutReason(): string | null {
+  try {
+    const reason = sessionStorage.getItem("signout-reason");
+    sessionStorage.removeItem("signout-reason");
+    return reason ? (SIGNOUT_MESSAGES[reason] ?? null) : null;
+  } catch {
+    return null;
+  }
+}
 
 declare global {
   interface Window {
@@ -88,6 +105,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+  const [signoutMessage] = useState(() => readAndClearSignoutReason());
 
   useEffect(() => {
     api
@@ -133,6 +151,7 @@ export default function LoginPage() {
             Update your Miva store's inventory using vendor stock files.
           </p>
         </div>
+        {signoutMessage && !error && <InfoBanner message={signoutMessage} />}
         {error && <ErrorBanner message={error} />}
 
         {googleClientId && (

@@ -14,6 +14,8 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
     date: "2026-10-16",
     items: [
+      "Added an idle-timeout sign-out: after a set number of minutes of inactivity, you'll see a 60-second warning with a \"Stay signed in\" button before being signed out automatically. New Settings > Session Timeout page lets an admin change how many minutes that is.",
+      "Fixed the app sometimes going \"stale\" after sitting open for a while -- it now notices right away when your session has ended and takes you to the sign-in page, instead of looking signed in but not working until you refresh.",
       "Fixed the batch email report's \"Skipped\" count sometimes showing a number larger than the total rows in the run.",
       "Fixed a link from an email (View Run / View Batch) opened while signed out: signing in now takes you straight to that page instead of the home page.",
     ],

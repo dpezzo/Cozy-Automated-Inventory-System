@@ -306,6 +306,36 @@ router.put(
   }),
 );
 
+// Deliberately NOT requireAdmin -- every signed-in user's browser needs this
+// value to run its own idle-timeout countdown, not just admins.
+router.get(
+  "/session-config",
+  asyncHandler(async (_req, res) => {
+    res.json({ idleTimeoutMinutes: await getRepository().getIdleTimeoutMinutes() });
+  }),
+);
+
+router.put(
+  "/admin/session-config",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { idleTimeoutMinutes } = req.body as { idleTimeoutMinutes?: unknown };
+    if (typeof idleTimeoutMinutes !== "number" || !Number.isFinite(idleTimeoutMinutes) || idleTimeoutMinutes < 5 || idleTimeoutMinutes > 480) {
+      res.status(400).json({ error: "INVALID_REQUEST", message: "idleTimeoutMinutes must be a number between 5 and 480." });
+      return;
+    }
+    await getRepository().setIdleTimeoutMinutes(idleTimeoutMinutes);
+    await getRepository().insertAuditLog({
+      actorId: req.session.userId!,
+      action: "IDLE_TIMEOUT_CHANGED",
+      entityType: "system",
+      entityId: null,
+      details: { idleTimeoutMinutes },
+    });
+    res.json({ idleTimeoutMinutes });
+  }),
+);
+
 router.post(
   "/miva/pull-snapshot",
   asyncHandler(async (req, res) => {

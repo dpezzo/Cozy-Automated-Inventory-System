@@ -2,6 +2,17 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-16 — Idle-timeout sign-out, with a warning dialog; fixed stale-session UI
+
+### Added
+- Configurable idle-timeout sign-out: after N minutes of no mouse/keyboard/scroll activity, a warning dialog appears with a live countdown (fixed 60s) and a "Stay signed in" button; if it's not clicked before the countdown ends, the user is signed out (server session destroyed via the real logout call, not just a client-side state clear). New `packages/web/src/components/IdleTimeoutGuard.tsx`, mounted once in `Shell` (`App.tsx`) so it only runs for an authenticated session. Once the warning is showing, only the explicit button resets the timer -- incidental mouse movement near the dialog can't silently dismiss it.
+- New Settings > Session Timeout page (`packages/web/src/pages/SessionTimeoutPage.tsx`) lets an admin set the idle-timeout minutes (5-480) app-wide. Backed by a new `app_settings` key (`idle_timeout_minutes`, default 30) via new `GET /session-config` (any signed-in user -- every browser needs this to run its own timer) and `PUT /admin/session-config` (admin-gated) routes.
+- The login page now shows a one-line reason ("signed out after a period of inactivity" / "your session expired") when it was reached via an automatic sign-out, stashed through `sessionStorage` across the redirect and cleared immediately after being read once.
+
+### Fixed
+- Root cause of the reported "app goes stale after inactivity" behavior: the frontend's `AuthContext` only ever checked login state once, on page load -- if the session cookie expired (or was destroyed) while the tab sat open, the UI kept rendering as if still signed in until a manual refresh happened to notice. `packages/web/src/api.ts`'s request helper now dispatches a `session-expired` window event on any `401 AUTHENTICATION_REQUIRED` response, which `AuthContext` listens for to clear the signed-in user immediately, letting `RequireAuth` redirect to `/login` right away instead of silently breaking mid-session.
+
+## 2026-10-16 — Fix: email report "Skipped" count exceeding total rows; post-login redirect back to the originally requested page
 ## 2026-10-16 — Fix: email report "Skipped" count exceeding total rows; post-login redirect back to the originally requested page
 
 ### Fixed

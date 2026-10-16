@@ -12,7 +12,8 @@ interface AuthState {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (credential: string) => Promise<void>;
-  logout: () => Promise<void>;
+  /** `reason` is stashed in sessionStorage for LoginPage to surface a one-line explanation (e.g. "signed out for inactivity") -- omitted for a normal, explicit "Sign out" click. */
+  logout: (reason?: "idle") => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -29,6 +30,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // Fired by api.ts's request() whenever a background API call discovers the
+  // session cookie has already expired/been destroyed server-side (12h fixed
+  // lifetime, or an idle-timeout logout from another tab) -- without this,
+  // `user` would stay set and the UI would look "logged in" but stop working
+  // until a manual refresh. Clearing it here lets RequireAuth (App.tsx)
+  // redirect to /login immediately, same as any other sign-out.
+  useEffect(() => {
+    function onSessionExpired() {
+      try {
+        sessionStorage.setItem("signout-reason", "expired");
+      } catch {
+        // Private-browsing or storage-disabled -- sign-out still happens, just without the login-page message.
+      }
+      setUser(null);
+    }
+    window.addEventListener("session-expired", onSessionExpired);
+    return () => window.removeEventListener("session-expired", onSessionExpired);
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
     const u = await api.login(email, password);
     setUser(u);
@@ -39,7 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }, []);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (reason?: "idle") => {
+    try {
+      if (reason) sessionStorage.setItem("signout-reason", reason);
+      else sessionStorage.removeItem("signout-reason");
+    } catch {
+      // Private-browsing or storage-disabled -- sign-out still happens, just without the login-page message.
+    }
     await api.logout();
     setUser(null);
   }, []);

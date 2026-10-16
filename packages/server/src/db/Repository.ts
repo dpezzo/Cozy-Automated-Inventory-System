@@ -145,6 +145,10 @@ export interface Repository {
   getReportEnabled(): Promise<boolean>;
   setReportEnabled(enabled: boolean): Promise<void>;
 
+  /** How many minutes of inactivity before a signed-in session is logged out client-side (Settings > Session Timeout). Defaults to 30 when never set. */
+  getIdleTimeoutMinutes(): Promise<number>;
+  setIdleTimeoutMinutes(minutes: number): Promise<void>;
+
   // Vendor configs
   listVendorConfigs(): Promise<VendorConfigRecord[]>;
   findVendorConfigByKey(key: string): Promise<VendorConfigRecord | null>;
