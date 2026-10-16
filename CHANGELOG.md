@@ -2,6 +2,11 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-16 — Fixed banner's "Switch connection" link overlapping the theme toggle
+
+### Fixed
+- The app banner's "Switch connection" link (flush right via `marginLeft: auto`) was sitting directly underneath the fixed top-right theme toggle button, in both light and dark mode, making it unreadable/hard to click. `ActiveSiteBanner.tsx` now reserves 72px of right padding to clear the toggle button.
+
 ## 2026-10-16 — Instructions cards and Settings changelog now start collapsed
 
 ### Changed

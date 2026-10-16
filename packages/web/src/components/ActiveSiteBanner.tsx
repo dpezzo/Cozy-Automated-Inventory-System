@@ -36,7 +36,12 @@ export function ActiveSiteBanner({
         display: "flex",
         alignItems: "center",
         gap: 10,
-        padding: "10px 16px",
+        // Right padding clears the fixed theme-toggle button (top:16/right:24,
+        // 36px wide) that floats above this banner in the top-right corner of
+        // the viewport in both light and dark mode -- without it, "Switch
+        // connection" (flush right via marginLeft: auto below) sits underneath
+        // the button and becomes unclickable/unreadable.
+        padding: "10px 72px 10px 16px",
         borderRadius: "var(--radius-md)",
         marginBottom: 16,
         background: live ? LIVE_BG : DEV_BG,
