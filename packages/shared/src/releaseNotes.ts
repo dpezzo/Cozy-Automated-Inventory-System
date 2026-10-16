@@ -14,6 +14,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
     date: "2026-10-16",
     items: [
+      "Added a banner at the top of every page showing whether you're on the Live or Development Miva store -- bright red for Live, so it can't be missed or confused for the other.",
       "Batch email report: the Live/Development store is now shown as a hard-to-miss colored banner (and in the subject line), the \"View Run\"/\"View Batch\" buttons are now different colors, and each Clean/Updated/Warning/Skipped line now has a \"View these rows\" link that opens Run Review pre-filtered to that set.",
       "Added an idle-timeout sign-out: after a set number of minutes of inactivity, you'll see a 60-second warning with a \"Stay signed in\" button before being signed out automatically. New Settings > Session Timeout page lets an admin change how many minutes that is.",
       "Fixed the app sometimes going \"stale\" after sitting open for a while -- it now notices right away when your session has ended and takes you to the sign-in page, instead of looking signed in but not working until you refresh.",

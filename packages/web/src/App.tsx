@@ -20,6 +20,7 @@ import EmailReportsPage from "./pages/EmailReportsPage";
 import SessionTimeoutPage from "./pages/SessionTimeoutPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
 import { DataSizeAlert } from "./components/DataSizeAlert";
+import { ActiveSiteBanner } from "./components/ActiveSiteBanner";
 import { IdleTimeoutGuard } from "./components/IdleTimeoutGuard";
 import { Sun, Moon, RefreshCcw, History, Layers, ClipboardCheck, Settings, HelpCircle } from "lucide-react";
 
@@ -122,6 +123,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
       </button>
       <main className="main">
+        <ActiveSiteBanner activeSite={activeSite} />
         <DataSizeAlert />
         {children}
       </main>

@@ -2,6 +2,12 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-16 — App-wide Live/Development banner
+
+### Added
+- A persistent, impossible-to-miss banner now appears at the top of every page's main content, naming which Miva site (Development or Live) every action on that page actually hits -- bright red "⚠ LIVE STORE" or slate "Development Store", with an icon and plain-language explanation. New `packages/web/src/components/ActiveSiteBanner.tsx`, mounted in `Shell` (`App.tsx`) above all page content, reusing the `activeSite` state `Shell` already tracked. Added after a real incident: the only prior indicator was a small pill at the bottom of the sidebar, easy to miss -- someone ran a catalog pull, saw a drastically different record count than expected, and didn't realize until after the fact they were looking at the other site.
+- Uses fixed hex colors (`#dc2626` live / `#334155` dev), not the app's theme-adaptive `--red`/`--charcoal` tokens -- `--charcoal` flips to a *light* gray in dark mode, which would have made the Development banner's white text nearly unreadable (caught via a dark-mode screenshot check before shipping). Same color pairing as the batch-push email's own site banner, so the visual language for "which site" stays consistent between the email and the app, in both themes.
+
 ## 2026-10-16 — Email report: prominent Live/Dev banner, distinct CTA colors, per-section filter links
 
 ### Changed
