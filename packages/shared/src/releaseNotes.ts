@@ -12,6 +12,22 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-15",
+    items: [
+      "Added automatic email reports: whenever a batch is pushed or rolled back to Miva, an email summarizes what was clean, updated, flagged with a warning, or skipped, with links back to the run and the batch.",
+      "New Settings > Email Reports page lets you choose who receives these emails and turn them on or off.",
+    ],
+  },
+  {
+    date: "2026-10-14",
+    items: [
+      "Every timestamp in the app (Catalog, Run History, Run Review, Activity Log, and more) now always shows Eastern time, so everyone sees the same clock time no matter their own timezone.",
+      "Added a new warning for a matched product whose parent item is inactive in Miva, even if the product itself still shows stock.",
+      "Run Review's Warnings/Blockers column now shows each warning or blocker as its own colored tag instead of one long comma-separated list.",
+      "Run Review toolbar cleanup: removed an unused approve-all button and all reject buttons (use \"Reset to pending\" instead), and \"Generate batch\" now looks visually distinct from \"Approve all clean.\"",
+    ],
+  },
+  {
     date: "2026-10-13",
     items: [
       "Manage Vendors: added a new matching option, \"Both (UPC + SKU)\", for vendors whose file reliably provides both -- checks each independently and only blocks for review if they disagree, instead of relying on just one.",
