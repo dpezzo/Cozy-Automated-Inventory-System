@@ -101,12 +101,12 @@ describe("renderBatchReportSubject / renderBatchReportHtml / renderBatchReportTe
 
   it("renders a full-width site banner with a distinct color for Live vs Development, independent of the push outcome", () => {
     const liveHtml = renderBatchReportHtml(baseData({ activeSite: "live", action: "API_PUSH_FAILED" }));
-    expect(liveHtml).toContain("#dc2626");
+    expect(liveHtml).toContain('background:#16a34a;padding:10px 28px');
     expect(liveHtml).toMatch(/LIVE STORE/);
     const devHtml = renderBatchReportHtml(baseData({ activeSite: "development", action: "API_PUSH_FAILED" }));
-    expect(devHtml).toContain("#334155");
+    expect(devHtml).toContain('background:#dc2626;padding:10px 28px');
     expect(devHtml).toMatch(/DEVELOPMENT STORE/);
-    expect(devHtml).not.toContain("#dc2626");
+    expect(devHtml).not.toContain('background:#16a34a;padding:10px 28px');
   });
 
   it("gives View Run and View Batch visually distinct button colors, matching the app's own two-action convention", () => {

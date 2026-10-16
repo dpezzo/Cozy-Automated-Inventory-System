@@ -2,6 +2,12 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-16 — Live/Dev banner colors swapped to green/red; admin quick-switch link
+
+### Changed
+- The app-wide `ActiveSiteBanner` and the batch-push email's own site banner now use green (`#16a34a`) for Live and red (`#dc2626`) for Development, matching the more conventional "green = safe, red = caution" reading -- the original red/slate pairing had Live in red, which read backwards to users. `ActiveSiteBanner.tsx` and `batchReportTemplate.ts`.
+- Admins now see a "Switch connection" link on the right side of the app banner that jumps straight to Settings > Miva Connection; non-admin users don't see it, since only admins can change the active site.
+
 ## 2026-10-16 — App-wide Live/Development banner
 
 ### Added

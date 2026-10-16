@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { AlertTriangle, FlaskConical } from "lucide-react";
 
 /**
@@ -11,17 +12,21 @@ import { AlertTriangle, FlaskConical } from "lucide-react";
  * tuned out -- Shell remounts on every navigation anyway, so a dismiss
  * wouldn't persist across pages even if one existed.
  */
-// Fixed hex values, deliberately NOT the theme-adaptive --red/--charcoal
-// tokens: --charcoal flips to a *light* gray in dark mode (see styles.css's
-// dark :root block), which made the Development banner nearly unreadable
-// (white text on light gray) -- caught via a dark-mode screenshot check.
-// Same pairing as the batch-push email's siteBanner() in
-// batchReportTemplate.ts, so the color language for "which Miva site" stays
-// consistent across the email and the app itself, in both themes.
-const LIVE_BG = "#dc2626";
-const DEV_BG = "#334155";
+// Fixed hex values, deliberately NOT theme-adaptive tokens like --charcoal:
+// --charcoal flips to a *light* gray in dark mode (see styles.css's dark
+// :root block), which made an earlier version of this banner nearly
+// unreadable (white text on light gray) -- caught via a dark-mode
+// screenshot check.
+const LIVE_BG = "#16a34a";
+const DEV_BG = "#dc2626";
 
-export function ActiveSiteBanner({ activeSite }: { activeSite: "development" | "live" | null }) {
+export function ActiveSiteBanner({
+  activeSite,
+  isAdmin,
+}: {
+  activeSite: "development" | "live" | null;
+  isAdmin: boolean;
+}) {
   if (!activeSite) return null;
   const live = activeSite === "live";
   return (
@@ -48,6 +53,21 @@ export function ActiveSiteBanner({ activeSite }: { activeSite: "development" | "
             : "this is the test site, not customer-facing."}
         </span>
       </span>
+      {isAdmin && (
+        <Link
+          to="/settings/miva-connection"
+          style={{
+            marginLeft: "auto",
+            flex: "none",
+            color: "#ffffff",
+            fontWeight: 600,
+            fontSize: 13,
+            textDecoration: "underline",
+          }}
+        >
+          Switch connection
+        </Link>
+      )}
     </div>
   );
 }

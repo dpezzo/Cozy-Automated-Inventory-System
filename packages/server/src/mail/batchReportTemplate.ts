@@ -58,8 +58,8 @@ const COLOR = {
   // Live-site banner needs to read as categorically different from any
   // row-level warning/failure color in the same email, so a glance at the
   // banner alone (regardless of success/failure) tells you which store it hit.
-  liveBanner: "#dc2626",
-  devBanner: "#334155",
+  liveBanner: "#16a34a",
+  devBanner: "#dc2626",
 } as const;
 
 const FONT_STACK = "'Inter', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";

@@ -123,7 +123,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
       </button>
       <main className="main">
-        <ActiveSiteBanner activeSite={activeSite} />
+        <ActiveSiteBanner activeSite={activeSite} isAdmin={user?.role === "admin"} />
         <DataSizeAlert />
         {children}
       </main>
