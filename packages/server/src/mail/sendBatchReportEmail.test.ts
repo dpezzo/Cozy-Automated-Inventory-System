@@ -109,6 +109,37 @@ describe("sendBatchReportEmail", () => {
     errorSpy.mockRestore();
   });
 
+  it("computes skippedCount as total minus approved rows, never double-counting BLOCKED+PENDING overlap", async () => {
+    // Regression test for a real production bug: 6841 total rows, 78 clean,
+    // the rest a mix of BLOCKED (always PENDING) and UNCHANGED-but-undecided
+    // (also PENDING) rows. The old formula (byReviewClass.BLOCKED +
+    // byDecisionStatus.PENDING) double-counted every BLOCKED row, since it's
+    // PENDING in *both* buckets, producing a reported skipped count (13203)
+    // that exceeded the run's own total (6841).
+    getRunSummary.mockResolvedValue({
+      total: 6841,
+      byReviewClass: { CLEAN: 78, BLOCKED: 6600, UNCHANGED: 163 },
+      byDecisionStatus: { APPROVED: 5, PENDING: 6836 },
+      changed: 5,
+      unchanged: 6836,
+    });
+    getResendClient.mockReturnValue({ emails: { send } });
+    getRepository.mockReturnValue(baseRepo());
+
+    const { sendBatchReportEmail } = await import("./sendBatchReportEmail");
+    await sendBatchReportEmail({
+      batchId: "batch-1",
+      target: "update",
+      action: "API_PUSH_SUCCEEDED",
+      pushResult: { pushed: 5, failed: 0, verificationMismatches: 0, results: [] },
+    });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const html: string = send.mock.calls[0]![0].html;
+    // 6841 total - 5 approved = 6836, matching byDecisionStatus.PENDING exactly -- never 13203.
+    expect(html).toContain("Skipped &middot; 6836");
+  });
+
   it("resolves without sending when the batch or run can no longer be found", async () => {
     getResendClient.mockReturnValue({ emails: { send } });
     getRepository.mockReturnValue(baseRepo({ findBatchById: vi.fn().mockResolvedValue(null) }));

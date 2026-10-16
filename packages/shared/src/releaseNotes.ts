@@ -12,6 +12,13 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-16",
+    items: [
+      "Fixed the batch email report's \"Skipped\" count sometimes showing a number larger than the total rows in the run.",
+      "Fixed a link from an email (View Run / View Batch) opened while signed out: signing in now takes you straight to that page instead of the home page.",
+    ],
+  },
+  {
     date: "2026-10-15",
     items: [
       "Added automatic email reports: whenever a batch is pushed or rolled back to Miva, an email summarizes what was clean, updated, flagged with a warning, or skipped, with links back to the run and the batch.",

@@ -2,6 +2,12 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-16 — Fix: email report "Skipped" count exceeding total rows; post-login redirect back to the originally requested page
+
+### Fixed
+- Batch push/rollback email's "Skipped" stat could report a count larger than the run's own total rows (e.g. 13,203 skipped out of 6,841 total, seen on a real test push). Root cause: `skippedCount` summed `byReviewClass.BLOCKED + byDecisionStatus.PENDING`, but those two buckets overlap -- a BLOCKED row is always PENDING, and an UNCHANGED-but-undecided row is PENDING too, so both got double-counted. `packages/server/src/mail/sendBatchReportEmail.ts` now computes it as `total - APPROVED - APPROVED_WARNING_ACK`, the only partition of `byDecisionStatus` that's guaranteed not to overlap. New regression test in `sendBatchReportEmail.test.ts` reproduces the exact real-world numbers.
+- Clicking "View Run" or "View Batch" in the email, while signed out in that browser, dropped the user on the Home page after logging in instead of the page they actually clicked through to. `RequireAuth` (`packages/web/src/App.tsx`) now passes the originally-requested path through `Navigate`'s `state.from`, and `LoginPage.tsx` redirects back to it (sanitized to a same-app relative path only, never an external URL) after a successful sign-in instead of always going to `/`.
+
 ## 2026-10-15 — Miva snapshot pulls now carry their source site; dropdowns filter to the active one
 
 ### Added

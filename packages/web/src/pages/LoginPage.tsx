@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { useTheme } from "../ThemeContext";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -73,9 +73,16 @@ function GoogleSignInButton({ clientId, onError }: { clientId: string; onError: 
   return <div ref={buttonRef} style={{ display: "flex", justifyContent: "center" }} />;
 }
 
+/** Only a same-app relative path is accepted as a post-login redirect target -- a bare "/" fallback otherwise, so a malformed or external `state.from` (e.g. a crafted "//evil.com" protocol-relative URL) can never redirect off the app. */
+function sanitizeRedirectTarget(from: unknown): string {
+  if (typeof from === "string" && from.startsWith("/") && !from.startsWith("//")) return from;
+  return "/";
+}
+
 export default function LoginPage() {
   const { user, login } = useAuth();
   const { theme } = useTheme();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +96,13 @@ export default function LoginPage() {
       .catch(() => setGoogleClientId(null));
   }, []);
 
-  if (user) return <Navigate to="/" replace />;
+  // RequireAuth (App.tsx) redirects here with state.from set to whatever URL
+  // was originally requested -- e.g. a run/batch link opened from an email
+  // while signed out -- so a successful sign-in lands back on it instead of
+  // always bouncing to the home page.
+  const redirectTarget = sanitizeRedirectTarget((location.state as { from?: unknown } | null)?.from);
+
+  if (user) return <Navigate to={redirectTarget} replace />;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

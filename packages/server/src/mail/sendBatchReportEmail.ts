@@ -38,7 +38,14 @@ async function buildBatchReportData(params: {
     repo.findVendorConfigByKey(vendorSlugFromRuleId(run.ruleId)),
   ]);
 
-  const skippedCount = (runSummary.byReviewClass.BLOCKED ?? 0) + (runSummary.byDecisionStatus.PENDING ?? 0);
+  // byDecisionStatus buckets are mutually exclusive and sum to runSummary.total,
+  // so "not approved" is the only safe way to count skipped rows. The earlier
+  // byReviewClass.BLOCKED + byDecisionStatus.PENDING formula double-counted:
+  // a BLOCKED row is always PENDING (can never be approved), and an UNCHANGED
+  // row left undecided is also PENDING, so both got counted in *both* terms --
+  // the reported total could exceed runSummary.total entirely.
+  const skippedCount =
+    runSummary.total - (runSummary.byDecisionStatus.APPROVED ?? 0) - (runSummary.byDecisionStatus.APPROVED_WARNING_ACK ?? 0);
 
   return {
     target: params.target,

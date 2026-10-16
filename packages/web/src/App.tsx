@@ -128,8 +128,13 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <div style={{ padding: 40 }}>Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  // Carries the originally-requested URL (e.g. a run/batch link from an
+  // email, opened signed-out in a browser with no session) through to
+  // LoginPage, so a successful sign-in lands back on it instead of always
+  // bouncing to the home page.
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   return <Shell>{children}</Shell>;
 }
 
