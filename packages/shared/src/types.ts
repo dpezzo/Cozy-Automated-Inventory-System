@@ -116,7 +116,9 @@ export type BlockerCode =
   /** Olliix's historical name for this same code, kept only because it's baked into the immutable, read-only bake-off fixture bundle -- new vendors use MISSING_FROM_VENDOR. */
   | "MISSING_FROM_OLLIIX"
   /** matchStrategy "upc-or-sku" only: a vendor row's UPC and SKU each cleanly resolve to exactly one Miva product, but to two DIFFERENT products -- never silently trust one over the other. */
-  | "IDENTIFIER_MISMATCH";
+  | "IDENTIFIER_MISMATCH"
+  /** A genuine vendor match against a Miva product with its native "Track Inventory" flag on and a valid (zero or greater) native stock count -- Cale stocks this product himself in his own warehouse, so it isn't actually dropshipped right now and the vendor's file must never drive its managed fields. Reverts to normal dropship reconciliation once Cale depletes his stock and turns Miva's tracking back off. */
+  | "MIVA_BUILT_IN_INVENTORY_TRACKED";
 
 export interface ManagedValues {
   simpleInventory: string;

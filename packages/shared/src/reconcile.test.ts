@@ -193,6 +193,53 @@ describe("reconcile: DS_INV_MGT tracked-flag warnings", () => {
   });
 });
 
+describe("reconcile: Miva built-in inventory tracking blocker", () => {
+  it("blocks a genuine match when Miva's native tracking is on and stock is zero or greater", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({ trackInventory: "1", currentStockLevel: "0" })];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.matchOutcome).toBe("MATCHED");
+    expect(rows[0]!.reviewClass).toBe("BLOCKED");
+    expect(rows[0]!.blockerCodes).toEqual(["MIVA_BUILT_IN_INVENTORY_TRACKED"]);
+    expect(rows[0]!.proposed).toEqual({});
+    expect(rows[0]!.isEligibleForApproval).toBe(false);
+  });
+
+  it("does not block when native tracking is on but the stock count is blank", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({ trackInventory: "1", currentStockLevel: "" })];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.blockerCodes).not.toContain("MIVA_BUILT_IN_INVENTORY_TRACKED");
+  });
+
+  it("does not block when native tracking is on but the stock count is negative", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({ trackInventory: "1", currentStockLevel: "-1" })];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.blockerCodes).not.toContain("MIVA_BUILT_IN_INVENTORY_TRACKED");
+  });
+
+  it("does not block when native tracking is off, regardless of stock count", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({ trackInventory: "0", currentStockLevel: "5" })];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.blockerCodes).not.toContain("MIVA_BUILT_IN_INVENTORY_TRACKED");
+    expect(rows[0]!.matchOutcome).toBe("MATCHED");
+  });
+
+  it("does not block when tracking/stock fields are entirely absent (today's default)", () => {
+    const olliix = [emptyOlliixRow({ upcRaw: "000000000999", totalQtyRaw: "10" })];
+    const miva = [mivaRow({})];
+    const { rows } = reconcile(olliix, miva, { config: OLLIIX_RULE_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.blockerCodes).not.toContain("MIVA_BUILT_IN_INVENTORY_TRACKED");
+  });
+});
+
 describe("reconcile: matchStrategy upc-or-sku", () => {
   const DUAL_CONFIG = { ...OLLIIX_RULE_CONFIG, matchStrategy: "upc-or-sku" as const };
 
@@ -224,6 +271,17 @@ describe("reconcile: matchStrategy upc-or-sku", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.reviewClass).toBe("WARNING");
     expect(rows[0]!.warningCodes).toEqual(["MIVA_MARKED_DISCONTINUED"]);
+  });
+
+  it("blocks a dual-identifier match when Miva's native tracking is on and stock is zero or greater", () => {
+    const vendor = [dualVendorRow({ upcRaw: "000000000999", skuRaw: "MPN-999" })];
+    const miva = [mivaRow({ trackInventory: "1", currentStockLevel: "3" })];
+    const { rows } = reconcile(vendor, miva, { config: DUAL_CONFIG, runDate: RUN_DATE });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.matchOutcome).toBe("MATCHED");
+    expect(rows[0]!.reviewClass).toBe("BLOCKED");
+    expect(rows[0]!.blockerCodes).toEqual(["MIVA_BUILT_IN_INVENTORY_TRACKED"]);
+    expect(rows[0]!.isEligibleForApproval).toBe(false);
   });
 
   it("blocks with IDENTIFIER_MISMATCH when UPC and SKU each cleanly resolve to different products", () => {

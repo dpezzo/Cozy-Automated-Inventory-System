@@ -42,6 +42,13 @@ function isMivaRowInactive(row: MivaRawRow): boolean {
   return v === "false" || v === "0";
 }
 
+/** True when Miva's own native inventory tracking is turned on for this product AND its native stock count is a valid, non-negative number -- Cale stocks it himself right now, so the vendor's file must not drive it. Reuses parseTotalQty's exact "zero or greater" validity rule for the native stock count. */
+function isNativelyTrackedWithStock(row: MivaRawRow): boolean {
+  const trackingEnabled = ["1", "true"].includes((row.trackInventory ?? "").trim().toLowerCase());
+  if (!trackingEnabled) return false;
+  return parseTotalQty(row.currentStockLevel).kind === "valid";
+}
+
 function buildProductCodeIndex(mivaRows: MivaRawRow[]): Map<string, MivaRawRow> {
   const index = new Map<string, MivaRawRow>();
   for (const row of mivaRows) index.set(row.productCode, row);
@@ -274,7 +281,34 @@ export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], op
       continue;
     }
 
-    // lookup.status === "unique": a genuine match. Apply quantity + date rules.
+    // lookup.status === "unique": a genuine match. Before anything else, check whether
+    // Miva's own native inventory tracking has already taken over this product (Cale
+    // stocks it himself right now) -- if so, the vendor's quantity is irrelevant and this
+    // is a hard block, not a quantity/date/warning concern.
+    if (isNativelyTrackedWithStock(lookup.match)) {
+      results.push({
+        sourceRowNumber: row.sourceRowNumber,
+        itemNo: row.itemNoRaw,
+        rawUpc: getVendorIdentifierRaw(row),
+        normalizedUpc: key.normalized,
+        description: row.descriptionRaw,
+        productCode,
+        matchOutcome: "MATCHED",
+        reviewClass: "BLOCKED",
+        warningCodes: [],
+        blockerCodes: ["MIVA_BUILT_IN_INVENTORY_TRACKED"],
+        totalQtyRaw,
+        expectedDate: null,
+        expectedDateSources: [],
+        current,
+        proposed: {},
+        changed: false,
+        isEligibleForApproval: false,
+      });
+      continue;
+    }
+
+    // Apply quantity + date rules.
     const totalQty = parseTotalQty(row.totalQtyRaw);
     if (totalQty.kind !== "valid") {
       const blocker: BlockerCode =
@@ -525,6 +559,12 @@ function buildDualMatchedRow(
   const totalQtyRaw = formatTotalQtyDisplay(row.totalQtyRaw);
   const productCode = product.productCode;
   const current = currentValuesFromMiva(product);
+
+  // See the identical check + comment in reconcile()'s single-identifier path above --
+  // Miva's own native inventory tracking takes priority over the vendor's quantity entirely.
+  if (isNativelyTrackedWithStock(product)) {
+    return dualBlockedRow(row, rawUpc, rawSku, normalizedKey, "MATCHED", ["MIVA_BUILT_IN_INVENTORY_TRACKED"], productCode, current);
+  }
 
   const totalQty = parseTotalQty(row.totalQtyRaw);
   if (totalQty.kind !== "valid") {

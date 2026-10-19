@@ -163,16 +163,9 @@ const COLUMNS: ColumnDef[] = [
   {
     key: "currentStockLevel",
     label: "Stock level",
-    get: (r) => r.currentStockLevel ?? "",
+    get: (r) => (formatActive(r.trackInventory) === "Yes" ? r.currentStockLevel ?? "" : "N/A"),
     defaultWidth: 100,
-    title: "This product's current on-hand stock quantity in Miva.",
-  },
-  {
-    key: "trackInventory",
-    label: "Track inventory",
-    get: (r) => formatActive(r.trackInventory),
-    defaultWidth: 110,
-    title: "Whether inventory tracking is turned on for this product in Miva.",
+    title: "This product's current on-hand stock quantity in Miva. Shows N/A when Miva's native inventory tracking is off for this product.",
   },
   {
     key: "simpleInventory",

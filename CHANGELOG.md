@@ -2,6 +2,14 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-19 — Reconciliation now respects Miva's built-in inventory tracking
+
+### Added
+- New `MIVA_BUILT_IN_INVENTORY_TRACKED` blocker code: when a vendor row genuinely matches a Miva product whose native "Track Inventory" flag is on *and* Miva's own stock count is a valid, non-negative number, the row is now blocked from approval instead of being silently proposed as a managed-field change. Reason: Cale occasionally stocks a product himself in his own warehouse and flips Miva's native tracking on for it -- while that's true, the vendor's dropship file must not drive it. It reverts to normal dropship reconciliation automatically once Cale depletes his stock and turns Miva's tracking back off (the check is purely data-driven off Miva's own flag, no manual toggle in this app). Row still appears in the output for visibility, same as every other blocked row, just not eligible for approval/push. Implemented in `packages/shared/src/reconcile.ts` (both the single-identifier and `upc-or-sku` dual-identifier match paths) and `packages/shared/src/types.ts`. Confirmed a no-op against the frozen bake-off fixture bundle, which has no `TRACK_INVENTORY`/`CURRENT_STOCK_LEVEL` columns at all.
+
+### Changed
+- Catalog page's "Stock level" column now shows "N/A" instead of a raw (often misleadingly `0`) number whenever Miva's native inventory tracking is off for that product, derived from the existing `trackInventory` flag already pulled from Miva. Removed the separate "Track inventory" Yes/No column since Stock level alone (a number vs. "N/A") now fully conveys that status. `packages/web/src/pages/CatalogPage.tsx`.
+
 ## 2026-10-16 — Fixed banner's "Switch connection" link overlapping the theme toggle
 
 ### Fixed

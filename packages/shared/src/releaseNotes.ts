@@ -12,6 +12,13 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-19",
+    items: [
+      "If Miva already shows a product as in-house tracked (its built-in inventory tracking is on with a real stock count), reconciliation now blocks that row from being approved instead of letting a vendor update overwrite it -- it still shows up in the run for visibility, just marked blocked. It goes back to normal as soon as Miva's tracking is turned off for that product.",
+      "Catalog page: the \"Stock level\" column now shows \"N/A\" for products where Miva's built-in inventory tracking is off, instead of a misleading 0. The separate \"Track inventory\" column was removed since Stock level now shows that on its own.",
+    ],
+  },
+  {
     date: "2026-10-16",
     items: [
       "Added a banner at the top of every page showing whether you're on the Live or Development Miva store -- green for Live, red for Development, so it can't be missed or confused for the other. Admins also see a \"Switch connection\" link on the banner that jumps straight to the Miva Connection settings page.",
