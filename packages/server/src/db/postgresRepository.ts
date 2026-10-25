@@ -968,6 +968,7 @@ function mapVendorConfigRow(row: Record<string, unknown>): VendorConfigRecord {
     brandAllowlist: (row.brand_allowlist as string[]) ?? [],
     matchStrategy: row.match_strategy as VendorConfigRecord["matchStrategy"],
     missingBlockerCode: (row.missing_blocker_code as VendorConfigRecord["missingBlockerCode"]) ?? null,
+    discontinuedThreshold: row.discontinued_threshold === null || row.discontinued_threshold === undefined ? null : Number(row.discontinued_threshold),
     fileShape: row.file_shape as VendorConfigRecord["fileShape"],
     columnMapping: (row.column_mapping as VendorConfigRecord["columnMapping"]) ?? null,
     pluginFilename: (row.plugin_filename as string | null) ?? null,

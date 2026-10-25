@@ -12,6 +12,16 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-25",
+    items: [
+      "Gobi Heat's new inventory report (with the Product Phase column) now uploads, and the old format still works. If a required column ever can't be recognized, the upload stops with a clear message instead of guessing.",
+      "Gobi products marked End of Life or Discontinued with fewer than 10 units are now proposed as NLA (taken out of rotation). At 10 or more units they follow the normal stock rules (6+ in stock, 5 and under sold out) so they stay live while inventory lasts. Active products work as before.",
+      "If a product is already NLA in Miva but Gobi's file says it should be live, it shows as a warning that needs your individual approval. Approving it puts it back in stock with the normal tracking values.",
+      "A live Gobi product in Miva that is missing from Gobi's file entirely now shows as a warning that proposes NLA (approve it individually) instead of a hard block.",
+      "Gobi products that are already set up correctly as NLA no longer show up as warnings; they appear as unchanged.",
+    ],
+  },
+  {
     date: "2026-10-19",
     items: [
       "If Miva already shows a product as in-house tracked (its built-in inventory tracking is on with a real stock count), reconciliation now blocks that row from being approved instead of letting a vendor update overwrite it -- it still shows up in the run for visibility, just marked blocked. It goes back to normal as soon as Miva's tracking is turned off for that product.",

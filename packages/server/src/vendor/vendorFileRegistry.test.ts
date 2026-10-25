@@ -38,6 +38,14 @@ describe("detectVendorFile", () => {
     expect(result.rows).toHaveLength(687);
   });
 
+  it("detects the 2026-10-24 Gobi report (renamed headers, Product Phase column) as gobi_workbook", async () => {
+    const buffer = readFileSync(path.join(VENDORS_DIR, "Inventory_Report_20261024.xlsx"));
+    const result = await detectVendorFile(buffer);
+    expect(result.vendorKey).toBe("gobi");
+    expect(result.fileKind).toBe("gobi_workbook");
+    expect(result.rows).toHaveLength(1105);
+  });
+
   it("detects the real FieldSheer/MobileWarming file as fieldsheer_workbook", async () => {
     const buffer = readFileSync(path.join(VENDORS_DIR, "FieldSheer-MobileWarming_daily_inventory.csv"));
     const result = await detectVendorFile(buffer);

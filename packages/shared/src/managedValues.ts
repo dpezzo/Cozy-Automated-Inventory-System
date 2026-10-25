@@ -1,10 +1,24 @@
 import type { ManagedValues } from "./types";
 
-/** Computes proposed managed values per Olliix_MVP_Rule_Contract.md section 8. */
+/** Computes proposed managed values per Olliix_MVP_Rule_Contract.md section 8 (IN STOCK / SOLD OUT), plus the NLA recipe for phase-aware vendors. */
 export function computeProposedManagedValues(
-  status: "IN STOCK" | "SOLD OUT",
+  status: "IN STOCK" | "SOLD OUT" | "NLA",
   expectedDate: string | null,
 ): ManagedValues {
+  // NLA recipe (Cale, 2026-10-25): status "NO LONGER AVAILABLE", availability /
+  // restock message / datafeed / DS_INV_MGT all blank, shopping feed "Exclude".
+  // Blank DS_INV_MGT takes the product out of the app's own tracked population,
+  // matching how the existing NLA products in Miva are already set up.
+  if (status === "NLA") {
+    return {
+      simpleInventory: "NO LONGER AVAILABLE",
+      availability: "",
+      restockMessage: "",
+      dataFeed: "",
+      shoppingFeed: "Exclude",
+      dsInvMgt: "",
+    };
+  }
   if (status === "IN STOCK") {
     return {
       simpleInventory: "IN STOCK",

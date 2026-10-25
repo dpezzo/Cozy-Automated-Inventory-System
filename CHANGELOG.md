@@ -2,6 +2,24 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-25 - Gobi Heat: new report format and Product Phase (End of Life / Discontinued) NLA rule
+
+### Added
+- Gobi's revised inventory report (renamed headers, renamed worksheet, new `Product Phase` column with Active / End of Life (EOL) / Discontinued) now uploads. `gobiParser.ts` matches each logical column against a short, explicit alias list (case, spacing and punctuation insensitive, not fuzzy): ID = `Gobi Heat ID` / `Gobo Heat ID (internal use only)` / `GOBI SKU`, quantity = the old long `Remaining after reservations ...` header / `QTY Available`, phase = `Product Phase` (optional, so the old format still parses and is treated as all Active). The worksheet is found by the legacy name, a similar "main inventory" name, or the workbook's only sheet. A required column that matches no alias still fails the upload with a clear `REQUIRED_COLUMNS_MISSING` error rather than guessing.
+- New NLA outcome for phase-aware vendors (opt-in per vendor via the new `discontinuedThreshold` rule setting; Gobi = 10). A row whose phase is End of Life or Discontinued with fewer than 10 units is now proposed as NLA instead of IN STOCK / SOLD OUT. At 10+ units it follows the normal stock rule (6+ in stock, 5 and under sold out) so a discontinued product stays live while real inventory remains. Active products are unchanged. Phase text is read by a tolerant normalized match (`productPhase.ts`: "End of Life (EOL)", "EOL", "discontinued" all work); an unrecognized phase value is treated as Active and flagged with the new `UNRECOGNIZED_PRODUCT_PHASE` warning.
+- The standard NLA recipe (agreed with Cale): status `NO LONGER AVAILABLE`, availability / restock message / datafeed / DS_INV_MGT blank, shopping feed `Exclude` (`managedValues.ts`).
+- New migration `0011_vendor_discontinued_threshold.sql` (Postgres and SQLite) adds `vendor_configs.discontinued_threshold`, set to 10 for Gobi and NULL (off) for every other vendor. `computeRuleConfigHash` only includes it when set, so every other vendor's rule config hash is unchanged.
+
+### Changed
+- A live Miva Gobi product that no longer appears in the vendor file used to be a hard block (`MISSING_FROM_VENDOR`). For phase-aware vendors it is now a WARNING row (`MISSING_FROM_VENDOR_PROPOSED_NLA`) that proposes the NLA values and can be approved individually; it can never be bulk-approved. A product Miva already shows as NO LONGER AVAILABLE is still quietly UNCHANGED, and vendors that have not opted in keep the original block.
+- When a row is itself proposing NLA, the "Miva state" warnings (`MIVA_NOT_DROPSHIP_TRACKED`, `MIVA_CURRENTLY_NLA`, `MIVA_MARKED_DISCONTINUED`, `MIVA_PARENT_INACTIVE`) are skipped: a product already set up as NLA resolves UNCHANGED, and one that only needs its NLA fields tidied is an ordinary CLEAN change. Reactivation is unchanged: an NLA product the vendor now says should be live is still a WARNING needing individual approval, and approving it writes the full IN STOCK / SOLD OUT values (including DS_INV_MGT = 1 and a cleared shopping feed).
+
+### Checked against real data (Gobi report 2026-10-24 vs Miva export 2026-10-25)
+- 1,105 rows parsed (820 Active, 116 EOL, 169 Discontinued). Reconciliation: 85 CLEAN changes to NLA (62 live Discontinued/EOL products under 10 units plus 23 existing NLA products whose fields get tidied), 94 already-correct NLA rows UNCHANGED, 37 reactivation warnings for NLA products the vendor says are live, 8 missing-from-file warnings, 407 unmatched file SKUs still BLOCKED (`NO_MIVA_MATCH` / `UNKNOWN_MIVA_BRAND`), 1 duplicate-MPN block (fixed in Miva since the export).
+
+### Tests
+- New `gobiNla.test.ts` (22 tests: phase parsing, NLA recipe, thresholds at 5/9/10, Active unaffected, old format, unrecognized phase, already-NLA UNCHANGED, reactivation warnings, missing-from-vendor behavior, config hash stability). `gobiParser.test.ts` and `vendorFileRegistry.test.ts` now cover the new report (1,105 rows, phase counts, detected as Gobi).
+
 ## 2026-10-19 — Reconciliation now respects Miva's built-in inventory tracking
 
 ### Added

@@ -37,6 +37,7 @@ function toVendorRuleConfig(record: VendorConfigRecord): VendorRuleConfig {
     brandAllowlist: record.brandAllowlist,
     matchStrategy: record.matchStrategy,
     missingBlockerCode: record.missingBlockerCode ?? undefined,
+    discontinuedThreshold: record.discontinuedThreshold ?? undefined,
   };
 }
 

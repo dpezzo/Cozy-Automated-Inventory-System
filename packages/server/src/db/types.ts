@@ -94,6 +94,8 @@ export interface VendorConfigRecord {
   brandAllowlist: string[];
   matchStrategy: VendorMatchStrategy;
   missingBlockerCode: BlockerCode | null;
+  /** Units below which an End of Life / Discontinued row becomes NLA. null = vendor not opted in (see VendorRuleConfig.discontinuedThreshold). */
+  discontinuedThreshold: number | null;
   fileShape: VendorFileShape;
   columnMapping: GenericCsvColumnMapping | null;
   pluginFilename: string | null;

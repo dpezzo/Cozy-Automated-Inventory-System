@@ -28,6 +28,8 @@ export interface VendorRawRow {
   skuRaw?: string | null;
   descriptionRaw: string | null;
   totalQtyRaw: string | null;
+  /** Vendor-reported product lifecycle text (e.g. Gobi's "Product Phase": Active / End of Life (EOL) / Discontinued). Optional: only vendors whose file carries such a column populate it; interpreted by productPhase.ts, never compared as a raw string. */
+  productPhaseRaw?: string | null;
   /** Per-location incoming-date/quantity evidence. Optional: only Olliix's file has this concept -- every other vendor simply omits it, and the rule engine treats that as "no expected date" rather than an error. */
   warehouses?: Record<WarehouseCode, WarehouseEvidence>;
 }
@@ -97,7 +99,11 @@ export type WarningCode =
   /** A genuine vendor match against a Miva product whose *status* field (simpleInventory) already says "NO LONGER AVAILABLE" -- a separate field from DROPSHIP_INVENTORY_MANAGEMENT/MIVA_CURRENTLY_NLA, and not implied by it: a product can be tracked ("1") and still have this status set. Without this check such a row resolves CLEAN (eligible for bulk approval) with no indication Miva already shows it discontinued. */
   | "MIVA_MARKED_DISCONTINUED"
   /** This row's matched Miva product is a Variant whose PARENT product is inactive. Informational, not a data error: a parent can go inactive because every other variant in the family is NLA/discontinued, even while this specific variant still shows stock -- Cale's call (2026-10) is to stop selling the whole family once the parent is inactive, so this flags that decision for review rather than silently approving a restock on a product line the business has chosen to retire. */
-  | "MIVA_PARENT_INACTIVE";
+  | "MIVA_PARENT_INACTIVE"
+  /** The vendor file's lifecycle/phase text was non-blank but not recognizable as Active, End of Life, or Discontinued -- the row is treated as Active (normal stock rules) and flagged so a new/misspelled phase value never silently changes behavior. */
+  | "UNRECOGNIZED_PRODUCT_PHASE"
+  /** A live (not already NO LONGER AVAILABLE) Miva product for a phase-aware vendor that no longer appears in the vendor's file at all. Approving it sets NLA. */
+  | "MISSING_FROM_VENDOR_PROPOSED_NLA";
 
 export type BlockerCode =
   | "BLANK_UPC"
@@ -172,4 +178,14 @@ export interface VendorRuleConfig {
   matchStrategy: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";
   /** Blocker code for "Miva product missing from this vendor's file". Defaults to MISSING_FROM_VENDOR; Olliix pins its historical MISSING_FROM_OLLIIX to stay byte-identical with the immutable bake-off fixture bundle. */
   missingBlockerCode?: BlockerCode;
+  /**
+   * Opts a vendor into lifecycle-aware NLA handling. When set, a row whose
+   * vendor-reported phase is End of Life or Discontinued and whose quantity is
+   * BELOW this value is proposed as NLA (NO LONGER AVAILABLE) instead of
+   * IN STOCK/SOLD OUT, and a live Miva product missing from the vendor file is
+   * proposed as NLA (a WARNING needing explicit approval) instead of being a
+   * hard block. At or above this value the normal inStockThreshold rule applies.
+   * Unset (the default) leaves every existing vendor's behavior untouched.
+   */
+  discontinuedThreshold?: number;
 }

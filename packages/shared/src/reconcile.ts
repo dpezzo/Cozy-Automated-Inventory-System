@@ -14,6 +14,7 @@ import { normalizeUpc, normalizeGtin, normalizeSku, isBrandAllowed } from "./nor
 import { parseTotalQty, parseWarehouseQty } from "./quantity";
 import { selectExpectedDate, type ParsedCalendarDate } from "./dateRules";
 import { computeProposedManagedValues, managedValuesEqual } from "./managedValues";
+import { interpretProductPhase } from "./productPhase";
 
 function formatTotalQtyDisplay(raw: string | null): string | null {
   return raw;
@@ -47,6 +48,29 @@ function isNativelyTrackedWithStock(row: MivaRawRow): boolean {
   const trackingEnabled = ["1", "true"].includes((row.trackInventory ?? "").trim().toLowerCase());
   if (!trackingEnabled) return false;
   return parseTotalQty(row.currentStockLevel).kind === "valid";
+}
+
+/**
+ * Decides IN STOCK / SOLD OUT / NLA for a valid-quantity vendor row. NLA only
+ * exists for vendors that opt in via config.discontinuedThreshold: a row the
+ * vendor reports as End of Life or Discontinued with fewer units than that
+ * threshold is NLA; at or above it, the ordinary inStockThreshold rule applies
+ * (so a discontinued product stays live while real inventory remains). An
+ * unrecognized phase value is treated as Active but reported so it gets a
+ * warning instead of silently changing behavior.
+ */
+function resolveStockStatus(
+  row: VendorRawRow,
+  quantity: number,
+  config: VendorRuleConfig,
+): { status: "IN STOCK" | "SOLD OUT" | "NLA"; unrecognizedPhase: boolean } {
+  const normalStatus = quantity >= config.inStockThreshold ? "IN STOCK" : "SOLD OUT";
+  if (config.discontinuedThreshold === undefined) return { status: normalStatus, unrecognizedPhase: false };
+  const phase = interpretProductPhase(row.productPhaseRaw);
+  if (phase === "END_OF_LIFE_OR_DISCONTINUED" && quantity < config.discontinuedThreshold) {
+    return { status: "NLA", unrecognizedPhase: false };
+  }
+  return { status: normalStatus, unrecognizedPhase: phase === "UNRECOGNIZED" };
 }
 
 function buildProductCodeIndex(mivaRows: MivaRawRow[]): Map<string, MivaRawRow> {
@@ -339,27 +363,36 @@ export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], op
       continue;
     }
 
-    const status: "IN STOCK" | "SOLD OUT" = totalQty.value >= config.inStockThreshold ? "IN STOCK" : "SOLD OUT";
+    const { status, unrecognizedPhase } = resolveStockStatus(row, totalQty.value, config);
 
     const warnings: WarningCode[] = [];
+    if (unrecognizedPhase) warnings.push("UNRECOGNIZED_PRODUCT_PHASE");
 
     // Matching no longer requires a non-blank DS_INV_MGT upstream (see
     // runService.ts) -- a genuine identifier+brand match against an
     // untracked or NLA Miva row must never silently resolve to CLEAN, since
     // approving it would either start tracking a product nobody's reviewed
     // or reactivate something deliberately marked discontinued.
+    // These Miva-state warnings exist to stop a vendor row from silently starting to
+    // track, or reactivating, something Miva has pulled. They don't apply when the row
+    // itself proposes NLA: an already-correct NLA product must resolve UNCHANGED, and
+    // one that merely needs its NLA fields tidied is an ordinary change.
     const dsInvMgt = (current.dsInvMgt ?? "").trim();
-    if (dsInvMgt === "") warnings.push("MIVA_NOT_DROPSHIP_TRACKED");
-    else if (dsInvMgt === "NLA") warnings.push("MIVA_CURRENTLY_NLA");
+    if (status !== "NLA") {
+      if (dsInvMgt === "") warnings.push("MIVA_NOT_DROPSHIP_TRACKED");
+      else if (dsInvMgt === "NLA") warnings.push("MIVA_CURRENTLY_NLA");
+    }
 
     // Independent of the tracked-flag checks above: a product can be
     // properly tracked ("1") and still have its separate status field
     // already set to NO LONGER AVAILABLE (e.g. set by hand, or mid
     // transition) -- without this, such a row resolves CLEAN with no
     // indication Miva already shows it discontinued.
-    if ((current.simpleInventory ?? "").trim() === "NO LONGER AVAILABLE") warnings.push("MIVA_MARKED_DISCONTINUED");
+    if (status !== "NLA") {
+      if ((current.simpleInventory ?? "").trim() === "NO LONGER AVAILABLE") warnings.push("MIVA_MARKED_DISCONTINUED");
 
-    if (hasInactiveParent(lookup.match, productCodeIndex)) warnings.push("MIVA_PARENT_INACTIVE");
+      if (hasInactiveParent(lookup.match, productCodeIndex)) warnings.push("MIVA_PARENT_INACTIVE");
+    }
 
     let dateResult: { date: string | null; sources: string[]; conflict: boolean } = { date: null, sources: [], conflict: false };
 
@@ -438,6 +471,34 @@ export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], op
     // information and keeps it out of the way once someone has already
     // made that call in Miva.
     const alreadyDiscontinued = (current.simpleInventory ?? "").trim() === "NO LONGER AVAILABLE";
+
+    // Phase-aware vendors (config.discontinuedThreshold set): a live product that has
+    // dropped out of the vendor's file entirely is proposed as NLA, but only as a
+    // WARNING a person must explicitly approve -- never a silent or bulk-approvable
+    // change. Every other vendor keeps the original hard block (DEV-001 above).
+    if (!alreadyDiscontinued && config.discontinuedThreshold !== undefined) {
+      const proposedNla = computeProposedManagedValues("NLA", null);
+      results.push({
+        sourceRowNumber: null,
+        itemNo: null,
+        rawUpc: getMivaIdentifierRaw(row),
+        normalizedUpc: normalized.normalized,
+        description: null,
+        productCode: row.productCode,
+        matchOutcome: "MISSING - REVIEW REQUIRED",
+        reviewClass: "WARNING",
+        warningCodes: ["MISSING_FROM_VENDOR_PROPOSED_NLA"],
+        blockerCodes: [],
+        totalQtyRaw: null,
+        expectedDate: null,
+        expectedDateSources: [],
+        current,
+        proposed: proposedNla,
+        changed: !managedValuesEqual(current, proposedNla),
+        isEligibleForApproval: true,
+      });
+      continue;
+    }
 
     results.push({
       sourceRowNumber: null,

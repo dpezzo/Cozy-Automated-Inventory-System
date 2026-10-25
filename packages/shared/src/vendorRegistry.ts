@@ -35,6 +35,8 @@ export const VENDOR_REGISTRY = {
     timezone: "America/New_York",
     brandAllowlist: ["Gobi Heat"],
     matchStrategy: "sku-to-mpn",
+    // End of Life / Discontinued products with fewer than this many units become NLA (Cale, 2026-10-25).
+    discontinuedThreshold: 10,
   },
   fieldsheer: {
     ruleId: "fieldsheer-inventory-v1",
@@ -64,6 +66,8 @@ export function computeRuleConfigHash(config: VendorRuleConfig): string {
     timezone: config.timezone,
     brandAllowlist: [...config.brandAllowlist].sort(),
     matchStrategy: config.matchStrategy,
+    // Spread only when set so every vendor without NLA handling keeps a byte-identical hash.
+    ...(config.discontinuedThreshold !== undefined ? { discontinuedThreshold: config.discontinuedThreshold } : {}),
   });
   return createHash("sha256").update(canonical, "utf8").digest("hex");
 }
