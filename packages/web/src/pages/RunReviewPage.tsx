@@ -979,6 +979,7 @@ export default function RunReviewPage() {
                   <td style={changedFieldsForRow.includes("restockMessage") ? highlightStyle : undefined}>
                     {row.proposed.restockMessage ?? "-"}
                   </td>
+                  {hasProductPhase && <td>{row.productPhase ?? "-"}</td>}
                   {highlightDiff && (
                     <td title={CHANGED_FIELDS_TOOLTIP}>{changedFieldsForRow.map((f) => MANAGED_FIELD_LABELS[f]).join(", ") || "-"}</td>
                   )}
