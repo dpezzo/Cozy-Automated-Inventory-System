@@ -1,7 +1,33 @@
 import type { ManagedValues } from "./types";
 
+/**
+ * DROPSHIP_INVENTORY_MANAGEMENT (DS_INV_MGT) values (Cale, 2026-10-25):
+ *   blank = do not manage inventory (the app only reports on it)
+ *   "1"   = manage dropship inventory
+ *   "2"   = manage inventory exactly like "1", but never push the product to the
+ *           shopping feed (availability blank, datafeed blank, shopping feed Exclude)
+ *   "3"   = hide from the app entirely: no run row, no warning, not counted
+ */
+export const DS_INV_MGT_NO_FEED = "2";
+export const DS_INV_MGT_HIDDEN = "3";
+
+export interface ProposedValuesOptions {
+  /** True for a product whose DS_INV_MGT is "2": whatever the stock status, availability and datafeed are blank, shopping feed is Exclude, and DS_INV_MGT stays "2". */
+  feedExcluded?: boolean;
+}
+
 /** Computes proposed managed values per Olliix_MVP_Rule_Contract.md section 8 (IN STOCK / SOLD OUT), plus the NLA recipe for phase-aware vendors. */
 export function computeProposedManagedValues(
+  status: "IN STOCK" | "SOLD OUT" | "NLA",
+  expectedDate: string | null,
+  options: ProposedValuesOptions = {},
+): ManagedValues {
+  const base = computeStatusValues(status, expectedDate);
+  if (!options.feedExcluded) return base;
+  return { ...base, availability: "", dataFeed: "", shoppingFeed: "Exclude", dsInvMgt: DS_INV_MGT_NO_FEED };
+}
+
+function computeStatusValues(
   status: "IN STOCK" | "SOLD OUT" | "NLA",
   expectedDate: string | null,
 ): ManagedValues {

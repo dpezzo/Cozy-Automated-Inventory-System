@@ -5,7 +5,7 @@ import { ValidationError, ForbiddenError, NotFoundError } from "../errors";
 import { getRepository, type RunRecord, type ReviewRowView, type RowFilter, type ReconciliationRowRecord, type DecisionRecord } from "../db";
 import { runReconciliation } from "./runPipeline";
 import { vendorSlugFromRuleId } from "./batchService";
-import { isBrandAllowed, type ParsedCalendarDate, type WarningCode } from "@cozywinters/shared";
+import { isBrandAllowed, DS_INV_MGT_HIDDEN, type ParsedCalendarDate, type WarningCode } from "@cozywinters/shared";
 
 export interface CreateRunInput {
   vendorFileId: string;
@@ -184,7 +184,7 @@ async function computeMivaBrandTotal(runId: string): Promise<number | null> {
   if (!vendorConfig) return null;
 
   const { rows: mivaRows } = parseMivaSnapshotCsv(readStoredFileText(mivaFile.storagePath));
-  return mivaRows.filter((r) => isBrandAllowed(r.brandRaw, vendorConfig.brandAllowlist)).length;
+  return mivaRows.filter((r) => isBrandAllowed(r.brandRaw, vendorConfig.brandAllowlist) && r.currentDsInvMgt.trim() !== DS_INV_MGT_HIDDEN).length;
 }
 
 function rowMatchesFilter(row: ReconciliationRowRecord, decisionStatus: string, filter: RowFilter): boolean {
@@ -241,6 +241,7 @@ export async function listUntrackedBrandRows(runId: string, filter: RowFilter = 
   const results: ReviewRowView[] = [];
   for (const mivaRow of mivaRows) {
     if (!isBrandAllowed(mivaRow.brandRaw, vendorConfig.brandAllowlist)) continue;
+    if (mivaRow.currentDsInvMgt.trim() === DS_INV_MGT_HIDDEN) continue; // set to "3": hidden from the app entirely
     if (coveredProductCodes.has(mivaRow.productCode)) continue;
     coveredProductCodes.add(mivaRow.productCode); // defensive: never emit two synthetic rows for the same product_code
 

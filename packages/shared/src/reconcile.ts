@@ -13,7 +13,7 @@ import type {
 import { normalizeUpc, normalizeGtin, normalizeSku, isBrandAllowed } from "./normalize";
 import { parseTotalQty, parseWarehouseQty } from "./quantity";
 import { selectExpectedDate, type ParsedCalendarDate } from "./dateRules";
-import { computeProposedManagedValues, managedValuesEqual } from "./managedValues";
+import { computeProposedManagedValues, managedValuesEqual, DS_INV_MGT_HIDDEN, DS_INV_MGT_NO_FEED } from "./managedValues";
 import { interpretProductPhase } from "./productPhase";
 
 function formatTotalQtyDisplay(raw: string | null): string | null {
@@ -48,6 +48,60 @@ function isNativelyTrackedWithStock(row: MivaRawRow): boolean {
   const trackingEnabled = ["1", "true"].includes((row.trackInventory ?? "").trim().toLowerCase());
   if (!trackingEnabled) return false;
   return parseTotalQty(row.currentStockLevel).kind === "valid";
+}
+
+/**
+ * Products whose DS_INV_MGT is "3" ("hide from warnings") are left out of the run
+ * completely: they never become a row, never count as missing from the vendor, and
+ * a vendor-file row that can only be matched to such a product is skipped silently
+ * instead of showing up as an unmatched/blocked exception. Only products in this
+ * vendor's brand scope count, so a "3" on some other brand's product can't swallow
+ * an unrelated vendor row.
+ */
+function excludeHiddenProducts(
+  vendorRows: VendorRawRow[],
+  mivaRows: MivaRawRow[],
+  config: VendorRuleConfig,
+): { vendorRows: VendorRawRow[]; mivaRows: MivaRawRow[] } {
+  const isHidden = (r: MivaRawRow) => r.currentDsInvMgt.trim() === DS_INV_MGT_HIDDEN;
+  const hidden = mivaRows.filter((r) => isHidden(r) && isBrandAllowed(r.brandRaw, config.brandAllowlist));
+  if (hidden.length === 0) return { vendorRows, mivaRows: mivaRows.filter((r) => !isHidden(r)) };
+
+  const useSku = config.matchStrategy !== "upc-to-gtin";
+  const useUpc = config.matchStrategy !== "sku-to-mpn";
+  const keysOfMiva = (r: MivaRawRow): string[] => {
+    const keys: string[] = [];
+    if (useSku) {
+      const k = normalizeSku(r.mpnRaw);
+      if (k.valid) keys.push(`sku:${k.normalized}`);
+    }
+    if (useUpc) {
+      const k = normalizeGtin(r.gtinRaw);
+      if (k.valid) keys.push(`upc:${k.normalized}`);
+    }
+    return keys;
+  };
+  const keysOfVendor = (r: VendorRawRow): string[] => {
+    const keys: string[] = [];
+    if (useSku) {
+      const k = normalizeSku(r.skuRaw ?? null);
+      if (k.valid) keys.push(`sku:${k.normalized}`);
+    }
+    if (useUpc) {
+      const k = normalizeUpc(r.upcRaw);
+      if (k.valid) keys.push(`upc:${k.normalized}`);
+    }
+    return keys;
+  };
+
+  const hiddenKeys = new Set(hidden.flatMap(keysOfMiva));
+  const visibleMiva = mivaRows.filter((r) => !isHidden(r));
+  const visibleKeys = new Set(visibleMiva.flatMap(keysOfMiva));
+  const visibleVendor = vendorRows.filter((r) => {
+    const keys = keysOfVendor(r);
+    return !(keys.some((k) => hiddenKeys.has(k)) && !keys.some((k) => visibleKeys.has(k)));
+  });
+  return { vendorRows: visibleVendor, mivaRows: visibleMiva };
 }
 
 /**
@@ -156,7 +210,8 @@ export interface ReconcileResult {
  * regardless of vendor.
  */
 export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], options: ReconcileOptions): ReconcileResult {
-  const result = reconcileCore(vendorRows, mivaRows, options);
+  const visible = excludeHiddenProducts(vendorRows, mivaRows, options.config);
+  const result = reconcileCore(visible.vendorRows, visible.mivaRows, options);
   // Carry the vendor-reported phase onto each vendor-sourced row for display in Run Review.
   // Done once here (not at every row-construction site) and only when the vendor actually
   // supplied one, so rows for vendors without a phase column are byte-identical to before.
@@ -430,7 +485,7 @@ function reconcileCore(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], optio
       warnings.push(...evaluated.warnings);
     }
 
-    const proposed = computeProposedManagedValues(status, status === "SOLD OUT" ? dateResult.date : null);
+    const proposed = computeProposedManagedValues(status, status === "SOLD OUT" ? dateResult.date : null, { feedExcluded: dsInvMgt === DS_INV_MGT_NO_FEED });
     const changed = !managedValuesEqual(current, proposed);
 
     let reviewClass: ReviewClass;
@@ -496,7 +551,7 @@ function reconcileCore(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], optio
     // WARNING a person must explicitly approve -- never a silent or bulk-approvable
     // change. Every other vendor keeps the original hard block (DEV-001 above).
     if (!alreadyDiscontinued && config.discontinuedThreshold !== undefined) {
-      const proposedNla = computeProposedManagedValues("NLA", null);
+      const proposedNla = computeProposedManagedValues("NLA", null, { feedExcluded: (current.dsInvMgt ?? "").trim() === DS_INV_MGT_NO_FEED });
       results.push({
         sourceRowNumber: null,
         itemNo: null,
@@ -678,7 +733,7 @@ function buildDualMatchedRow(
     warnings.push(...evaluated.warnings);
   }
 
-  const proposed = computeProposedManagedValues(status, status === "SOLD OUT" ? dateResult.date : null);
+  const proposed = computeProposedManagedValues(status, status === "SOLD OUT" ? dateResult.date : null, { feedExcluded: dsInvMgt === DS_INV_MGT_NO_FEED });
   const changed = !managedValuesEqual(current, proposed);
 
   let reviewClass: ReviewClass;

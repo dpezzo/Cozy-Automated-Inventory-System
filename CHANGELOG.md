@@ -2,6 +2,20 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-25 - DS_INV_MGT values 2 (no shopping feed) and 3 (hidden from the app)
+
+### Added
+- Dropship Inventory Management now understands four values (Cale's new Miva rules): blank = do not manage inventory (unchanged), `1` = manage dropship inventory (unchanged), `2` = manage inventory exactly like 1 but never push the product to the shopping feed, `3` = hide from the app entirely.
+- **2:** stock status (IN STOCK / SOLD OUT / NLA) and restock message follow the normal rules, but availability and datafeed are always blank, shopping feed is always `Exclude`, and DS_INV_MGT stays `2` (never rewritten to 1, including when the product goes NLA or comes back). A product at 2 already set up this way resolves UNCHANGED; one that isn't is a normal CLEAN fix-up. A 2 counts as managed, so it never gets the "not tracked" warning. `managedValues.ts`: `computeProposedManagedValues(..., { feedExcluded })`, constants `DS_INV_MGT_NO_FEED` / `DS_INV_MGT_HIDDEN`; applied in both reconcile paths and the missing-from-file NLA proposal.
+- **3:** a product set to 3 never becomes a run row: not matched, not "missing from vendor", not counted in the Miva brand total, and not in Run Review's "Show all Miva products". A vendor file row that can only match a hidden product is skipped silently instead of becoming an unmatched/blocked exception; if a visible product shares the identifier, the row still matches that one. Only products inside the vendor's brand scope can hide a vendor row. `reconcile.ts` (`excludeHiddenProducts`) and `runService.ts`.
+
+### Notes
+- Nothing in Miva is set to 2 or 3 yet. As of the 2026-10-25 export, 1,322 products have DS_INV_MGT 1 with shopping feed Exclude; until those are moved to 2 in Miva, the value-1 recipe (blank shopping feed) would clear their Exclude if a run ever changed them.
+- Not yet built: the "do not sell" mark that writes 3 to Miva for an unmatched SKU's product.
+
+### Tests
+- New `dsInvMgt.test.ts` (13 tests).
+
 ## 2026-10-25 - Vendor exception report: warnings now export, and it carries every Run Review column
 
 ### Fixed
