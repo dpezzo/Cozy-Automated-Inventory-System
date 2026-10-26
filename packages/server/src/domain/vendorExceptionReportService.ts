@@ -31,14 +31,24 @@ export async function generateVendorExceptionReport(
   if (!run) throw new ValidationError("RUN_NOT_FOUND", "Run not found.");
 
   const allRows = await repo.listRunRows(runId);
-  const vendorRows = toVendorExceptionRows(allRows.map((v) => v.row), categories).map((r) => ({
+  const vendorRows = toVendorExceptionRows(
+    allRows.map((v) => ({ ...v.row, decisionStatus: v.decision.status })),
+    categories,
+  ).map((r) => ({
+    MIVA_PRODUCT_CODE: r.productCode ?? "",
     ITEM_NO: r.itemNo ?? "",
     VENDOR_UPC: r.vendorUpc ?? "",
-    MIVA_PRODUCT_CODE: r.productCode ?? "",
-    DESCRIPTION: r.description ?? "",
-    STATUS: r.mivaStatus ?? "",
+    OUTCOME: r.outcome,
+    CLASS: r.reviewClass,
+    WARNINGS_BLOCKERS: r.reasonCodes,
     TOTAL_QTY: r.totalQtyRaw ?? "",
-    REASON: r.reasonCodes,
+    CURRENT_STATUS: r.mivaStatus ?? "",
+    PROPOSED_STATUS: r.proposedStatus ?? "",
+    PROPOSED_RESTOCK: r.proposedRestock ?? "",
+    PRODUCT_PHASE: r.productPhase ?? "",
+    CHANGED_FIELDS: r.changedFields,
+    DECISION: r.decision,
+    DESCRIPTION: r.description ?? "",
     DETAIL: r.detail,
   }));
 

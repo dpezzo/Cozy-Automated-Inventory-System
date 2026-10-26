@@ -2,6 +2,17 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-25 - Vendor exception report: warnings now export, and it carries every Run Review column
+
+### Fixed
+- The vendor exception report never contained warning rows, whichever boxes were ticked. `toVendorExceptionRows` (`packages/shared/src/reports.ts`) only looked at a WARNING row's warning codes, but the category lists held almost none of the warning codes the engine actually produces (only the Olliix date warnings), so every warning row was dropped. A row's reasons are now its warnings and blockers together, and new categories were added: "Miva status warnings" (`MIVA_NOT_DROPSHIP_TRACKED`, `MIVA_CURRENTLY_NLA`, `MIVA_MARKED_DISCONTINUED`, `MIVA_PARENT_INACTIVE`) and "Unrecognized product phase". The new `MISSING_FROM_VENDOR_PROPOSED_NLA` warning was also added to "Missing from vendor file", otherwise those rows (a hard block before the Gobi change) would have silently vanished from that category. Both new categories are ticked by default in the export menu.
+
+### Changed
+- The export now has every column Run Review shows, in the same order: `MIVA_PRODUCT_CODE, ITEM_NO, VENDOR_UPC, OUTCOME, CLASS, WARNINGS_BLOCKERS, TOTAL_QTY, CURRENT_STATUS, PROPOSED_STATUS, PROPOSED_RESTOCK, PRODUCT_PHASE, CHANGED_FIELDS, DECISION`, then `DESCRIPTION, DETAIL`. The old `STATUS` and `REASON` headers are now `CURRENT_STATUS` and `WARNINGS_BLOCKERS`. `sortForReview` is now generic so extra per-row fields (the decision) pass through.
+
+### Tests
+- New `vendorExceptionRows.test.ts`.
+
 ## 2026-10-25 - Gobi Heat: new report format and Product Phase (End of Life / Discontinued) NLA rule
 
 ### Added

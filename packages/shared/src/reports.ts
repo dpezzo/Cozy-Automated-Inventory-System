@@ -1,5 +1,6 @@
 import type { BlockerCode, ReconciliationRow, WarningCode } from "./types";
 import { vendorConfigByRuleId } from "./vendorRegistry";
+import { diffFields } from "./managedValues";
 
 const MATCH_METHOD_BY_STRATEGY = {
   "upc-to-gtin": "EXACT_UPC_TO_GTIN",
@@ -8,7 +9,7 @@ const MATCH_METHOD_BY_STRATEGY = {
 } as const;
 
 /** Deterministic display order: natural vendor source-row order, Miva-only rows last. */
-export function sortForReview(rows: ReconciliationRow[]): ReconciliationRow[] {
+export function sortForReview<T extends ReconciliationRow>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
     const aKey = a.sourceRowNumber ?? Number.MAX_SAFE_INTEGER;
     const bKey = b.sourceRowNumber ?? Number.MAX_SAFE_INTEGER;
@@ -63,7 +64,7 @@ export const VENDOR_EXCEPTION_CATEGORIES = {
   DUPLICATE_IDENTIFIER: ["DUPLICATE_VENDOR_UPC", "DUPLICATE_VENDOR_SKU", "IDENTIFIER_MISMATCH"],
   MISSING_OR_INVALID_IDENTIFIER: ["BLANK_UPC", "NONNUMERIC_UPC", "BLANK_VENDOR_SKU"],
   MISSING_OR_INVALID_QUANTITY: ["BLANK_TOTAL_QTY", "NEGATIVE_TOTAL_QTY", "INVALID_TOTAL_QTY"],
-  MISSING_FROM_VENDOR_FILE: ["MISSING_FROM_VENDOR", "MISSING_FROM_OLLIIX"],
+  MISSING_FROM_VENDOR_FILE: ["MISSING_FROM_VENDOR", "MISSING_FROM_OLLIIX", "MISSING_FROM_VENDOR_PROPOSED_NLA"],
   DATA_WARNINGS: [
     "WAREHOUSE_TOTAL_MISMATCH",
     "EXPECTED_DATE_CONFLICT",
@@ -71,6 +72,11 @@ export const VENDOR_EXCEPTION_CATEGORIES = {
     "INCOMING_QTY_WITHOUT_DATE",
     "AMBIGUOUS_INCOMING_DATE",
   ],
+  // Warnings about the matched Miva product's own current state (already NLA, not tracked,
+  // parent inactive) and the vendor's lifecycle phase. Not something the vendor can fix, but
+  // they are exactly the rows a reviewer needs to see in the exported report.
+  MIVA_STATUS_WARNINGS: ["MIVA_NOT_DROPSHIP_TRACKED", "MIVA_CURRENTLY_NLA", "MIVA_MARKED_DISCONTINUED", "MIVA_PARENT_INACTIVE"],
+  PRODUCT_PHASE_WARNINGS: ["UNRECOGNIZED_PRODUCT_PHASE"],
   UNMATCHED_IN_MIVA: ["NO_MIVA_MATCH"],
 } as const satisfies Record<string, (BlockerCode | WarningCode)[]>;
 
@@ -86,7 +92,33 @@ export interface VendorExceptionRowView {
   totalQtyRaw: string | null;
   reasonCodes: string;
   detail: string;
+  /** Same wording as Run Review's Outcome column ("Matched", "Miva only", ...). */
+  outcome: string;
+  reviewClass: string;
+  proposedStatus: string | null;
+  proposedRestock: string | null;
+  productPhase: string | null;
+  /** Same wording as Run Review's Changed fields column. */
+  changedFields: string;
+  /** Run Review's Decision column (PENDING / APPROVED / ...); blank when the caller did not supply decisions. */
+  decision: string;
 }
+
+/** Run Review's friendly Outcome wording; any other outcome is shown as its raw value, same as the screen. */
+const OUTCOME_LABELS: Record<string, string> = {
+  MATCHED: "Matched",
+  "MISSING - REVIEW REQUIRED": "Miva only",
+  "IN MIVA - NOT TRACKED": "Not tracked",
+};
+
+const MANAGED_FIELD_LABELS: Record<string, string> = {
+  simpleInventory: "Status",
+  availability: "Availability",
+  restockMessage: "Restock",
+  dataFeed: "Datafeed",
+  shoppingFeed: "Shopping feed",
+  dsInvMgt: "Dropship Inventory Management",
+};
 
 /**
  * Vendor-facing exception rows: a curated, richer alternative to
@@ -95,17 +127,18 @@ export interface VendorExceptionRowView {
  * an empty array yields no rows.
  */
 export function toVendorExceptionRows(
-  rows: ReconciliationRow[],
+  rows: (ReconciliationRow & { decisionStatus?: string })[],
   categories: VendorExceptionCategory[],
 ): VendorExceptionRowView[] {
   const allowedCodes = new Set<string>(categories.flatMap((c) => VENDOR_EXCEPTION_CATEGORIES[c]));
   if (allowedCodes.size === 0) return [];
 
   const sorted = sortForReview(rows);
-  const matching = sorted.filter((r) => {
-    const codes = r.reviewClass === "WARNING" ? r.warningCodes : r.blockerCodes;
-    return codes.some((c) => allowedCodes.has(c));
-  });
+  // A row's reasons are its warnings AND blockers together (never one or the other by class):
+  // previously a WARNING row was only matched on its warning codes against a category list that
+  // held almost no warning codes, so ticking any box exported no warnings at all.
+  const codesOf = (r: ReconciliationRow): string[] => [...r.warningCodes, ...r.blockerCodes];
+  const matching = sorted.filter((r) => codesOf(r).some((c) => allowedCodes.has(c)));
 
   // Groups rows sharing a raw vendor identifier so a DUPLICATE_VENDOR_UPC/SKU
   // row's detail can name its sibling(s) directly -- the same real-world
@@ -121,7 +154,7 @@ export function toVendorExceptionRows(
   }
 
   return matching.map((r) => {
-    const codes = r.reviewClass === "WARNING" ? r.warningCodes : r.blockerCodes;
+    const codes = codesOf(r);
     const isDuplicateIdentifier = codes.some(
       (c) => (VENDOR_EXCEPTION_CATEGORIES.DUPLICATE_IDENTIFIER as readonly string[]).includes(c),
     );
@@ -141,18 +174,35 @@ export function toVendorExceptionRows(
       totalQtyRaw: r.totalQtyRaw,
       reasonCodes: codes.join(","),
       detail,
+      outcome: OUTCOME_LABELS[r.matchOutcome] ?? r.matchOutcome,
+      reviewClass: r.reviewClass,
+      proposedStatus: r.proposed.simpleInventory ?? null,
+      proposedRestock: r.proposed.restockMessage ?? null,
+      productPhase: r.productPhase ?? null,
+      changedFields: diffFields(r.current, r.proposed)
+        .map((f) => MANAGED_FIELD_LABELS[f])
+        .join(", "),
+      decision: r.decisionStatus ?? "",
     };
   });
 }
 
+/** Mirrors Run Review's column order (Product code, Item No, UPC / SKU, Outcome, Class, Warnings/Blockers, Qty, Current status, Proposed status, Proposed restock, Product phase, Changed fields, Decision), plus Description and Detail. */
 export const VENDOR_EXCEPTION_HEADERS = [
+  "MIVA_PRODUCT_CODE",
   "ITEM_NO",
   "VENDOR_UPC",
-  "MIVA_PRODUCT_CODE",
-  "DESCRIPTION",
-  "STATUS",
+  "OUTCOME",
+  "CLASS",
+  "WARNINGS_BLOCKERS",
   "TOTAL_QTY",
-  "REASON",
+  "CURRENT_STATUS",
+  "PROPOSED_STATUS",
+  "PROPOSED_RESTOCK",
+  "PRODUCT_PHASE",
+  "CHANGED_FIELDS",
+  "DECISION",
+  "DESCRIPTION",
   "DETAIL",
 ] as const;
 

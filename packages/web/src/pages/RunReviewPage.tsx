@@ -44,6 +44,8 @@ const VENDOR_EXCEPTION_CATEGORY_LABELS: Record<string, string> = {
   MISSING_OR_INVALID_QUANTITY: "Missing or invalid quantity",
   MISSING_FROM_VENDOR_FILE: "Missing from vendor file (possible discontinuation)",
   DATA_WARNINGS: "Data warnings (mismatched totals, date conflicts)",
+  MIVA_STATUS_WARNINGS: "Miva status warnings (already NLA, not tracked, parent inactive)",
+  PRODUCT_PHASE_WARNINGS: "Unrecognized product phase",
   UNMATCHED_IN_MIVA: "Unmatched -- UPC not found in Miva",
 };
 const VENDOR_EXCEPTION_DEFAULT_CATEGORIES = [
@@ -52,6 +54,8 @@ const VENDOR_EXCEPTION_DEFAULT_CATEGORIES = [
   "MISSING_OR_INVALID_QUANTITY",
   "MISSING_FROM_VENDOR_FILE",
   "DATA_WARNINGS",
+  "MIVA_STATUS_WARNINGS",
+  "PRODUCT_PHASE_WARNINGS",
 ];
 
 /** ruleId is always "<vendorKey>-inventory-v1" (see runPipeline.ts's ruleIdFor) -- strips that fixed suffix to recover the vendorKey for a vendor label lookup. Duplicated from RunHistoryPage.tsx's identical helper since it's a one-liner and pulling in a shared module for it isn't worth the indirection. */
