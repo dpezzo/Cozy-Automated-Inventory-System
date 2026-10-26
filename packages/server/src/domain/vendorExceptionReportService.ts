@@ -56,7 +56,7 @@ export async function generateVendorExceptionReport(
   const extension = format === "xlsx" ? "xlsx" : "csv";
   const content =
     format === "xlsx"
-      ? await rowsToXlsx(vendorRows, [...VENDOR_EXCEPTION_HEADERS], { sanitizeFormulas: true, sheetName: "Exceptions" })
+      ? await rowsToXlsx(vendorRows, [...VENDOR_EXCEPTION_HEADERS], { sanitizeFormulas: true, sheetName: "Exceptions", numericColumns: ["TOTAL_QTY"] })
       : rowsToCsv(vendorRows, [...VENDOR_EXCEPTION_HEADERS], { sanitizeFormulas: true });
   const savedFile = saveGeneratedFile(
     content,

@@ -10,6 +10,7 @@ All notable changes to the CozyWinters Olliix inventory reconciliation app are d
 - Run Review's new Product phase column (added earlier today) only had its header: the row cells were hardcoded and missing the matching cell, so every later cell shifted one column left (Decision text showed under Product phase, the Decision pill and buttons under Actions, and Actions looked empty). `RunReviewPage.tsx` now renders the phase cell whenever the column is shown.
 
 ### Changed
+- The Excel (.xlsx) vendor exception report now opens as a real Excel table: blue header with filter/sort buttons, light-blue banded rows, frozen header row, and sized columns, and Total qty is stored as a number. `writeXlsx.ts` now writes a shared-strings table plus an `xl/tables/table1.xml` part (style `TableStyleMedium2`); with zero data rows it falls back to just a header row. CSV is unchanged. New `writeXlsx.test.ts`.
 - The export now has every column Run Review shows, in the same order: `MIVA_PRODUCT_CODE, ITEM_NO, VENDOR_UPC, OUTCOME, CLASS, WARNINGS_BLOCKERS, TOTAL_QTY, CURRENT_STATUS, PROPOSED_STATUS, PROPOSED_RESTOCK, PRODUCT_PHASE, CHANGED_FIELDS, DECISION`, then `DESCRIPTION, DETAIL`. The old `STATUS` and `REASON` headers are now `CURRENT_STATUS` and `WARNINGS_BLOCKERS`. `sortForReview` is now generic so extra per-row fields (the decision) pass through.
 
 ### Tests
