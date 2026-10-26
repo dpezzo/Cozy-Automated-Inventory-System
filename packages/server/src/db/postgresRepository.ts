@@ -246,8 +246,8 @@ export class PostgresRepository implements Repository {
           `INSERT INTO reconciliation_rows
             (run_id, source_row_number, item_no, raw_upc, normalized_upc, description, product_code,
              match_outcome, review_class, warning_codes, blocker_codes, total_qty_raw,
-             expected_date, expected_date_sources, current_values, proposed_values, changed, is_eligible_for_approval)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+             expected_date, expected_date_sources, current_values, proposed_values, changed, is_eligible_for_approval, product_phase)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
            RETURNING id`,
           [
             runId,
@@ -268,6 +268,7 @@ export class PostgresRepository implements Repository {
             JSON.stringify(r.proposed),
             r.changed,
             r.isEligibleForApproval,
+            r.productPhase ?? null,
           ],
         );
         const id = resultRows[0].id as string;
@@ -1030,6 +1031,7 @@ function mapReviewRowView(row: Record<string, unknown>): ReviewRowView {
     proposed,
     changed: row.changed as boolean,
     isEligibleForApproval: row.is_eligible_for_approval as boolean,
+    productPhase: (row.product_phase as string | null) ?? null,
   };
   const decision: DecisionRecord = {
     id: row.decision_id as string,

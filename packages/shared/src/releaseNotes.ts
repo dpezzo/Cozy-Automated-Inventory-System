@@ -19,6 +19,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
       "If a product is already NLA in Miva but Gobi's file says it should be live, it shows as a warning that needs your individual approval. Approving it puts it back in stock with the normal tracking values.",
       "A live Gobi product in Miva that is missing from Gobi's file entirely now shows as a warning that proposes NLA (approve it individually) instead of a hard block.",
       "Gobi products that are already set up correctly as NLA no longer show up as warnings; they appear as unchanged.",
+      "Run Review has a new \"Product phase\" column (Active, End of Life, Discontinued) for vendors whose file includes one, so you can see why a product is being proposed as NLA. Runs created before this update won't show a phase.",
     ],
   },
   {

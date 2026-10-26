@@ -390,6 +390,8 @@ export interface ReconciliationRowView {
   proposed: ManagedValuesView;
   changed: boolean;
   isEligibleForApproval: boolean;
+  /** Vendor-reported lifecycle text (e.g. Gobi's Product Phase), when the vendor file has one. */
+  productPhase?: string | null;
 }
 
 export interface DecisionView {

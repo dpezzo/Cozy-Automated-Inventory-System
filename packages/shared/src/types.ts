@@ -164,6 +164,8 @@ export interface ReconciliationRow {
   changed: boolean;
   /** True only for MATCHED rows with a valid, non-negative numeric total quantity. */
   isEligibleForApproval: boolean;
+  /** The vendor file's lifecycle/phase text for this row, exactly as the vendor wrote it (e.g. "End of Life (EOL)"). Only present for vendor-sourced rows from a file that has a phase column; absent for every other vendor and for Miva-only rows. */
+  productPhase?: string | null;
 }
 
 /** One vendor's full rule configuration. See packages/shared/src/vendorRegistry.ts for the actual per-vendor instances. */

@@ -17,6 +17,9 @@ All notable changes to the CozyWinters Olliix inventory reconciliation app are d
 ### Checked against real data (Gobi report 2026-10-24 vs Miva export 2026-10-25)
 - 1,105 rows parsed (820 Active, 116 EOL, 169 Discontinued). Reconciliation: 85 CLEAN changes to NLA (62 live Discontinued/EOL products under 10 units plus 23 existing NLA products whose fields get tidied), 94 already-correct NLA rows UNCHANGED, 37 reactivation warnings for NLA products the vendor says are live, 8 missing-from-file warnings, 407 unmatched file SKUs still BLOCKED (`NO_MIVA_MATCH` / `UNKNOWN_MIVA_BRAND`), 1 duplicate-MPN block (fixed in Miva since the export).
 
+### Run Review
+- New "Product phase" column in Run Review, between the proposed restock and the Changed fields / Decision columns. It shows the vendor's own phase text per row (Active, End of Life (EOL), Discontinued) and only appears when the run's vendor file has a phase column (today only Gobi), so other vendors' runs look the same as before. Stored per row in the new `reconciliation_rows.product_phase` column (migration `0012_reconciliation_rows_product_phase.sql`, Postgres and SQLite); runs created before this change show no phase. `reconcile()` copies the vendor phase onto vendor-sourced rows in one place, and only when present, so every other vendor's row output is unchanged.
+
 ### Tests
 - New `gobiNla.test.ts` (22 tests: phase parsing, NLA recipe, thresholds at 5/9/10, Active unaffected, old format, unrecognized phase, already-NLA UNCHANGED, reactivation warnings, missing-from-vendor behavior, config hash stability). `gobiParser.test.ts` and `vendorFileRegistry.test.ts` now cover the new report (1,105 rows, phase counts, detected as Gobi).
 

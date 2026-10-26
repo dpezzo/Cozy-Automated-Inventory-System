@@ -156,6 +156,25 @@ export interface ReconcileResult {
  * regardless of vendor.
  */
 export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], options: ReconcileOptions): ReconcileResult {
+  const result = reconcileCore(vendorRows, mivaRows, options);
+  // Carry the vendor-reported phase onto each vendor-sourced row for display in Run Review.
+  // Done once here (not at every row-construction site) and only when the vendor actually
+  // supplied one, so rows for vendors without a phase column are byte-identical to before.
+  const phaseBySourceRow = new Map<number, string>();
+  for (const row of vendorRows) {
+    const phase = (row.productPhaseRaw ?? "").trim();
+    if (phase !== "") phaseBySourceRow.set(row.sourceRowNumber, phase);
+  }
+  if (phaseBySourceRow.size > 0) {
+    for (const row of result.rows) {
+      const phase = row.sourceRowNumber === null ? undefined : phaseBySourceRow.get(row.sourceRowNumber);
+      if (phase !== undefined) row.productPhase = phase;
+    }
+  }
+  return result;
+}
+
+function reconcileCore(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], options: ReconcileOptions): ReconcileResult {
   // "upc-or-sku" is handled entirely separately (see reconcileDual below),
   // deliberately NOT woven into the single-identifier logic that follows --
   // that logic is exercised byte-for-byte by the frozen bake-off fixture

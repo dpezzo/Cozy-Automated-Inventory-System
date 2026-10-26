@@ -128,6 +128,13 @@ function diffFields(current: ManagedValuesView, proposed: ManagedValuesView): st
   });
 }
 
+const PRODUCT_PHASE_COLUMN: ColumnDef = {
+  key: "productPhase",
+  label: "Product phase",
+  title: "The vendor file's own lifecycle status for this product (for example Active, End of Life, or Discontinued). End of Life and Discontinued products with low quantity are proposed as NLA.",
+  get: (v) => v.row.productPhase ?? "",
+};
+
 const CHANGED_FIELDS_COLUMN: ColumnDef = {
   key: "changedFields",
   label: "Changed fields",
@@ -218,12 +225,17 @@ export default function RunReviewPage() {
     };
   }, [run, summary, runBatches, highlightDiff]);
 
+  // Product phase is vendor-specific (today only Gobi's file has one), so the column only
+  // appears when at least one row in this run actually carries a phase.
+  const hasProductPhase = useMemo(() => rows.some((r) => !!r.row.productPhase), [rows]);
+
   const columns = useMemo(() => {
-    if (!highlightDiff) return BASE_COLUMNS;
-    const withChangedFields = [...BASE_COLUMNS];
-    withChangedFields.splice(withChangedFields.findIndex((c) => c.key === "decision"), 0, CHANGED_FIELDS_COLUMN);
-    return withChangedFields;
-  }, [highlightDiff]);
+    const cols = [...BASE_COLUMNS];
+    const decisionIndex = () => cols.findIndex((c) => c.key === "decision");
+    if (hasProductPhase) cols.splice(decisionIndex(), 0, PRODUCT_PHASE_COLUMN);
+    if (highlightDiff) cols.splice(decisionIndex(), 0, CHANGED_FIELDS_COLUMN);
+    return cols;
+  }, [highlightDiff, hasProductPhase]);
 
   const loadRun = useCallback(async () => {
     if (!runId) return;

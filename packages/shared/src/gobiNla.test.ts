@@ -199,6 +199,24 @@ describe("reconcile: live Gobi product missing from the vendor file", () => {
   });
 });
 
+describe("reconcile: product phase carried onto rows", () => {
+  it("attaches the vendor's phase text to vendor-sourced rows only", () => {
+    const { rows } = reconcile([gobiRow("TEST-S", "3", "End of Life (EOL)")], [mivaGobi(), mivaGobi({ productCode: "gh-other", mpnRaw: "OTHER" })], {
+      config: GOBI,
+      runDate: RUN_DATE,
+    });
+    const matched = rows.find((r) => r.matchOutcome === "MATCHED")!;
+    const missing = rows.find((r) => r.matchOutcome === "MISSING - REVIEW REQUIRED")!;
+    expect(matched.productPhase).toBe("End of Life (EOL)");
+    expect(missing.productPhase).toBeUndefined();
+  });
+
+  it("leaves rows untouched when the vendor file has no phase column", () => {
+    const { rows } = reconcile([gobiRow("TEST-S", "3", null)], [mivaGobi()], { config: GOBI, runDate: RUN_DATE });
+    expect("productPhase" in rows[0]!).toBe(false);
+  });
+});
+
 describe("computeRuleConfigHash", () => {
   it("is unchanged for vendors that do not set discontinuedThreshold", () => {
     const withoutField = { ...VENDOR_REGISTRY.fieldsheer };

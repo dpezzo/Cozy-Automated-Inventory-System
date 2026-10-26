@@ -340,8 +340,8 @@ export class SqliteRepository implements Repository {
         `INSERT INTO reconciliation_rows
           (id, run_id, source_row_number, item_no, raw_upc, normalized_upc, description, product_code,
            match_outcome, review_class, warning_codes, blocker_codes, total_qty_raw,
-           expected_date, expected_date_sources, current_values, proposed_values, changed, is_eligible_for_approval)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           expected_date, expected_date_sources, current_values, proposed_values, changed, is_eligible_for_approval, product_phase)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       );
       const insertDecision = db.prepare(
         `INSERT INTO decisions (id, reconciliation_row_id, run_id, status, warnings_at_decision) VALUES (?, ?, ?, 'PENDING', '[]')`,
@@ -368,6 +368,7 @@ export class SqliteRepository implements Repository {
           JSON.stringify(r.proposed),
           toIntBool(r.changed),
           toIntBool(r.isEligibleForApproval),
+          r.productPhase ?? null,
         );
         insertDecision.run(randomUUID(), id, runId);
       }
@@ -1179,6 +1180,7 @@ function mapReviewRowView(row: Record<string, unknown>): ReviewRowView {
     proposed,
     changed: fromIntBool(row.changed),
     isEligibleForApproval: fromIntBool(row.is_eligible_for_approval),
+    productPhase: (row.product_phase as string | null) ?? null,
   };
   const decision: DecisionRecord = {
     id: row.decision_id as string,
