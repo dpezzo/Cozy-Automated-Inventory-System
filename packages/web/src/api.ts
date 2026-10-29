@@ -149,6 +149,15 @@ export const api = {
       duplicateWarning: string | null;
     };
   },
+  listCatalogViews: () => request<CatalogViewsPayload>("/catalog-views"),
+  createCatalogView: (input: { name: string; isShared: boolean; config: CatalogViewConfig }) =>
+    request<CatalogViewDto>("/catalog-views", { method: "POST", body: JSON.stringify(input) }),
+  updateCatalogView: (id: string, patch: { name?: string; isShared?: boolean; config?: CatalogViewConfig }) =>
+    request<CatalogViewDto>(`/catalog-views/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  deleteCatalogView: (id: string) => request(`/catalog-views/${id}`, { method: "DELETE" }),
+  /** scope "team" is admin-only; viewId null clears that default. */
+  setCatalogViewDefault: (scope: "personal" | "team", viewId: string | null) =>
+    request(`/catalog-views/default`, { method: "PUT", body: JSON.stringify({ scope, viewId }) }),
   getCatalogRows: (fileId: string) => request<MivaCatalogRow[]>(`/files/${fileId}/catalog-rows`),
 
   getMivaApiStatus: () =>
@@ -237,6 +246,39 @@ export const api = {
   listPostImportVerifications: (batchId: string) =>
     request<{ id: string; created_at: string }[]>(`/batches/${batchId}/post-import-verifications`),
 };
+
+/** Mirrors CatalogViewConfig in packages/shared/src/catalogView.ts (the web package doesn't import shared). */
+export interface CatalogViewConfig {
+  version: 1;
+  hiddenColumns: string[];
+  /** Empty means the page's default column order. */
+  columnOrder: string[];
+  columnWidths: Record<string, number>;
+  /** Per column, the values that stay visible; a column with no entry is unfiltered. */
+  columnFilters: Record<string, string[]>;
+  sortKey: string | null;
+  sortDir: "asc" | "desc";
+  vendorBrandsOnly: boolean;
+}
+
+export interface CatalogViewDto {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  ownerLabel: string;
+  isShared: boolean;
+  isMine: boolean;
+  /** The owner or an admin. */
+  canEdit: boolean;
+  config: CatalogViewConfig;
+  updatedAt: string;
+}
+
+export interface CatalogViewsPayload {
+  views: CatalogViewDto[];
+  builtins: { id: string; name: string; config: CatalogViewConfig }[];
+  defaults: { personal: string | null; team: string | null };
+}
 
 export interface MivaCatalogRow {
   sourceRowNumber: number;

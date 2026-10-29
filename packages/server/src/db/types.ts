@@ -1,4 +1,4 @@
-import type { ReconciliationRow, BlockerCode, LegacyComparisonValues } from "@cozywinters/shared";
+import type { ReconciliationRow, BlockerCode, LegacyComparisonValues, CatalogViewConfig } from "@cozywinters/shared";
 import type { GenericCsvColumnMapping } from "../vendor/genericCsvParser";
 
 // Shared record and filter shapes for both the SQLite (default, native
@@ -153,6 +153,31 @@ export interface DiscontinuedItemRecord extends DiscontinuedItemInput {
 export interface UpsertDiscontinuedItemsResult {
   added: number;
   updated: number;
+}
+
+// ---------- Catalog views ----------
+
+export interface CatalogViewRecord {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  isShared: boolean;
+  config: CatalogViewConfig;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InsertCatalogViewInput {
+  name: string;
+  ownerUserId: string;
+  isShared: boolean;
+  config: CatalogViewConfig;
+}
+
+export interface UpdateCatalogViewPatch {
+  name?: string;
+  isShared?: boolean;
+  config?: CatalogViewConfig;
 }
 
 export type RunStatus = "validating" | "normalizing" | "matching" | "calculating" | "ready" | "failed";

@@ -29,6 +29,9 @@ import type {
   DiscontinuedItemInput,
   DiscontinuedItemRecord,
   UpsertDiscontinuedItemsResult,
+  CatalogViewRecord,
+  InsertCatalogViewInput,
+  UpdateCatalogViewPatch,
 } from "./types";
 
 /**
@@ -166,4 +169,17 @@ export interface Repository {
   listDiscontinuedItems(vendorKey: string): Promise<DiscontinuedItemRecord[]>;
   /** Just the normalized UPCs, for the rule engine's overlay. */
   listDiscontinuedUpcs(vendorKey: string): Promise<string[]>;
+
+  // Catalog views (saved column/filter/sort setups) and which one opens by default
+  /** The user's own views plus every shared view, newest first. */
+  listCatalogViewsVisibleTo(userId: string): Promise<CatalogViewRecord[]>;
+  findCatalogViewById(id: string): Promise<CatalogViewRecord | null>;
+  insertCatalogView(input: InsertCatalogViewInput): Promise<CatalogViewRecord>;
+  updateCatalogView(id: string, patch: UpdateCatalogViewPatch): Promise<CatalogViewRecord>;
+  /** Also clears any default that pointed at it. */
+  deleteCatalogView(id: string): Promise<void>;
+  /** scope is "team" or "user:<id>". Returns the view id (a catalog_views id or a built-in id), or null. */
+  getCatalogViewDefault(scope: string): Promise<string | null>;
+  /** null clears the default for that scope. */
+  setCatalogViewDefault(scope: string, viewId: string | null): Promise<void>;
 }

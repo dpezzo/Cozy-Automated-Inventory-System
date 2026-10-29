@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import type { ManagedValues, ReconciliationRow, WarehouseCode } from "@cozywinters/shared";
+import { parseCatalogViewConfig } from "@cozywinters/shared";
 import type { Repository } from "./Repository";
 import type {
   UserRecord,
@@ -33,6 +34,9 @@ import type {
   DiscontinuedItemInput,
   DiscontinuedItemRecord,
   UpsertDiscontinuedItemsResult,
+  CatalogViewRecord,
+  InsertCatalogViewInput,
+  UpdateCatalogViewPatch,
 } from "./types";
 import { DEFAULT_DATA_SIZE_ALERT_THRESHOLDS } from "./types";
 
@@ -976,6 +980,107 @@ export class PostgresRepository implements Repository {
   async listDiscontinuedUpcs(vendorKey: string): Promise<string[]> {
     const { rows } = await this.getPool().query("SELECT normalized_upc FROM vendor_discontinued_items WHERE vendor_key = $1", [vendorKey]);
     return rows.map((r) => r.normalized_upc as string);
+  }
+
+  // ---------- Catalog views ----------
+
+  async listCatalogViewsVisibleTo(userId: string): Promise<CatalogViewRecord[]> {
+    const { rows } = await this.getPool().query(
+      "SELECT * FROM catalog_views WHERE owner_user_id = $1 OR is_shared = true ORDER BY updated_at DESC",
+      [userId],
+    );
+    return rows.flatMap((r) => mapCatalogViewRow(r) ?? []);
+  }
+
+  async findCatalogViewById(id: string): Promise<CatalogViewRecord | null> {
+    const { rows } = await this.getPool().query("SELECT * FROM catalog_views WHERE id = $1", [id]);
+    return rows[0] ? mapCatalogViewRow(rows[0]) : null;
+  }
+
+  async insertCatalogView(input: InsertCatalogViewInput): Promise<CatalogViewRecord> {
+    const { rows } = await this.getPool().query(
+      "INSERT INTO catalog_views (name, owner_user_id, is_shared, config) VALUES ($1,$2,$3,$4) RETURNING *",
+      [input.name, input.ownerUserId, input.isShared, JSON.stringify(input.config)],
+    );
+    return mapCatalogViewRow(rows[0])!;
+  }
+
+  async updateCatalogView(id: string, patch: UpdateCatalogViewPatch): Promise<CatalogViewRecord> {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (patch.name !== undefined) {
+      params.push(patch.name);
+      sets.push(`name = $${params.length}`);
+    }
+    if (patch.isShared !== undefined) {
+      params.push(patch.isShared);
+      sets.push(`is_shared = $${params.length}`);
+    }
+    if (patch.config !== undefined) {
+      params.push(JSON.stringify(patch.config));
+      sets.push(`config = $${params.length}`);
+    }
+    sets.push("updated_at = now()");
+    params.push(id);
+    const { rows } = await this.getPool().query(`UPDATE catalog_views SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`, params);
+    if (rows.length === 0) throw new Error(`Catalog view ${id} not found.`);
+    return mapCatalogViewRow(rows[0])!;
+  }
+
+  async deleteCatalogView(id: string): Promise<void> {
+    const client = await this.getPool().connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM catalog_view_defaults WHERE view_id = $1", [id]);
+      await client.query("DELETE FROM catalog_views WHERE id = $1", [id]);
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getCatalogViewDefault(scope: string): Promise<string | null> {
+    const { rows } = await this.getPool().query("SELECT view_id FROM catalog_view_defaults WHERE scope = $1", [scope]);
+    return rows[0]?.view_id ?? null;
+  }
+
+  async setCatalogViewDefault(scope: string, viewId: string | null): Promise<void> {
+    if (viewId === null) {
+      await this.getPool().query("DELETE FROM catalog_view_defaults WHERE scope = $1", [scope]);
+      return;
+    }
+    await this.getPool().query(
+      "INSERT INTO catalog_view_defaults (scope, view_id) VALUES ($1, $2) ON CONFLICT (scope) DO UPDATE SET view_id = EXCLUDED.view_id",
+      [scope, viewId],
+    );
+  }
+}
+
+/** Null when the stored config no longer validates, so one bad row is skipped instead of breaking the whole list. */
+function mapCatalogViewRow(row: Record<string, unknown>): CatalogViewRecord | null {
+  // node-postgres hands JSONB back already parsed; accept a string too in case a driver setting changes that.
+  const raw = typeof row.config === "string" ? safeJson(row.config) : row.config;
+  const config = parseCatalogViewConfig(raw);
+  if (!config) return null;
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    ownerUserId: String(row.owner_user_id),
+    isShared: Boolean(row.is_shared),
+    config,
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
+  };
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
   }
 }
 

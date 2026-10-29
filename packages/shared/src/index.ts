@@ -3,6 +3,7 @@ export * from "./vendorRegistry";
 export * from "./normalize";
 export * from "./quantity";
 export * from "./productPhase";
+export * from "./catalogView";
 export * from "./dateRules";
 export * from "./managedValues";
 export * from "./reconcile";

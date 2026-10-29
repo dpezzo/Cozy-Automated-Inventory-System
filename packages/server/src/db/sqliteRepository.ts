@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import type { ManagedValues, ReconciliationRow, WarehouseCode } from "@cozywinters/shared";
+import { parseCatalogViewConfig } from "@cozywinters/shared";
 import type { Repository } from "./Repository";
 import type {
   UserRecord,
@@ -34,6 +35,9 @@ import type {
   DiscontinuedItemInput,
   DiscontinuedItemRecord,
   UpsertDiscontinuedItemsResult,
+  CatalogViewRecord,
+  InsertCatalogViewInput,
+  UpdateCatalogViewPatch,
 } from "./types";
 import { DEFAULT_DATA_SIZE_ALERT_THRESHOLDS } from "./types";
 import { defaultSqlitePath } from "../config/paths";
@@ -1141,6 +1145,101 @@ export class SqliteRepository implements Repository {
     const rows = this.conn().prepare("SELECT normalized_upc FROM vendor_discontinued_items WHERE vendor_key = ?").all(vendorKey) as { normalized_upc: string }[];
     return rows.map((r) => r.normalized_upc);
   }
+
+  // ---------- Catalog views ----------
+
+  async listCatalogViewsVisibleTo(userId: string): Promise<CatalogViewRecord[]> {
+    const rows = this.conn()
+      .prepare("SELECT * FROM catalog_views WHERE owner_user_id = ? OR is_shared = 1 ORDER BY updated_at DESC")
+      .all(userId) as Record<string, unknown>[];
+    return rows.flatMap((r) => mapCatalogViewRow(r) ?? []);
+  }
+
+  async findCatalogViewById(id: string): Promise<CatalogViewRecord | null> {
+    const row = this.conn().prepare("SELECT * FROM catalog_views WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    return row ? mapCatalogViewRow(row) : null;
+  }
+
+  async insertCatalogView(input: InsertCatalogViewInput): Promise<CatalogViewRecord> {
+    const id = randomUUID();
+    const now = nowIso();
+    this.conn()
+      .prepare("INSERT INTO catalog_views (id, name, owner_user_id, is_shared, config, created_at, updated_at) VALUES (?,?,?,?,?,?,?)")
+      .run(id, input.name, input.ownerUserId, toIntBool(input.isShared), JSON.stringify(input.config), now, now);
+    return (await this.findCatalogViewById(id))!;
+  }
+
+  async updateCatalogView(id: string, patch: UpdateCatalogViewPatch): Promise<CatalogViewRecord> {
+    const sets: string[] = [];
+    const params: (string | number)[] = [];
+    if (patch.name !== undefined) {
+      sets.push("name = ?");
+      params.push(patch.name);
+    }
+    if (patch.isShared !== undefined) {
+      sets.push("is_shared = ?");
+      params.push(toIntBool(patch.isShared));
+    }
+    if (patch.config !== undefined) {
+      sets.push("config = ?");
+      params.push(JSON.stringify(patch.config));
+    }
+    sets.push("updated_at = ?");
+    params.push(nowIso());
+    this.conn().prepare(`UPDATE catalog_views SET ${sets.join(", ")} WHERE id = ?`).run(...params, id);
+    const updated = await this.findCatalogViewById(id);
+    if (!updated) throw new Error(`Catalog view ${id} not found.`);
+    return updated;
+  }
+
+  async deleteCatalogView(id: string): Promise<void> {
+    const db = this.conn();
+    db.exec("BEGIN");
+    try {
+      db.prepare("DELETE FROM catalog_view_defaults WHERE view_id = ?").run(id);
+      db.prepare("DELETE FROM catalog_views WHERE id = ?").run(id);
+      db.exec("COMMIT");
+    } catch (err) {
+      db.exec("ROLLBACK");
+      throw err;
+    }
+  }
+
+  async getCatalogViewDefault(scope: string): Promise<string | null> {
+    const row = this.conn().prepare("SELECT view_id FROM catalog_view_defaults WHERE scope = ?").get(scope) as { view_id: string } | undefined;
+    return row?.view_id ?? null;
+  }
+
+  async setCatalogViewDefault(scope: string, viewId: string | null): Promise<void> {
+    if (viewId === null) {
+      this.conn().prepare("DELETE FROM catalog_view_defaults WHERE scope = ?").run(scope);
+      return;
+    }
+    this.conn()
+      .prepare("INSERT INTO catalog_view_defaults (scope, view_id) VALUES (?, ?) ON CONFLICT (scope) DO UPDATE SET view_id = excluded.view_id")
+      .run(scope, viewId);
+  }
+}
+
+/** Null when the stored config no longer validates, so one bad row is skipped instead of breaking the whole list. */
+function mapCatalogViewRow(row: Record<string, unknown>): CatalogViewRecord | null {
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(String(row.config));
+  } catch {
+    return null;
+  }
+  const config = parseCatalogViewConfig(parsedJson);
+  if (!config) return null;
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    ownerUserId: String(row.owner_user_id),
+    isShared: Number(row.is_shared) === 1,
+    config,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
 }
 
 function mapFileRow(row: Record<string, unknown>): FileRecord {

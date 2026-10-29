@@ -47,6 +47,14 @@ import {
   reloadPlugins,
   type CreateVendorConfigRequest,
 } from "./domain/vendorConfigService";
+import {
+  listCatalogViews,
+  createCatalogView,
+  updateCatalogView as updateCatalogViewForUser,
+  deleteCatalogView as deleteCatalogViewForUser,
+  setCatalogViewDefault,
+  type CatalogViewActor,
+} from "./domain/catalogViewService";
 import { ValidationError, ForbiddenError, NotFoundError } from "./errors";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -967,6 +975,55 @@ router.delete(
   requireAdmin,
   asyncHandler(async (req, res) => {
     await deactivateVendorConfig(req.params.key!, req.session.userId!);
+    res.json({ ok: true });
+  }),
+);
+
+// ---------- Catalog views ----------
+// Saved column/filter/sort setups for the Catalog page. Any signed-in user can
+// save their own and share them; the service decides who may change what.
+
+function catalogViewActor(req: import("express").Request): CatalogViewActor {
+  return { userId: req.session.userId!, role: req.session.role === "admin" ? "admin" : "member" };
+}
+
+router.get(
+  "/catalog-views",
+  asyncHandler(async (req, res) => {
+    res.json(await listCatalogViews(catalogViewActor(req)));
+  }),
+);
+
+router.post(
+  "/catalog-views",
+  asyncHandler(async (req, res) => {
+    const { name, isShared, config } = req.body as { name?: unknown; isShared?: unknown; config?: unknown };
+    res.status(201).json(await createCatalogView(catalogViewActor(req), { name, isShared, config }));
+  }),
+);
+
+// Registered before "/catalog-views/:id" so "default" is never read as a view id.
+router.put(
+  "/catalog-views/default",
+  asyncHandler(async (req, res) => {
+    const { scope, viewId } = req.body as { scope?: unknown; viewId?: unknown };
+    await setCatalogViewDefault(catalogViewActor(req), scope, viewId === undefined ? null : viewId);
+    res.json({ ok: true });
+  }),
+);
+
+router.patch(
+  "/catalog-views/:id",
+  asyncHandler(async (req, res) => {
+    const { name, isShared, config } = req.body as { name?: unknown; isShared?: unknown; config?: unknown };
+    res.json(await updateCatalogViewForUser(catalogViewActor(req), req.params.id!, { name, isShared, config }));
+  }),
+);
+
+router.delete(
+  "/catalog-views/:id",
+  asyncHandler(async (req, res) => {
+    await deleteCatalogViewForUser(catalogViewActor(req), req.params.id!);
     res.json({ ok: true });
   }),
 );

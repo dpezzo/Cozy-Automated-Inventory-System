@@ -9,7 +9,9 @@ import {
   ArrowDown,
   ExternalLink,
 } from "lucide-react";
-import { api, ApiRequestError, type FileRecord, type MivaCatalogRow } from "../api";
+import { api, ApiRequestError, type FileRecord, type MivaCatalogRow, type CatalogViewConfig, type CatalogViewsPayload } from "../api";
+import { useAuth } from "../AuthContext";
+import { CatalogViewsBar } from "../components/CatalogViewsBar";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { loadFromStorage, saveToStorage } from "../lib/storage";
@@ -30,6 +32,8 @@ const HIDDEN_COLUMNS_KEY = "cw-catalog-hidden-columns-v1";
 const COLUMN_WIDTHS_KEY = "cw-catalog-column-widths-v1";
 const VENDOR_BRANDS_ONLY_KEY = "cw-catalog-vendor-brands-only-v1";
 const COLUMN_ORDER_KEY = "cw-catalog-column-order-v1";
+/** Which saved view was last applied in this browser; the view itself lives on the server. */
+const ACTIVE_VIEW_KEY = "cw-catalog-active-view-v1";
 
 // Fixed row height + windowing: with ~8,000 rows, rendering every <tr> makes
 // any state change (a column toggle, a filter, a sort) feel laggy, since the
@@ -213,10 +217,41 @@ const COLUMNS: ColumnDef[] = [
 ];
 
 const DEFAULT_COLUMN_ORDER = COLUMNS.map((c) => c.key);
+const KNOWN_COLUMN_KEYS = new Set(DEFAULT_COLUMN_ORDER);
+
+/** A saved order may predate a column (or name one that no longer exists): keep what is known, in its order, then append anything missing. Empty means the default order. */
+function resolveColumnOrder(order: string[]): string[] {
+  const kept = order.filter((k) => KNOWN_COLUMN_KEYS.has(k));
+  return [...kept, ...DEFAULT_COLUMN_ORDER.filter((k) => !kept.includes(k))];
+}
+
+/** A stable string for comparing two configs regardless of array/key order, so "modified" only lights up for a real difference. */
+function canonicalConfig(c: CatalogViewConfig): string {
+  return JSON.stringify({
+    hidden: c.hiddenColumns.filter((k) => KNOWN_COLUMN_KEYS.has(k)).sort(),
+    order: resolveColumnOrder(c.columnOrder),
+    widths: Object.entries(c.columnWidths)
+      .filter(([k]) => KNOWN_COLUMN_KEYS.has(k))
+      .sort(([a], [b]) => a.localeCompare(b)),
+    filters: Object.entries(c.columnFilters)
+      .filter(([k]) => KNOWN_COLUMN_KEYS.has(k))
+      .map(([k, v]): [string, string[]] => [k, [...v].sort()])
+      .sort(([a], [b]) => a.localeCompare(b)),
+    sort: c.sortKey !== null && KNOWN_COLUMN_KEYS.has(c.sortKey) ? [c.sortKey, c.sortDir] : null,
+    vendorBrandsOnly: c.vendorBrandsOnly,
+  });
+}
 
 export default function CatalogPage() {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [selectedFile, setSelectedFile] = useState<string>("");
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [viewsPayload, setViewsPayload] = useState<CatalogViewsPayload | null>(null);
+  const [activeViewId, setActiveViewId] = useState<string | null>(() => loadFromStorage<string | null>(ACTIVE_VIEW_KEY, null));
+  const [viewsBusy, setViewsBusy] = useState(false);
+  const [viewsError, setViewsError] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const [loadedRows, setRows] = useState<MivaCatalogRow[]>([]);
   const [vendorBrandGroups, setVendorBrandGroups] = useState<{ vendorKey: string; vendorLabel: string; brands: string[] }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -282,7 +317,13 @@ export default function CatalogPage() {
     }
     recomputeHeight();
     window.addEventListener("resize", recomputeHeight);
-    return () => window.removeEventListener("resize", recomputeHeight);
+    // The saved-views bar and the active-filters line above the table appear and disappear, which moves the table's top edge.
+    const observer = cardRef.current ? new ResizeObserver(recomputeHeight) : null;
+    if (observer && cardRef.current) observer.observe(cardRef.current);
+    return () => {
+      window.removeEventListener("resize", recomputeHeight);
+      observer?.disconnect();
+    };
   }, []);
 
   function loadFiles(selectId?: string, site: "development" | "live" | null = activeSite) {
@@ -402,6 +443,196 @@ export default function CatalogPage() {
     }
     return map;
   }, [searched, filterableColumns]);
+
+  // ---------- Saved views ----------
+
+  const currentConfig = useMemo<CatalogViewConfig>(
+    () => ({
+      version: 1,
+      hiddenColumns: [...hiddenColumns],
+      columnOrder,
+      columnWidths,
+      columnFilters: Object.fromEntries(Object.entries(columnFilterValues).map(([k, v]) => [k, [...v]])),
+      sortKey,
+      sortDir,
+      vendorBrandsOnly,
+    }),
+    [hiddenColumns, columnOrder, columnWidths, columnFilterValues, sortKey, sortDir, vendorBrandsOnly],
+  );
+
+  function findViewConfig(viewId: string): CatalogViewConfig | null {
+    const fromViews = viewsPayload?.views.find((v) => v.id === viewId);
+    if (fromViews) return fromViews.config;
+    return viewsPayload?.builtins.find((b) => b.id === viewId)?.config ?? null;
+  }
+
+  const activeViewConfig = activeViewId !== null ? findViewConfig(activeViewId) : null;
+  const viewModified = activeViewConfig !== null && canonicalConfig(currentConfig) !== canonicalConfig(activeViewConfig);
+
+  /** Replaces columns, order, widths, filters, sort and the brand switch wholesale (never merges), and mirrors them to the same browser storage the page already uses. */
+  function applyViewConfig(config: CatalogViewConfig, viewId: string | null) {
+    const hidden = config.hiddenColumns.filter((k) => KNOWN_COLUMN_KEYS.has(k));
+    const order = resolveColumnOrder(config.columnOrder);
+    const widths = Object.fromEntries(Object.entries(config.columnWidths).filter(([k]) => KNOWN_COLUMN_KEYS.has(k)));
+    const filters = Object.fromEntries(
+      Object.entries(config.columnFilters)
+        .filter(([k]) => KNOWN_COLUMN_KEYS.has(k))
+        .map(([k, v]) => [k, new Set(v)]),
+    );
+    setHiddenColumns(new Set(hidden));
+    setColumnOrder(order);
+    setColumnWidths(widths);
+    setColumnFilterValues(filters);
+    setSortKey(config.sortKey !== null && KNOWN_COLUMN_KEYS.has(config.sortKey) ? config.sortKey : null);
+    setSortDir(config.sortDir);
+    setVendorBrandsOnly(config.vendorBrandsOnly);
+    saveToStorage(HIDDEN_COLUMNS_KEY, hidden);
+    saveToStorage(COLUMN_ORDER_KEY, order);
+    saveToStorage(COLUMN_WIDTHS_KEY, widths);
+    saveToStorage(VENDOR_BRANDS_ONLY_KEY, config.vendorBrandsOnly);
+    setActiveViewId(viewId);
+    saveToStorage(ACTIVE_VIEW_KEY, viewId);
+  }
+
+  function selectView(viewId: string | null) {
+    setViewsError(null);
+    if (viewId === null) {
+      setActiveViewId(null);
+      saveToStorage(ACTIVE_VIEW_KEY, null);
+      return;
+    }
+    const config = findViewConfig(viewId);
+    if (config) applyViewConfig(config, viewId);
+  }
+
+  function revertActiveView() {
+    if (activeViewId !== null && activeViewConfig) applyViewConfig(activeViewConfig, activeViewId);
+  }
+
+  async function refreshViews(): Promise<CatalogViewsPayload> {
+    const payload = await api.listCatalogViews();
+    setViewsPayload(payload);
+    return payload;
+  }
+
+  /** Runs a views server call with the busy flag and shows the server's message on failure; rethrows so a form can stay open. */
+  async function runViewAction<T>(action: () => Promise<T>): Promise<T> {
+    setViewsBusy(true);
+    setViewsError(null);
+    try {
+      return await action();
+    } catch (err) {
+      console.error(err);
+      setViewsError(err instanceof ApiRequestError ? err.body.message : "That didn't work. Please try again.");
+      throw err;
+    } finally {
+      setViewsBusy(false);
+    }
+  }
+
+  async function saveNewView(name: string, isShared: boolean) {
+    await runViewAction(async () => {
+      const created = await api.createCatalogView({ name, isShared, config: currentConfig });
+      await refreshViews();
+      setActiveViewId(created.id);
+      saveToStorage(ACTIVE_VIEW_KEY, created.id);
+    });
+  }
+
+  async function updateActiveView() {
+    if (activeViewId === null) return;
+    await runViewAction(async () => {
+      await api.updateCatalogView(activeViewId, { config: currentConfig });
+      await refreshViews();
+    });
+  }
+
+  async function renameActiveView(name: string) {
+    if (activeViewId === null) return;
+    await runViewAction(async () => {
+      await api.updateCatalogView(activeViewId, { name });
+      await refreshViews();
+    });
+  }
+
+  async function setActiveViewShared(isShared: boolean) {
+    if (activeViewId === null) return;
+    await runViewAction(async () => {
+      await api.updateCatalogView(activeViewId, { isShared });
+      await refreshViews();
+    });
+  }
+
+  async function deleteActiveView() {
+    if (activeViewId === null) return;
+    const name = viewsPayload?.views.find((v) => v.id === activeViewId)?.name ?? "this view";
+    if (!window.confirm(`Delete "${name}"? This can't be undone. Your current columns and filters stay as they are.`)) return;
+    await runViewAction(async () => {
+      await api.deleteCatalogView(activeViewId);
+      await refreshViews();
+      setActiveViewId(null);
+      saveToStorage(ACTIVE_VIEW_KEY, null);
+    });
+  }
+
+  async function setViewDefault(scope: "personal" | "team", viewId: string | null) {
+    await runViewAction(async () => {
+      await api.setCatalogViewDefault(scope, viewId);
+      await refreshViews();
+    });
+  }
+
+  // On first load, open the person's own default view, else the team default; with neither, keep whatever this browser already had.
+  const initialViewApplied = useRef(false);
+  useEffect(() => {
+    api
+      .listCatalogViews()
+      .then((payload) => {
+        setViewsPayload(payload);
+        if (initialViewApplied.current) return;
+        initialViewApplied.current = true;
+        const defaultId = payload.defaults.personal ?? payload.defaults.team;
+        const defaultConfig = defaultId
+          ? (payload.views.find((v) => v.id === defaultId)?.config ?? payload.builtins.find((b) => b.id === defaultId)?.config ?? null)
+          : null;
+        if (defaultId && defaultConfig) {
+          applyViewConfig(defaultConfig, defaultId);
+        } else {
+          // No default: just forget a remembered view that no longer exists (deleted, or unshared by its owner).
+          setActiveViewId((current) =>
+            current !== null && (payload.views.some((v) => v.id === current) || payload.builtins.some((b) => b.id === current)) ? current : null,
+          );
+        }
+      })
+      .catch(() => setViewsPayload({ views: [], builtins: [], defaults: { personal: null, team: null } }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A view can filter on values this file doesn't have (a renamed vendor, a product that was removed). Say so instead of silently showing an empty table.
+  const staleViewFilterCount = useMemo(() => {
+    if (!activeViewConfig || loading || loadedRows.length === 0) return 0;
+    const entries = Object.entries(activeViewConfig.columnFilters).filter(([k]) => KNOWN_COLUMN_KEYS.has(k));
+    if (entries.length === 0) return 0;
+    let missing = 0;
+    for (const [colKey, savedValues] of entries) {
+      const col = COLUMNS.find((c) => c.key === colKey);
+      if (!col) continue;
+      const present = new Set(brandFiltered.map((r) => displayValue(col.get(r))));
+      missing += savedValues.filter((v) => !present.has(v)).length;
+    }
+    return missing;
+  }, [activeViewConfig, loading, loadedRows.length, brandFiltered]);
+
+  // One readable line per active column filter, so a view that hides rows says exactly how.
+  const filterSummary = Object.entries(columnFilterValues).map(([colKey, selected]) => {
+    const label = COLUMNS.find((c) => c.key === colKey)?.label ?? colKey;
+    const total = distinctValuesByColumn[colKey]?.length ?? 0;
+    const values = [...selected].sort((a, b) => a.localeCompare(b));
+    if (values.length === 0) return `${label}: nothing selected`;
+    if (values.length <= 3) return `${label}: ${values.join(", ")}`;
+    return `${label}: ${values.length} of ${total} values`;
+  });
+  const sortSummary = sortKey ? `${COLUMNS.find((c) => c.key === sortKey)?.label ?? sortKey} ${sortDir === "asc" ? "(A to Z)" : "(Z to A)"}` : null;
 
   function effectiveSelectedFor(colKey: string): Set<string> {
     return columnFilterValues[colKey] ?? new Set(distinctValuesByColumn[colKey] ?? []);
@@ -565,7 +796,23 @@ export default function CatalogPage() {
       {error && <ErrorBanner message={error} />}
       {pullMessage && <p style={{ fontSize: 13, color: "var(--muted)" }}>{pullMessage}</p>}
 
-      <div className="card">
+      <div className="card" ref={cardRef}>
+        <CatalogViewsBar
+          payload={viewsPayload}
+          activeViewId={activeViewId}
+          modified={viewModified}
+          isAdmin={isAdmin}
+          busy={viewsBusy}
+          error={viewsError}
+          onSelect={selectView}
+          onSaveNew={saveNewView}
+          onUpdate={updateActiveView}
+          onRevert={revertActiveView}
+          onRename={renameActiveView}
+          onSetShared={setActiveViewShared}
+          onDelete={deleteActiveView}
+          onSetDefault={setViewDefault}
+        />
         <div className="toolbar" style={{ flexWrap: "wrap" }}>
           <label>
             Snapshot:{" "}
@@ -657,6 +904,26 @@ export default function CatalogPage() {
             )}
           </span>
         </div>
+
+        {(filterSummary.length > 0 || sortSummary || staleViewFilterCount > 0) && (
+          <div style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 8px", display: "flex", flexWrap: "wrap", gap: "4px 16px" }}>
+            {filterSummary.length > 0 && (
+              <span>
+                <strong>Filtered by</strong> {filterSummary.join("  |  ")}
+              </span>
+            )}
+            {sortSummary && (
+              <span>
+                <strong>Sorted by</strong> {sortSummary}
+              </span>
+            )}
+            {staleViewFilterCount > 0 && (
+              <span style={{ color: "#b45309" }}>
+                {staleViewFilterCount} value{staleViewFilterCount === 1 ? "" : "s"} saved in this view {staleViewFilterCount === 1 ? "isn't" : "aren't"} in this snapshot, so those rows can't show.
+              </span>
+            )}
+          </div>
+        )}
 
         <div
           className="table-scroll"

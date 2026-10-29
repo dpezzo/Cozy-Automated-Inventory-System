@@ -2,6 +2,23 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-28 - Catalog saved views (columns, filters, sort), shareable, with defaults
+
+### Added
+- **Saved views on the Miva Catalog page.** A new View bar above the toolbar lets you pick a saved view, "Save as new view" from your current setup, "Update view" (when a view you can edit has been changed), "Revert", and a "..." menu for Rename, Share with the team / Make private, Make this my default, and Delete. A view stores visible columns, column order and widths, the per-column filters, the sort, and the "Vendor brands only" switch. It does not store the search box (a one-off lookup you wouldn't want to carry into the next view).
+- **Private by default, shareable.** Every view is private to its owner until they share it, after which every signed-in user can apply it. Only the owner or an admin can update, rename, share/unshare or delete a shared view; everyone else gets "Save as new view" to keep their own copy. Someone else's private view is reported as not found, even to an admin. Names are unique per owner (case-insensitive), at most 60 characters, and can't reuse a built-in name.
+- **Defaults.** Anyone can set their own default view. An admin can set the team default (it must be a shared or built-in view). On page load the person's own default wins, then the team default; with neither, the page opens exactly as before, with the columns this browser last had. Unsharing or deleting a view clears every default pointing at it.
+- **Built-in views** live in code (`BUILTIN_CATALOG_VIEWS` in `packages/shared/src/catalogView.ts`) and cannot be edited or deleted. Only "All columns" exists so far; add more there and everyone gets them without a migration.
+- **Applying a view replaces everything** (columns, filters, sort, brand switch), never merges. A line above the table now states what is hiding rows ("Filtered by Vendor: Olliix | ...", "Sorted by ..."), and a note appears if a view filters on values the loaded snapshot doesn't contain, instead of silently showing an empty table. A filter on a hidden column still applies and still appears in that line. The dropdown shows "(modified)" once you change anything after picking a view.
+- New tables `catalog_views` and `catalog_view_defaults` (migration 0014, SQLite and Postgres), repository methods, `catalogViewService.ts`, and routes `GET/POST /api/catalog-views`, `PATCH/DELETE /api/catalog-views/:id`, `PUT /api/catalog-views/default`. A view's settings are stored as versioned JSON (`version: 1`) and validated on write and on read (`parseCatalogViewConfig`), so a bad or future row is skipped rather than breaking the list, and adding editable columns later won't invalidate saved views.
+
+### Notes
+- The Postgres versions of the new queries are untested locally (same as the discontinued list); the SQLite path is covered end to end.
+- The Catalog table height is now recomputed whenever the area above it changes size (the views bar, its name form, the filter line).
+
+### Tests
+- New `catalogViewService.integration.test.ts` (real SQLite: privacy, sharing, admin rights, names, defaults, cleanup on unshare/delete) and `catalogView.test.ts` (config validation).
+
 ## 2026-10-28 - Catalog: Vendor column
 
 ### Added
