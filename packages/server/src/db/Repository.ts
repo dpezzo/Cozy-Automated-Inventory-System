@@ -26,6 +26,9 @@ import type {
   VendorConfigRecord,
   InsertVendorConfigInput,
   UpdateVendorConfigPatch,
+  DiscontinuedItemInput,
+  DiscontinuedItemRecord,
+  UpsertDiscontinuedItemsResult,
 } from "./types";
 
 /**
@@ -156,4 +159,11 @@ export interface Repository {
   updateVendorConfig(key: string, patch: UpdateVendorConfigPatch): Promise<VendorConfigRecord>;
   /** Soft delete: sets is_active = false. */
   deactivateVendorConfig(key: string): Promise<void>;
+
+  // Vendor discontinued items (the cumulative list behind the Olliix "Discontinued Items Notification" upload)
+  /** Inserts new UPCs and refreshes existing ones; never removes anything, so a shorter later list cannot un-discontinue an earlier item. */
+  upsertDiscontinuedItems(vendorKey: string, items: DiscontinuedItemInput[], sourceFileId: string): Promise<UpsertDiscontinuedItemsResult>;
+  listDiscontinuedItems(vendorKey: string): Promise<DiscontinuedItemRecord[]>;
+  /** Just the normalized UPCs, for the rule engine's overlay. */
+  listDiscontinuedUpcs(vendorKey: string): Promise<string[]>;
 }

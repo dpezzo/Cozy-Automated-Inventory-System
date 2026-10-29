@@ -31,6 +31,9 @@ import type {
   VendorConfigRecord,
   InsertVendorConfigInput,
   UpdateVendorConfigPatch,
+  DiscontinuedItemInput,
+  DiscontinuedItemRecord,
+  UpsertDiscontinuedItemsResult,
 } from "./types";
 import { DEFAULT_DATA_SIZE_ALERT_THRESHOLDS } from "./types";
 import { defaultSqlitePath } from "../config/paths";
@@ -1058,6 +1061,10 @@ export class SqliteRepository implements Repository {
       sets.push("column_mapping = ?");
       params.push(patch.columnMapping ? JSON.stringify(patch.columnMapping) : null);
     }
+    if (patch.discontinuedThreshold !== undefined) {
+      sets.push("discontinued_threshold = ?");
+      params.push(patch.discontinuedThreshold);
+    }
     if (patch.isActive !== undefined) {
       sets.push("is_active = ?");
       params.push(toIntBool(patch.isActive));
@@ -1078,6 +1085,61 @@ export class SqliteRepository implements Repository {
     this.conn()
       .prepare("UPDATE vendor_configs SET is_active = 0, updated_at = ? WHERE vendor_key = ?")
       .run(nowIso(), key);
+  }
+
+  // ---------- Vendor discontinued items ----------
+
+  async upsertDiscontinuedItems(vendorKey: string, items: DiscontinuedItemInput[], sourceFileId: string): Promise<UpsertDiscontinuedItemsResult> {
+    const db = this.conn();
+    const now = nowIso();
+    let added = 0;
+    let updated = 0;
+    db.exec("BEGIN");
+    try {
+      const exists = db.prepare("SELECT 1 FROM vendor_discontinued_items WHERE vendor_key = ? AND normalized_upc = ?");
+      const upsert = db.prepare(
+        `INSERT INTO vendor_discontinued_items
+          (vendor_key, normalized_upc, item_no, description, division, category, discontinued_date, source_file_id, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT (vendor_key, normalized_upc) DO UPDATE SET
+           item_no = excluded.item_no, description = excluded.description, division = excluded.division,
+           category = excluded.category, discontinued_date = excluded.discontinued_date,
+           source_file_id = excluded.source_file_id, updated_at = excluded.updated_at`,
+      );
+      for (const item of items) {
+        if (exists.get(vendorKey, item.normalizedUpc)) updated++;
+        else added++;
+        upsert.run(vendorKey, item.normalizedUpc, item.itemNo, item.description, item.division, item.category, item.discontinuedDate, sourceFileId, now, now);
+      }
+      db.exec("COMMIT");
+    } catch (err) {
+      db.exec("ROLLBACK");
+      throw err;
+    }
+    return { added, updated };
+  }
+
+  async listDiscontinuedItems(vendorKey: string): Promise<DiscontinuedItemRecord[]> {
+    const rows = this.conn()
+      .prepare("SELECT * FROM vendor_discontinued_items WHERE vendor_key = ? ORDER BY discontinued_date DESC, normalized_upc")
+      .all(vendorKey) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      vendorKey: String(row.vendor_key),
+      normalizedUpc: String(row.normalized_upc),
+      itemNo: (row.item_no as string | null) ?? null,
+      description: (row.description as string | null) ?? null,
+      division: (row.division as string | null) ?? null,
+      category: (row.category as string | null) ?? null,
+      discontinuedDate: (row.discontinued_date as string | null) ?? null,
+      sourceFileId: (row.source_file_id as string | null) ?? null,
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }));
+  }
+
+  async listDiscontinuedUpcs(vendorKey: string): Promise<string[]> {
+    const rows = this.conn().prepare("SELECT normalized_upc FROM vendor_discontinued_items WHERE vendor_key = ?").all(vendorKey) as { normalized_upc: string }[];
+    return rows.map((r) => r.normalized_upc);
   }
 }
 

@@ -2,6 +2,7 @@ import type { MivaRawRow, VendorRawRow, ReconciliationRow, VendorRuleConfig } fr
 import { computeRuleConfigHash, reconcile, type ParsedCalendarDate } from "@cozywinters/shared";
 import { getRepository, type VendorConfigRecord } from "../db";
 import { ValidationError } from "../errors";
+import { DISCONTINUED_LIST_VENDOR_KEY } from "./discontinuedListService";
 
 export interface RunPipelineInput {
   /** Matches vendor_configs.vendor_key -- a built-in VendorKey string for the 4 legacy vendors, or any dynamically-added vendor's slug. */
@@ -55,9 +56,17 @@ export async function runReconciliation(input: RunPipelineInput): Promise<RunPip
     throw new ValidationError("VENDOR_CONFIG_NOT_FOUND", `No active vendor configuration found for "${input.vendorKey}".`);
   }
   const config = toVendorRuleConfig(record);
+  // Only the discontinued-list vendor (Olliix, whose feed has no phase column) runs in list mode. Passing a set --
+  // even an empty one -- is what restricts its "missing from feed" NLA proposals to listed products; Gobi must
+  // never receive one, since its own Product Phase column drives it.
+  const discontinuedUpcs =
+    config.discontinuedThreshold !== undefined && input.vendorKey === DISCONTINUED_LIST_VENDOR_KEY
+      ? new Set(await getRepository().listDiscontinuedUpcs(input.vendorKey))
+      : undefined;
   const { rows } = reconcile(input.vendorRows, input.mivaRows, {
     config,
     runDate: input.runDate,
+    discontinuedUpcs,
   });
   return {
     rows,

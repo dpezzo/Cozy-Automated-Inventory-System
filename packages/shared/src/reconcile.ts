@@ -193,6 +193,30 @@ function resolveMiva(index: MivaIndex, normalizedKey: string): MivaLookup {
 export interface ReconcileOptions {
   config: VendorRuleConfig;
   runDate: ParsedCalendarDate;
+  /**
+   * Normalized UPCs the vendor has separately told us are discontinued (Olliix's
+   * emailed "Discontinued Items Notification"; its daily feed has no phase column).
+   * Only meaningful for a vendor with config.discontinuedThreshold set. When
+   * provided (even empty), a feed row with a listed UPC is treated as
+   * Discontinued, and a live Miva product missing from the feed is proposed as
+   * NLA only if its UPC is listed -- every other missing product keeps the hard
+   * block. When omitted (Gobi, whose feed carries its own phase), behavior is unchanged.
+   */
+  discontinuedUpcs?: ReadonlySet<string>;
+}
+
+/** Phase text stamped on feed rows matched by the discontinued list; shown in Run Review and read by interpretProductPhase. */
+export const DISCONTINUED_LIST_PHASE = "Discontinued (vendor list)";
+
+/** Returns the vendor rows with the discontinued-list phase applied; the originals are never mutated, and a row that already carries its own phase keeps it. */
+function applyDiscontinuedList(vendorRows: VendorRawRow[], options: ReconcileOptions): VendorRawRow[] {
+  const listed = options.discontinuedUpcs;
+  if (!listed || listed.size === 0 || options.config.discontinuedThreshold === undefined) return vendorRows;
+  return vendorRows.map((row) => {
+    if ((row.productPhaseRaw ?? "").trim() !== "") return row;
+    const upc = normalizeUpc(row.upcRaw).normalized;
+    return upc !== null && listed.has(upc) ? { ...row, productPhaseRaw: DISCONTINUED_LIST_PHASE } : row;
+  });
 }
 
 export interface ReconcileResult {
@@ -209,7 +233,8 @@ export interface ReconcileResult {
  * threshold, managed-value diffing, review-class assignment) is identical
  * regardless of vendor.
  */
-export function reconcile(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], options: ReconcileOptions): ReconcileResult {
+export function reconcile(rawVendorRows: VendorRawRow[], mivaRows: MivaRawRow[], options: ReconcileOptions): ReconcileResult {
+  const vendorRows = applyDiscontinuedList(rawVendorRows, options);
   const visible = excludeHiddenProducts(vendorRows, mivaRows, options.config);
   const result = reconcileCore(visible.vendorRows, visible.mivaRows, options);
   // Carry the vendor-reported phase onto each vendor-sourced row for display in Run Review.
@@ -550,7 +575,9 @@ function reconcileCore(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], optio
     // dropped out of the vendor's file entirely is proposed as NLA, but only as a
     // WARNING a person must explicitly approve -- never a silent or bulk-approvable
     // change. Every other vendor keeps the original hard block (DEV-001 above).
-    if (!alreadyDiscontinued && config.discontinuedThreshold !== undefined) {
+    // With a discontinued list (Olliix) that proposal is limited to products the list names.
+    const onDiscontinuedList = options.discontinuedUpcs === undefined || options.discontinuedUpcs.has(normalized.normalized);
+    if (!alreadyDiscontinued && config.discontinuedThreshold !== undefined && onDiscontinuedList) {
       const proposedNla = computeProposedManagedValues("NLA", null, { feedExcluded: (current.dsInvMgt ?? "").trim() === DS_INV_MGT_NO_FEED });
       results.push({
         sourceRowNumber: null,

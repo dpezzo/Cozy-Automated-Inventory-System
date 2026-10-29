@@ -203,6 +203,8 @@ export interface UpdateVendorConfigRequest {
   brandAllowlist?: string[];
   matchStrategy?: VendorMatchStrategy;
   columnMapping?: GenericCsvColumnMapping;
+  /** Positive whole number to enable lifecycle-aware NLA handling; null to turn it off. */
+  discontinuedThreshold?: number | null;
 }
 
 /** vendor_key is immutable and never accepted in a patch -- it's the primary key and ruleId-derivation source. */
@@ -224,6 +226,11 @@ export async function updateVendorConfig(
     brandAllowlist: patch.brandAllowlist ?? existing.brandAllowlist,
     matchStrategy: patch.matchStrategy ?? existing.matchStrategy,
   });
+  if (patch.discontinuedThreshold !== undefined && patch.discontinuedThreshold !== null) {
+    if (!Number.isInteger(patch.discontinuedThreshold) || patch.discontinuedThreshold <= 0) {
+      throw new ValidationError("INVALID_THRESHOLD", "discontinuedThreshold must be a positive whole number, or blank to turn it off.");
+    }
+  }
   if (patch.columnMapping !== undefined) {
     if (existing.fileShape !== "simple_csv") {
       throw new ValidationError("COLUMN_MAPPING_NOT_APPLICABLE", "columnMapping only applies to 'simple_csv' vendors.");

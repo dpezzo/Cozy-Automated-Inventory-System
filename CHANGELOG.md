@@ -2,6 +2,24 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-28 - Olliix discontinued items list (cumulative) and a per-vendor discontinued threshold
+
+### Added
+- **Upload the "Discontinued Items Notification" workbook** Alex emails into the same Vendor Inventory Data box as any vendor file. It is recognized by its worksheet name and headers (never the filename), merged into a cumulative per-vendor list, and kept as a stored file of the new kind `discontinued_list`. It never becomes a run input. Each upload only adds or refreshes entries, so a later, shorter notification cannot un-discontinue an earlier item. The upload message reports how many were added, refreshed and skipped (no usable UPC). `discontinuedListParser.ts` (UPC is the key; item number, description, division, category and the Excel-serial discontinued date are kept), `discontinuedListService.ts`, `uploadService.uploadVendorFileAutoDetect`. Re-uploading an identical file is the usual duplicate warning.
+- **Overlay on the daily feed:** a run for the list-driven vendor (currently only `olliix`, `DISCONTINUED_LIST_VENDOR_KEY`) loads its listed UPCs and passes them to the rule engine (`ReconcileOptions.discontinuedUpcs`). A feed row whose UPC is listed gets the phase "Discontinued (vendor list)" (shown in Run Review's Product phase column), so the existing Gobi rule applies: below the vendor's discontinued threshold it becomes NLA, at or above it follows the normal in-stock rule so it stays live while real stock remains. A phase the vendor's own file already supplied is never overridden.
+- **Missing from the feed:** with a list, a live Miva product absent from the feed is proposed as NLA (a WARNING needing individual approval) only if its UPC is listed. Every other missing product keeps the original hard block (`MISSING_FROM_OLLIIX`). An empty list therefore changes nothing. Gobi is untouched: it never receives a list, so its "any missing product proposes NLA" behavior is as before.
+- **Editable "Discontinued threshold"** per vendor on Manage Vendors (blank turns it off). The `vendor_configs.discontinued_threshold` column already existed (migration 0011) but could only be set by SQL. Validation: a positive whole number or null. Olliix is off until someone sets it; Cale's Gobi value of 10 is the suggested starting point.
+- New table `vendor_discontinued_items` (migration 0013, both SQLite and Postgres), keyed by vendor and normalized UPC, with repository methods `upsertDiscontinuedItems`, `listDiscontinuedItems`, `listDiscontinuedUpcs`.
+
+### Notes
+- Match is on UPC only. The feed's item numbers carry a suffix the notification's lack (`BR54-0308N` vs `BR54-0308`), so item number is display only. Against the 2026-10-23 samples, 9 of the 36 listed items are in the feed (the BR54 throws, 127 to 1,786 units on hand) and 27 are not in it at all.
+- A run reads the list as it stands when the run is created, so re-running an old file pair after the list grows can give different results. The phase text is stored on each row, so past runs stay explainable.
+- The Olliix entry in `VENDOR_REGISTRY` was not touched, so the frozen fixture and its rule config hash are unchanged (asserted in a test).
+- The Postgres version of the upsert and list queries is untested locally (no Postgres in the dev environment); the SQLite path is covered end to end.
+
+### Tests
+- New `discontinuedListParser.test.ts` (real notification file), `discontinuedList.test.ts` in shared (overlay and missing-from-feed rules), and `discontinuedList.integration.test.ts` (real SQLite: upload, refresh, never-removes, threshold edit, and a run).
+
 ## 2026-10-25 - DS_INV_MGT values 2 (no shopping feed) and 3 (hidden from the app)
 
 ### Added

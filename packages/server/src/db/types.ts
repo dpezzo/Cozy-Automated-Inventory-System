@@ -41,6 +41,8 @@ export type FileKind =
   | "kh_workbook"
   | "gobi_workbook"
   | "fieldsheer_workbook"
+  /** Olliix's emailed "Discontinued Items Notification" workbook. Not a vendor inventory file: it is imported into vendor_discontinued_items on upload and never selected as a run input. */
+  | "discontinued_list"
   | "miva_snapshot"
   | "legacy_audit"
   | "post_import_snapshot"
@@ -124,7 +126,33 @@ export interface UpdateVendorConfigPatch {
   brandAllowlist?: string[];
   matchStrategy?: VendorMatchStrategy;
   columnMapping?: GenericCsvColumnMapping | null;
+  /** null clears it (vendor opts out of lifecycle-aware NLA handling). */
+  discontinuedThreshold?: number | null;
   isActive?: boolean;
+}
+
+// ---------- Vendor discontinued items ----------
+
+export interface DiscontinuedItemInput {
+  normalizedUpc: string;
+  itemNo: string | null;
+  description: string | null;
+  division: string | null;
+  category: string | null;
+  /** ISO date (YYYY-MM-DD). */
+  discontinuedDate: string | null;
+}
+
+export interface DiscontinuedItemRecord extends DiscontinuedItemInput {
+  vendorKey: string;
+  sourceFileId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertDiscontinuedItemsResult {
+  added: number;
+  updated: number;
 }
 
 export type RunStatus = "validating" | "normalizing" | "matching" | "calculating" | "ready" | "failed";

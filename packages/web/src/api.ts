@@ -139,7 +139,13 @@ export const api = {
     const res = await fetch("/api/files/vendor-auto-detect", { method: "POST", body: form, credentials: "include" });
     const body = await res.json();
     if (!res.ok) throw new ApiRequestError(res.status, body);
-    return body as { file: FileRecord; detectedVendorLabel: string; duplicateWarning: string | null };
+    return body as {
+      file: FileRecord;
+      detectedVendorLabel: string;
+      /** Set only when the upload was a "Discontinued Items Notification", which is merged into the vendor's discontinued list instead of becoming a run input. Null if it was an unconfirmed duplicate. */
+      discontinuedImport: { added: number; updated: number; skipped: number } | null;
+      duplicateWarning: string | null;
+    };
   },
   getCatalogRows: (fileId: string) => request<MivaCatalogRow[]>(`/files/${fileId}/catalog-rows`),
 
@@ -296,6 +302,8 @@ export interface VendorConfig {
   vendorKey: string;
   vendorLabel: string;
   inStockThreshold: number;
+  /** Units below which a discontinued product becomes NLA; null = lifecycle-aware NLA handling is off for this vendor. */
+  discontinuedThreshold: number | null;
   timezone: string;
   brandAllowlist: string[];
   matchStrategy: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";
@@ -332,6 +340,8 @@ export type CreateVendorInput =
 export interface UpdateVendorInput {
   vendorLabel?: string;
   inStockThreshold?: number;
+  /** null turns lifecycle-aware NLA handling off. */
+  discontinuedThreshold?: number | null;
   timezone?: string;
   brandAllowlist?: string[];
   matchStrategy?: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";

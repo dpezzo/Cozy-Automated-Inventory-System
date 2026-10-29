@@ -30,6 +30,9 @@ import type {
   VendorConfigRecord,
   InsertVendorConfigInput,
   UpdateVendorConfigPatch,
+  DiscontinuedItemInput,
+  DiscontinuedItemRecord,
+  UpsertDiscontinuedItemsResult,
 } from "./types";
 import { DEFAULT_DATA_SIZE_ALERT_THRESHOLDS } from "./types";
 
@@ -892,6 +895,10 @@ export class PostgresRepository implements Repository {
       params.push(patch.columnMapping ? JSON.stringify(patch.columnMapping) : null);
       sets.push(`column_mapping = $${params.length}`);
     }
+    if (patch.discontinuedThreshold !== undefined) {
+      params.push(patch.discontinuedThreshold);
+      sets.push(`discontinued_threshold = $${params.length}`);
+    }
     if (patch.isActive !== undefined) {
       params.push(patch.isActive);
       sets.push(`is_active = $${params.length}`);
@@ -908,6 +915,67 @@ export class PostgresRepository implements Repository {
 
   async deactivateVendorConfig(key: string): Promise<void> {
     await this.getPool().query("UPDATE vendor_configs SET is_active = false, updated_at = now() WHERE vendor_key = $1", [key]);
+  }
+
+  // ---------- Vendor discontinued items ----------
+
+  async upsertDiscontinuedItems(vendorKey: string, items: DiscontinuedItemInput[], sourceFileId: string): Promise<UpsertDiscontinuedItemsResult> {
+    const client = await this.getPool().connect();
+    let added = 0;
+    let updated = 0;
+    try {
+      await client.query("BEGIN");
+      for (const item of items) {
+        // xmax = 0 is true only for a freshly inserted row, which tells an insert from an ON CONFLICT update.
+        const { rows } = await client.query(
+          `INSERT INTO vendor_discontinued_items
+            (vendor_key, normalized_upc, item_no, description, division, category, discontinued_date, source_file_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT (vendor_key, normalized_upc) DO UPDATE SET
+             item_no = EXCLUDED.item_no, description = EXCLUDED.description, division = EXCLUDED.division,
+             category = EXCLUDED.category, discontinued_date = EXCLUDED.discontinued_date,
+             source_file_id = EXCLUDED.source_file_id, updated_at = now()
+           RETURNING (xmax = 0) AS inserted`,
+          [vendorKey, item.normalizedUpc, item.itemNo, item.description, item.division, item.category, item.discontinuedDate, sourceFileId],
+        );
+        if (rows[0]?.inserted) added++;
+        else updated++;
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+    return { added, updated };
+  }
+
+  async listDiscontinuedItems(vendorKey: string): Promise<DiscontinuedItemRecord[]> {
+    const { rows } = await this.getPool().query(
+      `SELECT vendor_key, normalized_upc, item_no, description, division, category,
+              to_char(discontinued_date, 'YYYY-MM-DD') AS discontinued_date, source_file_id, created_at, updated_at
+         FROM vendor_discontinued_items WHERE vendor_key = $1
+         ORDER BY discontinued_date DESC NULLS LAST, normalized_upc`,
+      [vendorKey],
+    );
+    return rows.map((row) => ({
+      vendorKey: row.vendor_key,
+      normalizedUpc: row.normalized_upc,
+      itemNo: row.item_no ?? null,
+      description: row.description ?? null,
+      division: row.division ?? null,
+      category: row.category ?? null,
+      discontinuedDate: row.discontinued_date ?? null,
+      sourceFileId: row.source_file_id ?? null,
+      createdAt: new Date(row.created_at).toISOString(),
+      updatedAt: new Date(row.updated_at).toISOString(),
+    }));
+  }
+
+  async listDiscontinuedUpcs(vendorKey: string): Promise<string[]> {
+    const { rows } = await this.getPool().query("SELECT normalized_upc FROM vendor_discontinued_items WHERE vendor_key = $1", [vendorKey]);
+    return rows.map((r) => r.normalized_upc as string);
   }
 }
 

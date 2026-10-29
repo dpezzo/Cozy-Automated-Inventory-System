@@ -226,6 +226,7 @@ router.post(
     res.status(result.duplicateOf && !confirmDuplicate ? 200 : 201).json({
       file: result.file,
       detectedVendorLabel: result.detectedVendorLabel,
+      discontinuedImport: result.discontinuedImport ?? null,
       duplicateWarning: result.duplicateOf
         ? `An identical file was already uploaded on ${result.duplicateOf.uploadedAt}. Resubmit with confirmDuplicate to store it again.`
         : null,
@@ -934,9 +935,10 @@ router.patch(
   "/vendors/:key",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping } = req.body as {
+    const { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping, discontinuedThreshold } = req.body as {
       vendorLabel?: string;
       inStockThreshold?: number;
+      discontinuedThreshold?: number | null;
       timezone?: string;
       brandAllowlist?: string[];
       matchStrategy?: "upc-to-gtin" | "sku-to-mpn";
@@ -944,7 +946,7 @@ router.patch(
     };
     const vendor = await updateVendorConfig(
       req.params.key!,
-      { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping },
+      { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping, discontinuedThreshold },
       req.session.userId!,
     );
     res.json(vendor);

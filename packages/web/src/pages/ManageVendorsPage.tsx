@@ -27,6 +27,8 @@ const FILE_SHAPE_LABELS: Record<string, string> = {
 
 const MATCH_STRATEGY_HINT =
   "Which vendor-file identifier is matched against which Miva catalog field. Use UPC to GTIN unless the vendor only provides SKUs, not UPCs -- then use SKU to MPN instead. \"Both\" checks UPC and SKU independently on every row (using whichever one resolves, and blocking for review if they disagree) -- use it when the vendor's file reliably provides both and you want the extra cross-check.";
+const DISCONTINUED_THRESHOLD_HINT =
+  "Optional. A discontinued product with fewer units than this is proposed as No Longer Available; at or above it, the normal in-stock threshold applies so it stays live while real inventory remains. Leave blank to turn this off.";
 const IN_STOCK_THRESHOLD_HINT =
   "Minimum vendor quantity to be treated as in-stock. E.g. 6 means any vendor quantity below 6 is treated as out of stock in the proposed Miva update.";
 const TIMEZONE_HINT = "Used to determine this vendor's \"business day\" cutoff when comparing file dates. Format: America/New_York, America/Chicago, etc.";
@@ -39,6 +41,7 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; onDone: () => void; onCancel: () => void }) {
   const [vendorLabel, setVendorLabel] = useState(vendor.vendorLabel);
   const [inStockThreshold, setInStockThreshold] = useState(String(vendor.inStockThreshold));
+  const [discontinuedThreshold, setDiscontinuedThreshold] = useState(vendor.discontinuedThreshold === null ? "" : String(vendor.discontinuedThreshold));
   const [timezone, setTimezone] = useState(vendor.timezone);
   const [brandAllowlist, setBrandAllowlist] = useState(vendor.brandAllowlist.join(", "));
   const [matchStrategy, setMatchStrategy] = useState(vendor.matchStrategy);
@@ -58,6 +61,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
       await api.updateVendor(vendor.vendorKey, {
         vendorLabel,
         inStockThreshold: Number(inStockThreshold),
+        discontinuedThreshold: discontinuedThreshold.trim() === "" ? null : Number(discontinuedThreshold),
         timezone,
         brandAllowlist: parseAllowlist(brandAllowlist),
         matchStrategy,
@@ -103,6 +107,20 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
             required
           />
           <FieldHint>{IN_STOCK_THRESHOLD_HINT}</FieldHint>
+        </label>
+        <label>
+          Discontinued threshold
+          <br />
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={discontinuedThreshold}
+            onChange={(e) => setDiscontinuedThreshold(e.target.value)}
+            placeholder="Off"
+            style={{ width: "100%" }}
+          />
+          <FieldHint>{DISCONTINUED_THRESHOLD_HINT}</FieldHint>
         </label>
         <label>
           Timezone (IANA)

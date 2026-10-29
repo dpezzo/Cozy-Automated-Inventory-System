@@ -32,6 +32,15 @@ function useVendorAutoUploadControl(onUploaded: (file: FileRecord) => void) {
       if (result.duplicateWarning && !confirmDuplicate) {
         setMessage(result.duplicateWarning + " Click Upload again to store it as a new copy, or reuse the existing file below.");
         setPendingDuplicateFile(file);
+      } else if (result.discontinuedImport) {
+        // A discontinued-items notification feeds the vendor's discontinued list; it is not a file to run against, so it never joins the vendor-file picker.
+        const { added, updated, skipped } = result.discontinuedImport;
+        const skippedNote = skipped > 0 ? `, ${skipped} skipped (no usable UPC)` : "";
+        setMessage(
+          `Detected: ${result.detectedVendorLabel} discontinued items list. ${added} added, ${updated} already on the list and refreshed${skippedNote}. It applies to the next ${result.detectedVendorLabel} run.`,
+        );
+        setPendingDuplicateFile(null);
+        return;
       } else {
         setMessage(
           `Detected: ${result.detectedVendorLabel}. Uploaded: ${result.file.originalFilename} (${result.file.rowCount ?? "?"} rows)`,
