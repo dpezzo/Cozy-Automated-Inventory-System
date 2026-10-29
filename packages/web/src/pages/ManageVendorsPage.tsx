@@ -89,7 +89,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
   return (
     <form onSubmit={submit} style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
       {error && <ErrorBanner message={error} />}
-      <div className="grid cols-2">
+      <div className="grid cols-2" style={{ minWidth: 0 }}>
         <label>
           Vendor label
           <br />
@@ -619,15 +619,18 @@ export default function ManageVendorsPage() {
                 </tr>
                 {editingKey === v.vendorKey && (
                   <tr>
+                    {/* The table auto-sizes to its widest unwrapped content, and the form's long hint text would stretch the whole table past the screen. A zero-width wrapper with min-width: 100% contributes nothing to that sizing, so the form simply fills the row. */}
                     <td colSpan={7}>
-                      <EditVendorForm
-                        vendor={v}
-                        onDone={() => {
-                          setEditingKey(null);
-                          refresh();
-                        }}
-                        onCancel={() => setEditingKey(null)}
-                      />
+                      <div style={{ width: 0, minWidth: "100%" }}>
+                        <EditVendorForm
+                          vendor={v}
+                          onDone={() => {
+                            setEditingKey(null);
+                            refresh();
+                          }}
+                          onCancel={() => setEditingKey(null)}
+                        />
+                      </div>
                     </td>
                   </tr>
                 )}
