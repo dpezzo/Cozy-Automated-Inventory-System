@@ -6,6 +6,7 @@ All notable changes to the CozyWinters Olliix inventory reconciliation app are d
 
 ### Fixed
 - Opening a vendor's edit form on Manage Vendors made the whole page wider than the screen, so the form needed horizontal scrolling and some fields (In-stock threshold, Timezone) were pushed out of view. The vendors table sizes itself to its widest unwrapped content, and the form's long hint paragraphs stretched it. The edit row's form is now wrapped in a zero-width, `min-width: 100%` container so it fills the row without affecting the table's sizing, and `.grid.cols-2` uses `minmax(0, 1fr)` columns (as the wider grids already did) so a long child can't force a column open. `ManageVendorsPage.tsx`, `styles.css`.
+- Follow-up: the hint text under the fields still ran off the card and overlapped the neighboring column's hint, because every `td` is `white-space: nowrap` and the form inherited it. The form wrapper now sets `white-space: normal` so the hints wrap inside their columns.
 
 ## 2026-10-28 - Olliix discontinued items list (cumulative) and a per-vendor discontinued threshold
 

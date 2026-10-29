@@ -621,7 +621,8 @@ export default function ManageVendorsPage() {
                   <tr>
                     {/* The table auto-sizes to its widest unwrapped content, and the form's long hint text would stretch the whole table past the screen. A zero-width wrapper with min-width: 100% contributes nothing to that sizing, so the form simply fills the row. */}
                     <td colSpan={7}>
-                      <div style={{ width: 0, minWidth: "100%" }}>
+                      {/* Table cells are white-space: nowrap (styles.css), which the form would inherit and never wrap its hints. */}
+                      <div style={{ width: 0, minWidth: "100%", whiteSpace: "normal" }}>
                         <EditVendorForm
                           vendor={v}
                           onDone={() => {
