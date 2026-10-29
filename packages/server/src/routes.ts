@@ -1060,9 +1060,31 @@ router.delete(
 
 // ---------- Error handling ----------
 
+/**
+ * Errors the HTTP layer itself raises before any of our code runs (a request body that is too large or isn't valid JSON) carry their own
+ * 4xx status. Reporting those as a generic 500 hid what was wrong, so they keep their status with a safe, fixed message.
+ */
+function requestParsingStatus(err: unknown): 400 | 413 | null {
+  if (typeof err !== "object" || err === null) return null;
+  const { status, type } = err as { status?: unknown; type?: unknown };
+  if (type === "entity.too.large" || status === 413) return 413;
+  if (type === "entity.parse.failed" || type === "encoding.unsupported" || type === "charset.unsupported") return 400;
+  return null;
+}
+
+/** The database driver's own details (Postgres sets code, column, constraint), which say far more than the generic message. Never includes row values. */
+function databaseErrorSummary(err: unknown): string {
+  if (typeof err !== "object" || err === null) return "";
+  const { code, column, table, constraint, detail } = err as Record<string, unknown>;
+  const parts = Object.entries({ code, table, column, constraint, detail })
+    .filter(([, v]) => typeof v === "string" && v !== "")
+    .map(([k, v]) => `${k}=${String(v)}`);
+  return parts.length > 0 ? ` [db ${parts.join(" ")}]` : "";
+}
+
 export function errorHandler(
   err: unknown,
-  _req: import("express").Request,
+  req: import("express").Request,
   res: import("express").Response,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: import("express").NextFunction,
@@ -1079,8 +1101,17 @@ export function errorHandler(
     res.status(403).json({ error: "FORBIDDEN", message: err.message });
     return;
   }
-  // Never log full raw rows or credentials; log only the error shape.
+  const parsingStatus = requestParsingStatus(err);
+  if (parsingStatus !== null) {
+    res.status(parsingStatus).json({
+      error: parsingStatus === 413 ? "REQUEST_TOO_LARGE" : "INVALID_REQUEST",
+      message: parsingStatus === 413 ? "That request was too large to process." : "That request could not be read.",
+    });
+    return;
+  }
+  // Never log full raw rows or credentials; log only the error shape, plus which request it was so a user's
+  // "unexpected error" can be found in the logs by route.
   // eslint-disable-next-line no-console
-  console.error("Unhandled error:", err instanceof Error ? err.stack : err);
+  console.error(`Unhandled error on ${req.method} ${req.path}${databaseErrorSummary(err)}:`, err instanceof Error ? err.stack : err);
   res.status(500).json({ error: "INTERNAL_ERROR", message: "An unexpected error occurred." });
 }

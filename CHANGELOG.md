@@ -2,6 +2,18 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-29 - Server errors now say which request failed (investigating a failed vendor save)
+
+### Investigating (not yet resolved)
+- Saving the Olliix vendor with a Discontinued threshold of 10 on Railway returned "An unexpected error occurred." (a 500). Through the real service on SQLite the same save works (new `vendorConfigService.integration.test.ts`, sending the exact fields the edit form sends), and a read-through of the route, service and both repositories found no defect, so the cause is probably specific to the Railway database (the Postgres queries have never been run locally). The Railway log line is needed to name it; the change below makes that line useful.
+
+### Changed
+- `errorHandler` (`routes.ts`) now logs `Unhandled error on <METHOD> <path> [db code=... table=... column=... constraint=... detail=...]` followed by the stack, so a user's "unexpected error" can be found in the Railway logs by route, and a Postgres failure shows its error code and column. Row values are never logged. The message users see is unchanged.
+- A request body that is too large or isn't valid JSON now returns its real 413 / 400 (codes `REQUEST_TOO_LARGE` / `INVALID_REQUEST`) instead of a generic 500.
+
+### Tests
+- New service-level test for saving, clearing and rejecting the discontinued threshold, and new error handler tests in `routes.test.ts`.
+
 ## 2026-10-28 - Settings > Features: saved Catalog views are now off by default
 
 ### Changed
