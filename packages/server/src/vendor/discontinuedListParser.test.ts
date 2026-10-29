@@ -5,7 +5,7 @@ import { parseDiscontinuedListWorkbook } from "./discontinuedListParser";
 import { parseOlliixWorkbook } from "./olliixParser";
 import { parseGobiWorkbook } from "./gobiParser";
 
-// The real notification Alex emailed on 2026-10-23, plus the real daily feed it must never be confused with.
+// The real notification Olliix emailed on 2026-10-23, plus the real daily feed it must never be confused with.
 const VENDORS = path.resolve(__dirname, "../../../../../Vendors");
 const LIST_FILE = path.join(VENDORS, "Discontinue_Items_Notification_Email_202610231500007732.xlsx");
 const FEED_FILE = path.join(VENDORS, "Dealer_Inventory_202610230801063499.xlsx");

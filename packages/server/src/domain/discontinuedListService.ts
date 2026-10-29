@@ -2,7 +2,7 @@ import { getRepository, type FileRecord, type UpsertDiscontinuedItemsResult } fr
 import type { ParsedDiscontinuedList } from "../vendor/discontinuedListParser";
 
 /**
- * The one vendor whose discontinued list we receive today (Alex at Olliix emails it). The list is stored per
+ * The one vendor whose discontinued list we receive today (Olliix emails it). The list is stored per
  * vendor_key so another vendor could adopt it later, but the run pipeline treats exactly this vendor as
  * "list-driven" (see runPipeline.ts), so both places share this constant.
  */
