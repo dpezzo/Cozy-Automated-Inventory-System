@@ -39,6 +39,7 @@ import {
   listVendorConfigs,
   listVendorConfigSummaries,
   listActiveVendorBrands,
+  listVendorBrandGroups,
   createVendorConfig,
   updateVendorConfig,
   deactivateVendorConfig,
@@ -871,6 +872,14 @@ router.get(
   "/vendors/active-brands",
   asyncHandler(async (_req, res) => {
     res.json(await listActiveVendorBrands());
+  }),
+);
+
+// Same non-admin exposure as /vendors/active-brands: vendor label plus brand names only. Feeds the Catalog's Vendor column.
+router.get(
+  "/vendors/brand-groups",
+  asyncHandler(async (_req, res) => {
+    res.json(await listVendorBrandGroups());
   }),
 );
 

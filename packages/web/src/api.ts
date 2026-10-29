@@ -113,6 +113,8 @@ export const api = {
   listVendorSummaries: () => request<VendorSummary[]>("/vendors/summary"),
   /** Deduped brand names across every active vendor's allowlist -- used to default the Miva Catalog page to "our vendors' brands only." */
   listActiveVendorBrands: () => request<string[]>("/vendors/active-brands"),
+  /** Each active vendor with its brand allowlist -- lets the Catalog show which vendor carries a product's brand. */
+  listVendorBrandGroups: () => request<{ vendorKey: string; vendorLabel: string; brands: string[] }[]>("/vendors/brand-groups"),
 
   listFiles: (kind?: string) => request<FileRecord[]>(`/files${kind ? `?kind=${kind}` : ""}`),
   /** Every uploaded/pulled file across all vendor FileKinds, newest first -- what Step 3's vendor-file dropdown lists. */
@@ -256,6 +258,8 @@ export interface MivaCatalogRow {
   parentCode?: string;
   currentStockLevel?: string;
   trackInventory?: string;
+  /** Not from the server: the Catalog page fills this with the active vendor(s) whose brand allowlist contains this row's brand. */
+  vendorLabels?: string;
 }
 
 export interface AuthUserView {

@@ -105,6 +105,25 @@ export async function listActiveVendorBrands(): Promise<string[]> {
   return [...brands].sort((a, b) => a.localeCompare(b));
 }
 
+export interface VendorBrandGroup {
+  vendorKey: string;
+  vendorLabel: string;
+  brands: string[];
+}
+
+/** Each active vendor with its trimmed brand allowlist, so the Catalog can label a product's brand with the vendor(s) that carry it. Brand names only, same exposure as listActiveVendorBrands. */
+export async function listVendorBrandGroups(): Promise<VendorBrandGroup[]> {
+  const configs = await getRepository().listVendorConfigs();
+  return configs
+    .filter((c) => c.isActive)
+    .map((c) => ({
+      vendorKey: c.vendorKey,
+      vendorLabel: c.vendorLabel,
+      brands: c.brandAllowlist.map((b) => b.trim()).filter((b) => b !== ""),
+    }))
+    .sort((a, b) => a.vendorLabel.localeCompare(b.vendorLabel));
+}
+
 export interface CreateSimpleCsvVendorRequest {
   vendorKey: string;
   vendorLabel: string;

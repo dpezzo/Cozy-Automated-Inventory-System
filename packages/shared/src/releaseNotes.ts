@@ -17,6 +17,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
       "You can now upload Olliix's \"Discontinued Items Notification\" file in the same Vendor Inventory Data box as every other vendor file. The app recognizes it on its own and adds those products to Olliix's running list of discontinued items. Uploading a newer list never removes anything already on it.",
       "On an Olliix run, a product on that list is shown as Discontinued in the Product phase column. Once its quantity drops below the Discontinued threshold it is proposed as NLA; above it, it stays live under the normal stock rules. Products are matched by UPC.",
       "A live Olliix product that is on the discontinued list but missing from the daily file is now proposed as NLA as a warning you approve individually. Products missing from the file that are not on the list are still blocked, as before.",
+      "The Catalog page has a new Vendor column next to Brand. Filter it to a vendor (for example Olliix) to see every product under all of that vendor's brands.",
       "Fixed the Manage Vendors edit form stretching wider than the screen. It now fits without sideways scrolling.",
       "Manage Vendors has a new \"Discontinued threshold\" setting for each vendor (leave it blank to turn it off). Olliix starts with it off, so nothing changes for Olliix runs until you set a number.",
     ],

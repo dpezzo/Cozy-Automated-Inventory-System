@@ -2,6 +2,15 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-28 - Catalog: Vendor column
+
+### Added
+- The Miva Catalog page has a new **Vendor** column next to Brand. It shows the active vendor(s) whose brand list (Manage Vendors) contains the product's brand, matched case-insensitively. It uses the same column filter funnel as every other column, so filtering Vendor to "Olliix" shows every product under all of Olliix's brands (Beautyrest, Serta, True North by Sleep Philosophy, Woolrich, Sharper Image). A brand carried by two vendors shows both labels; a brand no active vendor carries is blank. Deactivated vendors are not shown.
+- New `GET /api/vendors/brand-groups` (`listVendorBrandGroups`): each active vendor's label and brand names. Not admin-only, same exposure as `/vendors/active-brands`. The Vendor value is computed in the browser (`CatalogPage.tsx`), not stored anywhere.
+
+### Notes
+- Existing users' saved column order puts the new column at the end until they drag it or use reset order. Brand stays the source of truth: changing a vendor's brand list changes the Vendor column immediately.
+
 ## 2026-10-28 - Manage Vendors edit form no longer stretches past the screen
 
 ### Fixed

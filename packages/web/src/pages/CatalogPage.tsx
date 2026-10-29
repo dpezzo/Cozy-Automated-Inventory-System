@@ -161,6 +161,13 @@ const COLUMNS: ColumnDef[] = [
   { key: "mpn", label: "MPN", get: (r) => r.mpnRaw ?? "", defaultWidth: 110, title: "Manufacturer Part Number" },
   { key: "brand", label: "Brand", get: (r) => r.brandRaw ?? "", defaultWidth: 130 },
   {
+    key: "vendor",
+    label: "Vendor",
+    get: (r) => r.vendorLabels ?? "",
+    defaultWidth: 130,
+    title: "The active vendor whose brand list (Settings > Manage Vendors) includes this product's brand. Filter on it to see every brand that vendor carries. Blank means no active vendor carries this brand.",
+  },
+  {
     key: "currentStockLevel",
     label: "Stock level",
     get: (r) => (formatActive(r.trackInventory) === "Yes" ? r.currentStockLevel ?? "" : "N/A"),
@@ -210,7 +217,8 @@ const DEFAULT_COLUMN_ORDER = COLUMNS.map((c) => c.key);
 export default function CatalogPage() {
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [selectedFile, setSelectedFile] = useState<string>("");
-  const [rows, setRows] = useState<MivaCatalogRow[]>([]);
+  const [loadedRows, setRows] = useState<MivaCatalogRow[]>([]);
+  const [vendorBrandGroups, setVendorBrandGroups] = useState<{ vendorKey: string; vendorLabel: string; brands: string[] }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mivaApiConfigured, setMivaApiConfigured] = useState(false);
@@ -293,6 +301,7 @@ export default function CatalogPage() {
       loadFiles(undefined, s.activeSite);
     });
     api.listActiveVendorBrands().then(setActiveBrands).catch(() => setActiveBrands([]));
+    api.listVendorBrandGroups().then(setVendorBrandGroups).catch(() => setVendorBrandGroups([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -348,6 +357,18 @@ export default function CatalogPage() {
   function displayValue(raw: string): string {
     return raw === "" ? "(Blank)" : raw;
   }
+
+  // Brand (case-insensitive) -> the vendor label(s) carrying it. A brand listed under two vendors shows both.
+  const rows = useMemo(() => {
+    const vendorsByBrand = new Map<string, string[]>();
+    for (const group of vendorBrandGroups) {
+      for (const brand of group.brands) {
+        const key = brand.toLowerCase();
+        vendorsByBrand.set(key, [...(vendorsByBrand.get(key) ?? []), group.vendorLabel]);
+      }
+    }
+    return loadedRows.map((r) => ({ ...r, vendorLabels: (vendorsByBrand.get((r.brandRaw ?? "").trim().toLowerCase()) ?? []).join(", ") }));
+  }, [loadedRows, vendorBrandGroups]);
 
   const activeBrandSet = useMemo(() => new Set(activeBrands.map((b) => b.trim().toLowerCase())), [activeBrands]);
 
