@@ -2,6 +2,17 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-29 - Catalog: export what you see, and download the full snapshot
+
+### Added
+- **Export view (CSV)** on the Miva Catalog page downloads exactly what the table shows: the visible columns in their current order, for every row that passes the search, "Vendor brands only" switch, column filters and sort (so a Vendor = Olliix + Status = NO LONGER AVAILABLE filter exports just those). The file is named after the snapshot (`<snapshot>-view.csv`).
+- **Download full snapshot** link (when a snapshot is selected) saves the stored snapshot file as pulled or uploaded, every row and every Miva column, ignoring filters. It uses the existing `/api/files/:id/download` route.
+- The CSV is built in the browser (`web/src/lib/csv.ts`), UTF-8 with a BOM and CRLF lines. Digit-only values of 8+ characters or with a leading zero (UPC/GTIN such as 022164437034) are written as `="022164437034"` so Excel and Google Sheets keep the exact text instead of dropping the leading zero; a text value starting with `=`, `+`, `-` or `@` gets a leading apostrophe so it can't run as a formula (plain numbers, including negatives, are untouched).
+
+### Notes
+- The CSV helper was checked with a throwaway script (12 cases); the web package has no test runner yet, so there is no committed unit test for it.
+- A snapshot's stored file only exists while the server's file storage does (the same limit the other downloads have).
+
 ## 2026-10-29 - Server errors now say which request failed (investigating a failed vendor save)
 
 ### Investigating (not yet resolved)

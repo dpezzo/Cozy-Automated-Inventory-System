@@ -15,6 +15,7 @@ import { CatalogViewsBar } from "../components/CatalogViewsBar";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { loadFromStorage, saveToStorage } from "../lib/storage";
+import { buildCsv, downloadTextFile } from "../lib/csv";
 import { formatEastern } from "../lib/format";
 
 interface ColumnDef {
@@ -645,6 +646,14 @@ export default function CatalogPage() {
   });
   const sortSummary = sortKey ? `${COLUMNS.find((c) => c.key === sortKey)?.label ?? sortKey} ${sortDir === "asc" ? "(A to Z)" : "(Z to A)"}` : null;
 
+  /** Exports exactly what the table shows: the visible columns in their current order, and every row that survives the search, brand switch, column filters and sort. */
+  function exportViewAsCsv() {
+    const headers = visibleColumns.map((c) => c.label);
+    const data = displayedRows.map((r) => visibleColumns.map((c) => c.get(r)));
+    const snapshotName = files.find((f) => f.id === selectedFile)?.originalFilename.replace(/\.[^.]+$/, "") ?? "miva-catalog";
+    downloadTextFile(`${snapshotName}-view.csv`, buildCsv(headers, data));
+  }
+
   function effectiveSelectedFor(colKey: string): Set<string> {
     return columnFilterValues[colKey] ?? new Set(distinctValuesByColumn[colKey] ?? []);
   }
@@ -904,6 +913,23 @@ export default function CatalogPage() {
               </div>
             )}
           </div>
+          <button
+            style={{ marginLeft: 8, whiteSpace: "nowrap" }}
+            disabled={loading || displayedRows.length === 0}
+            onClick={exportViewAsCsv}
+            title="Download a CSV of what the table shows right now: the visible columns, in their current order, for every row that passes your search and filters."
+          >
+            <Download size={16} /> Export view (CSV)
+          </button>
+          {selectedFile && (
+            <a
+              href={api.downloadFileUrl(selectedFile)}
+              style={{ marginLeft: 8, whiteSpace: "nowrap", fontSize: 13 }}
+              title="Download the whole saved snapshot file exactly as it was pulled or uploaded: every row and every Miva column, ignoring filters."
+            >
+              Download full snapshot
+            </a>
+          )}
           <span style={{ marginLeft: "auto", color: "var(--muted)", whiteSpace: "nowrap" }}>
             {loading ? "Loading..." : `Showing ${displayedRows.length} of ${rows.length} product${rows.length === 1 ? "" : "s"}`}
             {hasColumnFilters && (

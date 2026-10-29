@@ -12,6 +12,12 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-29",
+    items: [
+      "The Catalog page can now export. \"Export view (CSV)\" downloads exactly what you're looking at (your visible columns and every row that matches your search and filters), and \"Download full snapshot\" saves the whole catalog file with every column. UPCs keep their leading zeros when opened in Excel.",
+    ],
+  },
+  {
     date: "2026-10-28",
     items: [
       "You can now upload Olliix's \"Discontinued Items Notification\" file in the same Vendor Inventory Data box as every other vendor file. The app recognizes it on its own and adds those products to Olliix's running list of discontinued items. Uploading a newer list never removes anything already on it.",
