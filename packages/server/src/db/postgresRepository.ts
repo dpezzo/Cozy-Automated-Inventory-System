@@ -640,6 +640,19 @@ export class PostgresRepository implements Repository {
     );
   }
 
+  async getAppSetting(key: string): Promise<string | null> {
+    const { rows } = await this.getPool().query("SELECT value FROM app_settings WHERE key = $1", [key]);
+    return rows[0]?.value ?? null;
+  }
+
+  async setAppSetting(key: string, value: string): Promise<void> {
+    await this.getPool().query(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [key, value],
+    );
+  }
+
   async previewClearData(scope: ClearDataScope): Promise<ClearDataCounts> {
     const { deletedFileStoragePaths, ...counts } = await this.runClearData(scope, true);
     return counts;

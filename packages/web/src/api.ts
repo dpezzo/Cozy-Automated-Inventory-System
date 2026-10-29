@@ -149,6 +149,10 @@ export const api = {
       duplicateWarning: string | null;
     };
   },
+  /** App-wide on/off switches (Settings > Features). Every signed-in user can read them; only an admin can change them. */
+  getFeatures: () => request<FeatureFlags>("/features"),
+  setFeatures: (patch: Partial<FeatureFlags>) =>
+    request<FeatureFlags>("/admin/features", { method: "PUT", body: JSON.stringify(patch) }),
   listCatalogViews: () => request<CatalogViewsPayload>("/catalog-views"),
   createCatalogView: (input: { name: string; isShared: boolean; config: CatalogViewConfig }) =>
     request<CatalogViewDto>("/catalog-views", { method: "POST", body: JSON.stringify(input) }),
@@ -259,6 +263,10 @@ export interface CatalogViewConfig {
   sortKey: string | null;
   sortDir: "asc" | "desc";
   vendorBrandsOnly: boolean;
+}
+
+export interface FeatureFlags {
+  catalogViews: boolean;
 }
 
 export interface CatalogViewDto {

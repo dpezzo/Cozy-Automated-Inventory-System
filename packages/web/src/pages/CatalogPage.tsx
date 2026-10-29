@@ -9,7 +9,7 @@ import {
   ArrowDown,
   ExternalLink,
 } from "lucide-react";
-import { api, ApiRequestError, type FileRecord, type MivaCatalogRow, type CatalogViewConfig, type CatalogViewsPayload } from "../api";
+import { api, ApiRequestError, type FileRecord, type MivaCatalogRow, type CatalogViewConfig, type CatalogViewsPayload, type FeatureFlags } from "../api";
 import { useAuth } from "../AuthContext";
 import { CatalogViewsBar } from "../components/CatalogViewsBar";
 import { InstructionsCard } from "../components/InstructionsCard";
@@ -247,6 +247,9 @@ export default function CatalogPage() {
   const [selectedFile, setSelectedFile] = useState<string>("");
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  // Saved views are behind an admin switch (Settings > Features). Until it is known to be on, the page behaves exactly as it did before views existed.
+  const [features, setFeatures] = useState<FeatureFlags | null>(null);
+  const viewsEnabled = features?.catalogViews === true;
   const [viewsPayload, setViewsPayload] = useState<CatalogViewsPayload | null>(null);
   const [activeViewId, setActiveViewId] = useState<string | null>(() => loadFromStorage<string | null>(ACTIVE_VIEW_KEY, null));
   const [viewsBusy, setViewsBusy] = useState(false);
@@ -583,8 +586,16 @@ export default function CatalogPage() {
   }
 
   // On first load, open the person's own default view, else the team default; with neither, keep whatever this browser already had.
+  useEffect(() => {
+    api
+      .getFeatures()
+      .then(setFeatures)
+      .catch(() => setFeatures({ catalogViews: false }));
+  }, []);
+
   const initialViewApplied = useRef(false);
   useEffect(() => {
+    if (!viewsEnabled) return;
     api
       .listCatalogViews()
       .then((payload) => {
@@ -606,7 +617,7 @@ export default function CatalogPage() {
       })
       .catch(() => setViewsPayload({ views: [], builtins: [], defaults: { personal: null, team: null } }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [viewsEnabled]);
 
   // A view can filter on values this file doesn't have (a renamed vendor, a product that was removed). Say so instead of silently showing an empty table.
   const staleViewFilterCount = useMemo(() => {
@@ -797,6 +808,7 @@ export default function CatalogPage() {
       {pullMessage && <p style={{ fontSize: 13, color: "var(--muted)" }}>{pullMessage}</p>}
 
       <div className="card" ref={cardRef}>
+        {viewsEnabled && (
         <CatalogViewsBar
           payload={viewsPayload}
           activeViewId={activeViewId}
@@ -813,6 +825,7 @@ export default function CatalogPage() {
           onDelete={deleteActiveView}
           onSetDefault={setViewDefault}
         />
+        )}
         <div className="toolbar" style={{ flexWrap: "wrap" }}>
           <label>
             Snapshot:{" "}

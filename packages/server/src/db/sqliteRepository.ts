@@ -785,6 +785,20 @@ export class SqliteRepository implements Repository {
       .run(IDLE_TIMEOUT_MINUTES_SETTINGS_KEY, String(minutes), nowIso());
   }
 
+  async getAppSetting(key: string): Promise<string | null> {
+    const row = this.conn().prepare("SELECT value FROM app_settings WHERE key = ?").get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+  }
+
+  async setAppSetting(key: string, value: string): Promise<void> {
+    this.conn()
+      .prepare(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(key, value, nowIso());
+  }
+
   async previewClearData(scope: ClearDataScope): Promise<ClearDataCounts> {
     const { deletedFileStoragePaths, ...counts } = await this.runClearData(scope, true);
     return counts;

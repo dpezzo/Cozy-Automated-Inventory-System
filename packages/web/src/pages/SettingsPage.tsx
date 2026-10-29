@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type ReleaseNoteEntry } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { useAuth } from "../AuthContext";
-import { Users, Truck, Trash2, Settings, Plug, Activity, Mail, Timer, ChevronRight, ChevronUp } from "lucide-react";
+import { Users, Truck, Trash2, Settings, Plug, Activity, Mail, Timer, ToggleRight, ChevronRight, ChevronUp } from "lucide-react";
 
 /** "2026-10-07" -> "2026.10.07", matching the app's date-based version-number format. */
 function formatVersion(isoDate: string): string {
@@ -103,6 +103,15 @@ export default function SettingsPage() {
           <h3>Session Timeout</h3>
           <p>Set how long a user can stay idle before they're automatically signed out.</p>
         </Link>
+        {isAdmin && (
+          <Link to="/settings/features" className="card settings-tile">
+            <div className="settings-tile-icon">
+              <ToggleRight size={24} />
+            </div>
+            <h3>Features</h3>
+            <p>Turn optional features, like saved Catalog views, on or off for everyone.</p>
+          </Link>
+        )}
         {isAdmin && (
           <Link to="/settings/activity-log" className="card settings-tile">
             <div className="settings-tile-icon">

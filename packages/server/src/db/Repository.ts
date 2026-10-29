@@ -154,6 +154,9 @@ export interface Repository {
   /** How many minutes of inactivity before a signed-in session is logged out client-side (Settings > Session Timeout). Defaults to 30 when never set. */
   getIdleTimeoutMinutes(): Promise<number>;
   setIdleTimeoutMinutes(minutes: number): Promise<void>;
+  /** Raw app_settings value, or null if never set. Used by feature switches (see domain/featureFlags.ts). */
+  getAppSetting(key: string): Promise<string | null>;
+  setAppSetting(key: string, value: string): Promise<void>;
 
   // Vendor configs
   listVendorConfigs(): Promise<VendorConfigRecord[]>;

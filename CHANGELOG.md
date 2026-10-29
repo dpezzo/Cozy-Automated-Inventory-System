@@ -2,6 +2,18 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-28 - Settings > Features: saved Catalog views are now off by default
+
+### Changed
+- **Saved Catalog views are switched off until an admin turns them on.** New admin-only Settings > Features page with one checkbox per optional feature (so far only "Saved Catalog views"). While it is off: the Catalog's View bar is hidden, the page behaves as it did before views existed (it never loads views or applies a default), and every `/api/catalog-views` route refuses with 403 and the message "Saved Catalog views are turned off. An admin can turn them on in Settings > Features." Views people already saved are kept in the database and come back when it is turned on. Existing browsers keep their own column/filter choices either way. The change applies the next time a page is loaded or refreshed.
+- The filter/sort summary line above the Catalog table is not part of the switch; it stays on.
+
+### Added
+- `domain/featureFlags.ts`: a small registry of app-wide on/off switches stored in `app_settings`, each with a default (off for anything not ready for everyone), plus `assertFeatureEnabled`. A future feature can ship the same way by adding an entry there and one checkbox in `FeaturesPage.tsx`. `GET /api/features` (any signed-in user) and `PUT /api/admin/features` (admin only; unknown names and non-boolean values are rejected; each change is written to the activity log as `FEATURES_CHANGED`). New repository methods `getAppSetting` / `setAppSetting` (SQLite and Postgres; the Postgres version is untested locally).
+
+### Tests
+- New `featureFlags.integration.test.ts` (default off, persistence, guard message, validation).
+
 ## 2026-10-28 - Catalog saved views (columns, filters, sort), shareable, with defaults
 
 ### Added

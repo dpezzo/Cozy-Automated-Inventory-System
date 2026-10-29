@@ -55,6 +55,7 @@ import {
   setCatalogViewDefault,
   type CatalogViewActor,
 } from "./domain/catalogViewService";
+import { getFeatureFlags, setFeatureFlags, assertFeatureEnabled } from "./domain/featureFlags";
 import { ValidationError, ForbiddenError, NotFoundError } from "./errors";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -986,6 +987,35 @@ router.delete(
 function catalogViewActor(req: import("express").Request): CatalogViewActor {
   return { userId: req.session.userId!, role: req.session.role === "admin" ? "admin" : "member" };
 }
+
+// Every signed-in user's browser needs this to know whether to show a switchable feature; only admins can change it.
+router.get(
+  "/features",
+  asyncHandler(async (_req, res) => {
+    res.json(await getFeatureFlags());
+  }),
+);
+
+router.put(
+  "/admin/features",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { changed, flags } = await setFeatureFlags(req.body);
+    await getRepository().insertAuditLog({
+      actorId: req.session.userId!,
+      action: "FEATURES_CHANGED",
+      entityType: "system",
+      entityId: null,
+      details: { changed },
+    });
+    res.json(flags);
+  }),
+);
+
+// While the feature is off, none of its routes respond, so the data can't be reached or changed behind the UI.
+router.use("/catalog-views", (_req, _res, next) => {
+  assertFeatureEnabled("catalogViews").then(() => next(), next);
+});
 
 router.get(
   "/catalog-views",
