@@ -981,7 +981,12 @@ export default function RunReviewPage() {
                   </td>
                   {hasProductPhase && <td>{row.productPhase ?? "-"}</td>}
                   {highlightDiff && (
-                    <td title={CHANGED_FIELDS_TOOLTIP}>{changedFieldsForRow.map((f) => MANAGED_FIELD_LABELS[f]).join(", ") || "-"}</td>
+                    <td title={CHANGED_FIELDS_TOOLTIP} style={changedFieldsForRow.length > 0 ? highlightStyle : undefined}>
+                      {changedFieldsForRow.map((f) => MANAGED_FIELD_LABELS[f]).join(", ") || "-"}
+                      {changedFieldsForRow.length > 0 && !changedFieldsForRow.includes("simpleInventory") && !changedFieldsForRow.includes("restockMessage") && (
+                        <div style={{ color: "var(--muted)", fontSize: 12 }}>Status and restock unchanged</div>
+                      )}
+                    </td>
                   )}
                   <td>
                     <span className={`pill ${pillClass(decision.status)}`}>{decision.status}</span>

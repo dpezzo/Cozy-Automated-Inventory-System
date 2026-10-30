@@ -14,6 +14,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
     date: "2026-10-30",
     items: [
+      "On the run review page, \"Highlight differences\" now shades the Changed fields cell for every row where anything would change, including Availability, Datafeed, Shopping feed and Dropship Inventory Management. Rows where only those fields change are labeled \"Status and restock unchanged\", so they no longer look like nothing is changing.",
       "Fixed the \"An unexpected error occurred\" message when saving a vendor, such as setting Olliix's Discontinued threshold. The change itself was being saved, but the activity log entry for it failed and made the page report an error. Editing, adding and turning off vendors now saves cleanly.",
     ],
   },

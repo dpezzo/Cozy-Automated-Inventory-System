@@ -2,6 +2,16 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-30 - Run Review: "Highlight differences" now marks every changed field
+
+### Fixed
+- Cale reported no differences with Highlight differences on (run fc7e1f50, Olliix 2026-10-30). The run was correct (243 matched, 213 unchanged on status and restock, checked against an independent calculation), but the 30 WARNING rows differ only in Shopping feed and Dropship Inventory Management, which the highlight never colored: it shaded just the Proposed status and Proposed restock cells. Those rows read "IN STOCK to IN STOCK" with nothing marked.
+- With Highlight differences on, the Changed fields cell is now shaded amber for any row where a managed field differs, and says "Status and restock unchanged" when only the other fields (Availability, Datafeed, Shopping feed, Dropship Inventory Management) would change.
+
+### Notes
+- Display-only change in `RunReviewPage.tsx`; reconciliation output is unchanged. The web package has no test runner, so no committed test.
+- Not changed, flagged for Cale: duplicate-UPC blocking hides a real change on `br-heated-throw-ff-GY` (BR50-0753N has 1,167 units, BR50-0753 has 0, Miva shows SOLD OUT).
+
 ## 2026-10-30 - Fix: saving a vendor failed on Postgres ("An unexpected error occurred")
 
 ### Fixed
