@@ -209,8 +209,9 @@ export async function createVendorConfig(input: CreateVendorConfigRequest, actor
     actorId,
     action: "VENDOR_CONFIG_CREATED",
     entityType: "vendor_config",
-    entityId: record.vendorKey,
-    details: { vendorLabel: record.vendorLabel, fileShape: record.fileShape },
+    // audit_log.entity_id is a UUID column on Postgres and a vendor's key ("olliix") is not one, so the key rides in details instead.
+    entityId: null,
+    details: { vendorKey: record.vendorKey, vendorLabel: record.vendorLabel, fileShape: record.fileShape },
   });
   return record;
 }
@@ -262,8 +263,8 @@ export async function updateVendorConfig(
     actorId,
     action: "VENDOR_CONFIG_UPDATED",
     entityType: "vendor_config",
-    entityId: vendorKey,
-    details: { ...patch },
+    entityId: null,
+    details: { vendorKey, ...patch },
   });
   return record;
 }
@@ -279,7 +280,8 @@ export async function deactivateVendorConfig(vendorKey: string, actorId: string)
     actorId,
     action: "VENDOR_CONFIG_DEACTIVATED",
     entityType: "vendor_config",
-    entityId: vendorKey,
+    entityId: null,
+    details: { vendorKey },
   });
 }
 

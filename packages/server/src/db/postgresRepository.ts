@@ -523,9 +523,14 @@ export class PostgresRepository implements Repository {
   }
 
   async insertAuditLog(input: AuditLogInput): Promise<void> {
+    // entity_id is a UUID column. A caller passing anything else (a vendor key, say) would otherwise fail the whole request after its
+    // real work already succeeded, so keep the value in details instead and log the entry without an entity id.
+    const isUuid = input.entityId !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.entityId);
+    const entityId = isUuid ? input.entityId : null;
+    const details = input.entityId !== null && !isUuid ? { ...input.details, entityRef: input.entityId } : (input.details ?? {});
     await this.getPool().query(
       "INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details) VALUES ($1,$2,$3,$4,$5)",
-      [input.actorId, input.action, input.entityType, input.entityId, JSON.stringify(input.details ?? {})],
+      [input.actorId, input.action, input.entityType, entityId, JSON.stringify(details)],
     );
   }
 

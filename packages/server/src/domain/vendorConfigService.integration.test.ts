@@ -53,6 +53,14 @@ describe("updateVendorConfig: discontinued threshold", () => {
     expect((await repo.findVendorConfigByKey("olliix"))!.discontinuedThreshold).toBe(10);
   });
 
+  it("logs the change without a vendor key in entity_id, which is a UUID column on Postgres", async () => {
+    await updateVendorConfig("olliix", formPatch(12), adminId);
+    const entry = (await repo.listAuditLog(50)).find((e) => e.action === "VENDOR_CONFIG_UPDATED");
+    expect(entry).toBeDefined();
+    expect(entry!.entityId).toBeNull();
+    expect(entry!.details).toMatchObject({ vendorKey: "olliix", discontinuedThreshold: 12 });
+  });
+
   it("blank turns it back off, and invalid values are rejected without changing anything", async () => {
     expect((await updateVendorConfig("olliix", formPatch(null), adminId)).discontinuedThreshold).toBeNull();
     await expect(updateVendorConfig("olliix", formPatch(0), adminId)).rejects.toMatchObject({ code: "INVALID_THRESHOLD" });

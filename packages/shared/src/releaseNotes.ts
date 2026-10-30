@@ -12,6 +12,12 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-10-30",
+    items: [
+      "Fixed the \"An unexpected error occurred\" message when saving a vendor, such as setting Olliix's Discontinued threshold. The change itself was being saved, but the activity log entry for it failed and made the page report an error. Editing, adding and turning off vendors now saves cleanly.",
+    ],
+  },
+  {
     date: "2026-10-29",
     items: [
       "The Catalog page can now export. \"Export view (CSV)\" downloads exactly what you're looking at (your visible columns and every row that matches your search and filters), and \"Download full snapshot\" saves the whole catalog file with every column. UPCs keep their leading zeros when opened in Excel.",

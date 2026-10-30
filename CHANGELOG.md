@@ -2,6 +2,19 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-10-30 - Fix: saving a vendor failed on Postgres ("An unexpected error occurred")
+
+### Fixed
+- Root cause of the failed Olliix Discontinued threshold save on Railway, found from the new request-aware error log: `Unhandled error on PATCH /api/vendors/olliix [db code=22P02]: invalid input syntax for type uuid: "olliix"`. The vendor config create, update and deactivate paths wrote the vendor key into `audit_log.entity_id`, which is a UUID column on Postgres (SQLite stores it as text, so local tests never saw it). The vendor change itself was already committed when the audit insert threw, so the setting saved but the user saw a 500.
+- `vendorConfigService` now logs those entries with a null entity id and the vendor key in `details.vendorKey`.
+- `PostgresRepository.insertAuditLog` now also guards against any non-UUID entity id: it logs the entry with a null entity id and keeps the value in `details.entityRef`, so one bad caller can no longer fail a request whose real work already succeeded.
+
+### Tests
+- `vendorConfigService.integration.test.ts` checks the audit entry has a null entity id and the vendor key in details.
+
+### Notes
+- Earlier vendor edits on Railway (including the first Olliix threshold attempts) saved their changes but have no VENDOR_CONFIG_* entry in the activity log.
+
 ## 2026-10-29 - Catalog: export what you see, and download the full snapshot
 
 ### Added
