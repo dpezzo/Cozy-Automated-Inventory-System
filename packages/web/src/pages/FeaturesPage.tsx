@@ -14,6 +14,12 @@ const FEATURES: { key: keyof FeatureFlags; title: string; description: string }[
     description:
       "Lets people save the Miva Catalog's columns, column order and widths, filters and sort as named views, share them with the team, and pick a default view. When off, the Catalog works as it did before and the View bar is hidden. Views people already saved are kept and come back when you turn it on.",
   },
+  {
+    key: "autopilot",
+    title: "Email autopilot",
+    description:
+      "Lets the hub read the inventory mailbox and handle vendor files that approved people email to it. Turning this on only makes the Autopilot settings page usable; it still does nothing until you also switch the mode on there. Right now autopilot only reviews and reports, and never sends anything to Miva.",
+  },
 ];
 
 export default function FeaturesPage() {

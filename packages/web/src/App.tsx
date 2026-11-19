@@ -19,6 +19,7 @@ import MivaConnectionPage from "./pages/MivaConnectionPage";
 import EmailReportsPage from "./pages/EmailReportsPage";
 import SessionTimeoutPage from "./pages/SessionTimeoutPage";
 import FeaturesPage from "./pages/FeaturesPage";
+import AutopilotPage from "./pages/AutopilotPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
 import { DataSizeAlert } from "./components/DataSizeAlert";
 import { ActiveSiteBanner } from "./components/ActiveSiteBanner";
@@ -243,6 +244,14 @@ export default function App() {
           element={
             <RequireAuth>
               <SessionTimeoutPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings/autopilot"
+          element={
+            <RequireAuth>
+              <AutopilotPage />
             </RequireAuth>
           }
         />

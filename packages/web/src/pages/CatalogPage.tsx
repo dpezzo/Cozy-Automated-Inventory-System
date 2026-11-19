@@ -591,7 +591,7 @@ export default function CatalogPage() {
     api
       .getFeatures()
       .then(setFeatures)
-      .catch(() => setFeatures({ catalogViews: false }));
+      .catch(() => setFeatures({ catalogViews: false, autopilot: false }));
   }, []);
 
   const initialViewApplied = useRef(false);

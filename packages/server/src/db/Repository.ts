@@ -32,6 +32,8 @@ import type {
   CatalogViewRecord,
   InsertCatalogViewInput,
   UpdateCatalogViewPatch,
+  AutopilotMessageRecord,
+  InsertAutopilotMessageInput,
 } from "./types";
 
 /**
@@ -185,4 +187,13 @@ export interface Repository {
   getCatalogViewDefault(scope: string): Promise<string | null>;
   /** null clears the default for that scope. */
   setCatalogViewDefault(scope: string, viewId: string | null): Promise<void>;
+
+  // Email autopilot: one row per inbound message handled (see autopilot/processMessage.ts)
+  /** True if a message with this Message-ID was already recorded. */
+  hasAutopilotMessage(messageId: string): Promise<boolean>;
+  /** Returns null (and stores nothing) if the Message-ID was already recorded. */
+  insertAutopilotMessage(input: InsertAutopilotMessageInput): Promise<AutopilotMessageRecord | null>;
+  listAutopilotMessages(limit?: number): Promise<AutopilotMessageRecord[]>;
+  /** The most recent REVIEWED or HELD message for this vendor, for "was this file already processed" and the previous-row-count check. */
+  findLatestAutopilotMessageForFile(fileId: string): Promise<AutopilotMessageRecord | null>;
 }

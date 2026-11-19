@@ -2,6 +2,23 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-11-18 - Email autopilot, Stage 1 (review only, behind a feature flag, off by default)
+
+### Added
+- A mailbox poller (`src/autopilot/`) that logs in to hubinventory@delutti.com over IMAP (`imapflow` + `mailparser`, Google app password in `AUTOPILOT_IMAP_*` variables) every 2 minutes. It does nothing unless the new `autopilot` feature flag is on (Settings > Features) AND the mode in Settings > Autopilot is "Review only"; both are read fresh each pass, so no redeploy is needed. Only mail received after autopilot was first switched on is touched.
+- Per message: sender must be on the vendor's approved list AND the message must carry a passing DMARC result from our mail server (unknown or forged senders are ignored silently). Attachments (.xlsx/.csv, under 25 MB) are identified by content, the Olliix discontinued-items list is merged first, then a fresh Miva snapshot is pulled and a normal run is created under a login-less, inactive "Autopilot" service user. Nothing is approved, batched or pushed.
+- Safety brake (`brake.ts`, pure and unit tested): file under 80% of the previous row count, over 25% of carried products changing, over 25 No Longer Available proposals, or over 5% of carried products missing or blocked. All measured against products we carry, so Olliix's ~6,000 daily rows that are not in Miva cannot trip it. In Stage 1 a trip only labels the run "would have been held"; every number is recorded on the message to tune the limits.
+- Report email through Resend to every active admin (and a copy to the approved sender) for each reviewed, held, duplicate, rejected or failed message.
+- Settings > Autopilot page: mode, per-vendor on/off checkbox, comma-separated approved senders per vendor (default `cale@delutti.com, dpezzo@gmail.com`), hold minutes (default 10, stored now, used by a later stage), brake limits, mailbox status, and the last 50 emails with their outcome.
+- New table `autopilot_messages` (migration 0015, both dialects), keyed on the email's Message-ID so a message is never handled twice. `file_id` and `run_id` are deliberately not foreign keys so Clear Data cannot fail on them.
+
+### Tests
+- `brake.test.ts` (limits, boundaries, zero carried products, Gobi 11/6 case), sender and DMARC checks, and `processMessage.integration.test.ts` on real SQLite and real file storage with the synthetic Olliix fixtures (ignored sender, forged sender, no attachment, unknown file, good file creates a run and no batch, same email twice, duplicate file, per-vendor approval, discontinued list alone).
+
+### Notes
+- Not exercised against a real mailbox yet: the IMAP code path needs the app password on Railway and a live test email.
+- Autopilot in this stage never calls the Miva push. Push to Development, then Live, are later, separate stages.
+
 ## 2026-10-30 - Run Review: "Highlight differences" now marks every changed field
 
 ### Fixed

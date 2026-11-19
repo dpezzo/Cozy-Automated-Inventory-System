@@ -12,6 +12,12 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-11-18",
+    items: [
+      "Added an optional Autopilot (Settings > Autopilot, admins only, off until turned on in Settings > Features). Approved people can email a vendor file to the inventory mailbox, and the hub reads it, compares it to Miva, and emails the admins what it would have done. For now it only reviews and reports; it never sends anything to Miva.",
+    ],
+  },
+  {
     date: "2026-10-30",
     items: [
       "On the run review page, \"Highlight differences\" now shades the Changed fields cell for every row where anything would change, including Availability, Datafeed, Shopping feed and Dropship Inventory Management. Rows where only those fields change are labeled \"Status and restock unchanged\", so they no longer look like nothing is changing.",

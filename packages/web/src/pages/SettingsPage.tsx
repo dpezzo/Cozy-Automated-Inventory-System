@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type ReleaseNoteEntry } from "../api";
 import { InstructionsCard } from "../components/InstructionsCard";
 import { useAuth } from "../AuthContext";
-import { Users, Truck, Trash2, Settings, Plug, Activity, Mail, Timer, ToggleRight, ChevronRight, ChevronUp } from "lucide-react";
+import { Users, Truck, Trash2, Settings, Plug, Activity, Mail, Timer, ToggleRight, Inbox, ChevronRight, ChevronUp } from "lucide-react";
 
 /** "2026-10-07" -> "2026.10.07", matching the app's date-based version-number format. */
 function formatVersion(isoDate: string): string {
@@ -110,6 +110,15 @@ export default function SettingsPage() {
             </div>
             <h3>Features</h3>
             <p>Turn optional features, like saved Catalog views, on or off for everyone.</p>
+          </Link>
+        )}
+        {isAdmin && (
+          <Link to="/settings/autopilot" className="card settings-tile">
+            <div className="settings-tile-icon">
+              <Inbox size={24} />
+            </div>
+            <h3>Autopilot</h3>
+            <p>Handle vendor files emailed to the inventory mailbox: who may send, which vendors, and what happened.</p>
           </Link>
         )}
         {isAdmin && (

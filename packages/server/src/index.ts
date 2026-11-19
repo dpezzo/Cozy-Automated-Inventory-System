@@ -5,6 +5,7 @@ import path from "node:path";
 import { initRepository, getDbDriver } from "./db";
 import { createSessionStore } from "./sessionStore";
 import { router, errorHandler } from "./routes";
+import { startAutopilotPoller } from "./autopilot/poller";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -93,9 +94,12 @@ async function main() {
     console.log(`CozyWinters Olliix reconciliation server listening on port ${port}`);
   });
 
+  const autopilotPoller = startAutopilotPoller();
+
   function shutdown() {
     // eslint-disable-next-line no-console
     console.log("Shutting down...");
+    autopilotPoller?.stop();
     server.close(() => process.exit(0));
   }
   process.on("SIGINT", shutdown);

@@ -12,6 +12,11 @@ export const FEATURE_FLAGS = {
     defaultEnabled: false,
     turnedOffMessage: "Saved Catalog views are turned off. An admin can turn them on in Settings > Features.",
   },
+  autopilot: {
+    settingKey: "feature_autopilot",
+    defaultEnabled: false,
+    turnedOffMessage: "Email autopilot is turned off. An admin can turn it on in Settings > Features.",
+  },
 } as const;
 
 export type FeatureName = keyof typeof FEATURE_FLAGS;

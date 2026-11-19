@@ -153,6 +153,13 @@ export const api = {
   getFeatures: () => request<FeatureFlags>("/features"),
   setFeatures: (patch: Partial<FeatureFlags>) =>
     request<FeatureFlags>("/admin/features", { method: "PUT", body: JSON.stringify(patch) }),
+  getAutopilot: () => request<AutopilotSettings>("/admin/autopilot"),
+  setAutopilot: (patch: {
+    mode?: "off" | "review";
+    holdMinutes?: number;
+    brakeLimits?: AutopilotBrakeLimits;
+    vendors?: Record<string, { enabled?: boolean; approvedSenders?: string }>;
+  }) => request<AutopilotSettings>("/admin/autopilot", { method: "PUT", body: JSON.stringify(patch) }),
   listCatalogViews: () => request<CatalogViewsPayload>("/catalog-views"),
   createCatalogView: (input: { name: string; isShared: boolean; config: CatalogViewConfig }) =>
     request<CatalogViewDto>("/catalog-views", { method: "POST", body: JSON.stringify(input) }),
@@ -267,6 +274,43 @@ export interface CatalogViewConfig {
 
 export interface FeatureFlags {
   catalogViews: boolean;
+  autopilot: boolean;
+}
+
+export interface AutopilotBrakeLimits {
+  minRowRatio: number;
+  maxChangedPercent: number;
+  maxNlaProposals: number;
+  maxMissingOrBlockedPercent: number;
+}
+
+export interface AutopilotVendorSetting {
+  vendorKey: string;
+  vendorLabel: string;
+  enabled: boolean;
+  approvedSenders: string[];
+}
+
+export interface AutopilotMessageDto {
+  id: string;
+  messageId: string;
+  sender: string | null;
+  subject: string | null;
+  outcome: "REVIEWED" | "HELD" | "DUPLICATE" | "REJECTED" | "IGNORED" | "FAILED";
+  vendorKey: string | null;
+  runId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AutopilotSettings {
+  featureEnabled: boolean;
+  mode: "off" | "review";
+  holdMinutes: number;
+  brakeLimits: AutopilotBrakeLimits;
+  vendors: AutopilotVendorSetting[];
+  poller: { mailboxConfigured: boolean; lastPollAt: string | null; lastError: string | null; lastHandledCount: number };
+  recent: AutopilotMessageDto[];
 }
 
 export interface CatalogViewDto {

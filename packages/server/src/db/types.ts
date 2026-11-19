@@ -352,3 +352,30 @@ export interface AuditLogRecord {
   details: Record<string, unknown>;
   createdAt: string;
 }
+
+export type AutopilotOutcome = "REVIEWED" | "HELD" | "DUPLICATE" | "REJECTED" | "IGNORED" | "FAILED";
+
+export interface AutopilotMessageRecord {
+  id: string;
+  /** The email's own Message-ID header; unique, so a message is never handled twice. */
+  messageId: string;
+  sender: string | null;
+  subject: string | null;
+  outcome: AutopilotOutcome;
+  vendorKey: string | null;
+  fileId: string | null;
+  runId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface InsertAutopilotMessageInput {
+  messageId: string;
+  sender: string | null;
+  subject: string | null;
+  outcome: AutopilotOutcome;
+  vendorKey?: string | null;
+  fileId?: string | null;
+  runId?: string | null;
+  details?: Record<string, unknown>;
+}

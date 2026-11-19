@@ -37,6 +37,8 @@ import type {
   CatalogViewRecord,
   InsertCatalogViewInput,
   UpdateCatalogViewPatch,
+  AutopilotMessageRecord,
+  InsertAutopilotMessageInput,
 } from "./types";
 import { DEFAULT_DATA_SIZE_ALERT_THRESHOLDS } from "./types";
 
@@ -1000,6 +1002,43 @@ export class PostgresRepository implements Repository {
     return rows.map((r) => r.normalized_upc as string);
   }
 
+  // ---------- Email autopilot ----------
+
+  async hasAutopilotMessage(messageId: string): Promise<boolean> {
+    const { rows } = await this.getPool().query("SELECT 1 FROM autopilot_messages WHERE message_id = $1", [messageId]);
+    return rows.length > 0;
+  }
+
+  async insertAutopilotMessage(input: InsertAutopilotMessageInput): Promise<AutopilotMessageRecord | null> {
+    const { rows } = await this.getPool().query(
+      "INSERT INTO autopilot_messages (message_id, sender, subject, outcome, vendor_key, file_id, run_id, details) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (message_id) DO NOTHING RETURNING *",
+      [
+        input.messageId,
+        input.sender,
+        input.subject,
+        input.outcome,
+        input.vendorKey ?? null,
+        input.fileId ?? null,
+        input.runId ?? null,
+        JSON.stringify(input.details ?? {}),
+      ],
+    );
+    return rows[0] ? mapAutopilotMessageRow(rows[0]) : null;
+  }
+
+  async listAutopilotMessages(limit = 50): Promise<AutopilotMessageRecord[]> {
+    const { rows } = await this.getPool().query("SELECT * FROM autopilot_messages ORDER BY created_at DESC LIMIT $1", [limit]);
+    return rows.map(mapAutopilotMessageRow);
+  }
+
+  async findLatestAutopilotMessageForFile(fileId: string): Promise<AutopilotMessageRecord | null> {
+    const { rows } = await this.getPool().query(
+      "SELECT * FROM autopilot_messages WHERE file_id = $1 AND outcome IN ('REVIEWED','HELD') ORDER BY created_at DESC LIMIT 1",
+      [fileId],
+    );
+    return rows[0] ? mapAutopilotMessageRow(rows[0]) : null;
+  }
+
   // ---------- Catalog views ----------
 
   async listCatalogViewsVisibleTo(userId: string): Promise<CatalogViewRecord[]> {
@@ -1235,4 +1274,21 @@ function mapReviewRowView(row: Record<string, unknown>): ReviewRowView {
     locked: row.locked as boolean,
   };
   return { row: reconRow, decision };
+}
+
+function mapAutopilotMessageRow(row: Record<string, unknown>): AutopilotMessageRecord {
+  const raw = row.details;
+  const details = typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : ((raw as Record<string, unknown> | null) ?? {});
+  return {
+    id: row.id as string,
+    messageId: row.message_id as string,
+    sender: (row.sender as string | null) ?? null,
+    subject: (row.subject as string | null) ?? null,
+    outcome: row.outcome as AutopilotMessageRecord["outcome"],
+    vendorKey: (row.vendor_key as string | null) ?? null,
+    fileId: (row.file_id as string | null) ?? null,
+    runId: (row.run_id as string | null) ?? null,
+    details,
+    createdAt: new Date(row.created_at as string).toISOString(),
+  };
 }

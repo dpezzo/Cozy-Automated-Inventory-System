@@ -57,6 +57,17 @@ import {
 } from "./domain/catalogViewService";
 import { getFeatureFlags, setFeatureFlags, assertFeatureEnabled } from "./domain/featureFlags";
 import { ValidationError, ForbiddenError, NotFoundError } from "./errors";
+import {
+  getAutopilotMode,
+  setAutopilotMode,
+  getHoldMinutes,
+  setHoldMinutes,
+  getBrakeLimits,
+  setBrakeLimits,
+  listVendorAutopilotSettings,
+  setVendorAutopilot,
+} from "./autopilot/settings";
+import { getPollStatus } from "./autopilot/poller";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
 
@@ -1009,6 +1020,60 @@ router.put(
       details: { changed },
     });
     res.json(flags);
+  }),
+);
+
+// ---------- Email autopilot (admin only; see src/autopilot) ----------
+
+async function autopilotSnapshot() {
+  const repo = getRepository();
+  return {
+    featureEnabled: (await getFeatureFlags()).autopilot,
+    mode: await getAutopilotMode(),
+    holdMinutes: await getHoldMinutes(),
+    brakeLimits: await getBrakeLimits(),
+    vendors: await listVendorAutopilotSettings(),
+    poller: getPollStatus(),
+    recent: await repo.listAutopilotMessages(50),
+  };
+}
+
+router.get(
+  "/admin/autopilot",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json(await autopilotSnapshot());
+  }),
+);
+
+router.put(
+  "/admin/autopilot",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const body = (req.body ?? {}) as { mode?: unknown; holdMinutes?: unknown; brakeLimits?: unknown; vendors?: unknown };
+    const changed: Record<string, unknown> = {};
+    if (body.mode !== undefined) changed.mode = await setAutopilotMode(body.mode);
+    if (body.holdMinutes !== undefined) changed.holdMinutes = await setHoldMinutes(body.holdMinutes);
+    if (body.brakeLimits !== undefined) changed.brakeLimits = await setBrakeLimits(body.brakeLimits);
+    if (body.vendors !== undefined) {
+      if (typeof body.vendors !== "object" || body.vendors === null || Array.isArray(body.vendors)) {
+        throw new ValidationError("INVALID_AUTOPILOT_SETTINGS", "vendors must be an object keyed by vendor key.");
+      }
+      const vendorChanges: Record<string, unknown> = {};
+      for (const [vendorKey, patch] of Object.entries(body.vendors as Record<string, { enabled?: unknown; approvedSenders?: unknown }>)) {
+        await setVendorAutopilot(vendorKey, patch ?? {});
+        vendorChanges[vendorKey] = patch;
+      }
+      changed.vendors = vendorChanges;
+    }
+    await getRepository().insertAuditLog({
+      actorId: req.session.userId!,
+      action: "AUTOPILOT_SETTINGS_CHANGED",
+      entityType: "system",
+      entityId: null,
+      details: { changed },
+    });
+    res.json(await autopilotSnapshot());
   }),
 );
 

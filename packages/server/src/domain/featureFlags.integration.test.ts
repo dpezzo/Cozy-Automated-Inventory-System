@@ -31,7 +31,7 @@ afterAll(async () => {
 
 describe("feature flags", () => {
   it("saved Catalog views are off by default, and the guard refuses with a helpful message", async () => {
-    expect(await getFeatureFlags()).toEqual({ catalogViews: false });
+    expect(await getFeatureFlags()).toEqual({ catalogViews: false, autopilot: false });
     await expect(assertFeatureEnabled("catalogViews")).rejects.toMatchObject({
       name: "ForbiddenError",
       message: expect.stringContaining("Settings > Features"),
@@ -40,7 +40,7 @@ describe("feature flags", () => {
 
   it("turning it on persists and lets the guard through; turning it off closes it again", async () => {
     const on = await setFeatureFlags({ catalogViews: true });
-    expect(on).toEqual({ changed: { catalogViews: true }, flags: { catalogViews: true } });
+    expect(on).toEqual({ changed: { catalogViews: true }, flags: { catalogViews: true, autopilot: false } });
     expect(await isFeatureEnabled("catalogViews")).toBe(true);
     await expect(assertFeatureEnabled("catalogViews")).resolves.toBeUndefined();
     expect(await repo.getAppSetting("feature_catalog_views")).toBe("true");
@@ -53,6 +53,6 @@ describe("feature flags", () => {
     await expect(setFeatureFlags({ bogus: true })).rejects.toMatchObject({ code: "INVALID_FEATURES" });
     await expect(setFeatureFlags({ catalogViews: "yes" })).rejects.toMatchObject({ code: "INVALID_FEATURES" });
     await expect(setFeatureFlags(null)).rejects.toMatchObject({ code: "INVALID_FEATURES" });
-    expect(await getFeatureFlags()).toEqual({ catalogViews: false });
+    expect(await getFeatureFlags()).toEqual({ catalogViews: false, autopilot: false });
   });
 });

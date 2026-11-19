@@ -38,6 +38,8 @@ import type {
   CatalogViewRecord,
   InsertCatalogViewInput,
   UpdateCatalogViewPatch,
+  AutopilotMessageRecord,
+  InsertAutopilotMessageInput,
 } from "./types";
 import { DEFAULT_DATA_SIZE_ALERT_THRESHOLDS } from "./types";
 import { defaultSqlitePath } from "../config/paths";
@@ -1160,6 +1162,49 @@ export class SqliteRepository implements Repository {
     return rows.map((r) => r.normalized_upc);
   }
 
+  // ---------- Email autopilot ----------
+
+  async hasAutopilotMessage(messageId: string): Promise<boolean> {
+    return this.conn().prepare("SELECT 1 FROM autopilot_messages WHERE message_id = ?").get(messageId) !== undefined;
+  }
+
+  async insertAutopilotMessage(input: InsertAutopilotMessageInput): Promise<AutopilotMessageRecord | null> {
+    const id = randomUUID();
+    const result = this.conn()
+      .prepare(
+        "INSERT OR IGNORE INTO autopilot_messages (id, message_id, sender, subject, outcome, vendor_key, file_id, run_id, details, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+      )
+      .run(
+        id,
+        input.messageId,
+        input.sender,
+        input.subject,
+        input.outcome,
+        input.vendorKey ?? null,
+        input.fileId ?? null,
+        input.runId ?? null,
+        JSON.stringify(input.details ?? {}),
+        nowIso(),
+      );
+    if (Number(result.changes) === 0) return null;
+    const row = this.conn().prepare("SELECT * FROM autopilot_messages WHERE id = ?").get(id) as Record<string, unknown>;
+    return mapAutopilotMessageRow(row);
+  }
+
+  async listAutopilotMessages(limit = 50): Promise<AutopilotMessageRecord[]> {
+    const rows = this.conn()
+      .prepare("SELECT * FROM autopilot_messages ORDER BY created_at DESC, rowid DESC LIMIT ?")
+      .all(limit) as Record<string, unknown>[];
+    return rows.map(mapAutopilotMessageRow);
+  }
+
+  async findLatestAutopilotMessageForFile(fileId: string): Promise<AutopilotMessageRecord | null> {
+    const row = this.conn()
+      .prepare("SELECT * FROM autopilot_messages WHERE file_id = ? AND outcome IN ('REVIEWED','HELD') ORDER BY created_at DESC LIMIT 1")
+      .get(fileId) as Record<string, unknown> | undefined;
+    return row ? mapAutopilotMessageRow(row) : null;
+  }
+
   // ---------- Catalog views ----------
 
   async listCatalogViewsVisibleTo(userId: string): Promise<CatalogViewRecord[]> {
@@ -1368,4 +1413,25 @@ function mapReviewRowView(row: Record<string, unknown>): ReviewRowView {
     locked: fromIntBool(row.locked),
   };
   return { row: reconRow, decision };
+}
+
+function mapAutopilotMessageRow(row: Record<string, unknown>): AutopilotMessageRecord {
+  let details: Record<string, unknown> = {};
+  try {
+    details = JSON.parse(String(row.details ?? "{}")) as Record<string, unknown>;
+  } catch {
+    details = {};
+  }
+  return {
+    id: row.id as string,
+    messageId: row.message_id as string,
+    sender: (row.sender as string | null) ?? null,
+    subject: (row.subject as string | null) ?? null,
+    outcome: row.outcome as AutopilotMessageRecord["outcome"],
+    vendorKey: (row.vendor_key as string | null) ?? null,
+    fileId: (row.file_id as string | null) ?? null,
+    runId: (row.run_id as string | null) ?? null,
+    details,
+    createdAt: row.created_at as string,
+  };
 }
