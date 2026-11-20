@@ -39,6 +39,21 @@ export const SKU_CHANGE_REVIEW_HEADERS: (keyof SkuChangeReviewRow)[] = [
   "PACK_QTY", "PRODUCT", "OLLIIX_ACTION_TEXT", "OLLIIX_NOTES",
 ];
 
+/** Row background colors (RGB hex) for the review workbook; the legend is in the CHANGELOG and handed to Cale with the file. */
+export const SKU_CHANGE_COLORS = {
+  ready: "BDD7EE", // blue: RENAME, ready now
+  done: "C6EFCE", // green: Miva MPN already equals the new SKU
+  waiting: "FFEB9C", // yellow: HOLD, new SKU not in the dealer file yet
+  problem: "FFC7CE", // red: HOLD for any other reason (no Miva match, discontinued, MPN mismatch)
+  noAction: "EDEDED", // grey: tier 2 / tier 3, nothing to do
+} as const;
+
+export function skuChangeRowColor(row: SkuChangeReviewRow): string {
+  if (row.PROPOSED_ACTION === "RENAME") return SKU_CHANGE_COLORS.ready;
+  if (row.PROPOSED_ACTION === "SKIP") return row.REASON.startsWith("Miva MPN already") ? SKU_CHANGE_COLORS.done : SKU_CHANGE_COLORS.noAction;
+  return row.REASON.startsWith("New SKU is not in the dealer") ? SKU_CHANGE_COLORS.waiting : SKU_CHANGE_COLORS.problem;
+}
+
 const key = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
 
 /**

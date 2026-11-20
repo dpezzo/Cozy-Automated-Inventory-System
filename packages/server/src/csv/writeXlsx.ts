@@ -37,6 +37,8 @@ export interface WriteXlsxOptions {
   numericColumns?: string[];
   /** Excel table style. Medium 2 = blue header with light-blue banded rows. */
   tableStyle?: string;
+  /** Optional background color per data row (same order as the rows), as 6-digit RGB hex like "C6EFCE"; null/undefined leaves the row unfilled. */
+  rowFillColors?: (string | null | undefined)[];
 }
 
 const PLAIN_NUMBER = /^-?(0|[1-9]\d*)(\.\d+)?$/;
@@ -91,16 +93,32 @@ export async function rowsToXlsx<T extends object>(rows: T[], headers: string[],
     return `<c r="${ref}" t="s"><v>${idx}</v></c>`;
   };
 
+  // Row fills: style index 0 is the default; each distinct color gets its own fill + cell format.
+  const fillColors: string[] = [];
+  const styleFor = (color: string | null | undefined): number => {
+    if (!color || !/^[0-9A-Fa-f]{6}$/.test(color)) return 0;
+    const upper = color.toUpperCase();
+    let at = fillColors.indexOf(upper);
+    if (at < 0) {
+      fillColors.push(upper);
+      at = fillColors.length - 1;
+    }
+    return at + 1;
+  };
+  const rowStyles = dataRows.map((_, r) => styleFor(options.rowFillColors?.[r]));
+  const styleAttr = (style: number): string => (style > 0 ? ` s="${style}"` : "");
+
   const headerCells = columnNames.map((name, i) => stringCell(`${columnLetter(i)}1`, name)).join("");
   const bodyRowsXml = dataRows
     .map((values, r) => {
       const rowNumber = r + 2;
+      const style = rowStyles[r]!;
       const cells = values
         .map((v, i) => {
-          if (v === "") return "";
           const ref = `${columnLetter(i)}${rowNumber}`;
-          if (numericColumns.has(headers[i]!) && PLAIN_NUMBER.test(v)) return `<c r="${ref}"><v>${v}</v></c>`;
-          return stringCell(ref, v);
+          if (v === "") return style > 0 ? `<c r="${ref}"${styleAttr(style)}/>` : "";
+          if (numericColumns.has(headers[i]!) && PLAIN_NUMBER.test(v)) return `<c r="${ref}"${styleAttr(style)}><v>${v}</v></c>`;
+          return stringCell(ref, v).replace(`<c r="${ref}" t="s">`, `<c r="${ref}"${styleAttr(style)} t="s">`);
         })
         .join("");
       return `<row r="${rowNumber}">${cells}</row>`;
@@ -139,11 +157,24 @@ export async function rowsToXlsx<T extends object>(rows: T[], headers: string[],
     hasTable ? `<Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>` : ""
   }</Types>`;
 
+  const hasStyles = fillColors.length > 0;
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="${fillColors.length + 2}"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>${fillColors
+    .map((c) => `<fill><patternFill patternType="solid"><fgColor rgb="FF${c}"/><bgColor indexed="64"/></patternFill></fill>`)
+    .join("")}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${fillColors.length + 1}"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>${fillColors
+    .map((_, i) => `<xf numFmtId="0" fontId="0" fillId="${i + 2}" borderId="0" xfId="0" applyFill="1"/>`)
+    .join("")}</cellXfs></styleSheet>`;
+
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", contentTypesXml);
+  zip.file("[Content_Types].xml", hasStyles ? contentTypesXml.replace("</Types>", `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`) : contentTypesXml);
+  if (hasStyles) zip.file("xl/styles.xml", stylesXml);
   zip.file("_rels/.rels", rootRelsXml);
   zip.file("xl/workbook.xml", workbookXml);
-  zip.file("xl/_rels/workbook.xml.rels", workbookRelsXml);
+  zip.file(
+    "xl/_rels/workbook.xml.rels",
+    hasStyles
+      ? workbookRelsXml.replace("</Relationships>", `<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`)
+      : workbookRelsXml,
+  );
   zip.file("xl/sharedStrings.xml", sharedStringsXml);
   zip.file("xl/worksheets/sheet1.xml", sheetXml);
   if (hasTable) {

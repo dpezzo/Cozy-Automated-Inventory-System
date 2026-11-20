@@ -7,7 +7,8 @@ All notable changes to the CozyWinters Olliix inventory reconciliation app are d
 ### Added
 - `POST /api/olliix/sku-change-review` (admin only): upload Olliix's Running Change SKU list, the latest dealer inventory file and the discontinued items list; the server cross-references them with the newest stored Miva snapshot and returns an Excel review for Cale. Nothing is stored or pushed to Miva.
 - Join is UPC to Miva GTIN (same as reconciliation). Each row is RENAME (tier 1A/1B, new SKU in the dealer file, not discontinued, Miva MPN equals the old SKU), HOLD (with the reason: no Miva match, new SKU not in dealer file yet, discontinued, MPN mismatch, tier 1C) or SKIP (tier 2/3, or MPN already the new SKU). Olliix's own action text, notes and pack quantity are carried through unchanged.
-- Against the 11/19 files: 13 RENAME, 6 HOLD, 50 SKIP.
+- Rows are color coded: blue = ready to rename, green = Miva MPN already the new SKU, yellow = new SKU not in the dealer file yet, red = held for another reason, grey = tier 2/3 no action. `writeXlsx.ts` gained an optional `rowFillColors` option for this.
+- Against the 11/19 files and the 11/20 Miva pull: 0 RENAME (all 13 already carry the new MPN), 6 HOLD, 50 SKIP.
 - Code: `vendor/runningChangeParser.ts`, `domain/skuChangeReview.ts` (pure, unit tested), `domain/skuChangeReviewService.ts`.
 
 ### Not yet built

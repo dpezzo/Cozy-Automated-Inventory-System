@@ -6,7 +6,7 @@ import { parseRunningChangeWorkbook } from "../vendor/runningChangeParser";
 import { parseOlliixWorkbook } from "../vendor/olliixParser";
 import { parseDiscontinuedListWorkbook } from "../vendor/discontinuedListParser";
 import { parseMivaSnapshotCsv } from "../vendor/mivaCsv";
-import { buildSkuChangeReview, SKU_CHANGE_REVIEW_HEADERS } from "./skuChangeReview";
+import { buildSkuChangeReview, skuChangeRowColor, SKU_CHANGE_REVIEW_HEADERS } from "./skuChangeReview";
 
 export interface SkuChangeReviewResult {
   xlsx: Buffer;
@@ -44,6 +44,7 @@ export async function generateSkuChangeReview(files: {
     sanitizeFormulas: true,
     sheetName: "SKU Change Review",
     numericColumns: ["OLD_SKU_QTY", "NEW_SKU_QTY"],
+    rowFillColors: rows.map(skuChangeRowColor),
   });
   return {
     xlsx,
