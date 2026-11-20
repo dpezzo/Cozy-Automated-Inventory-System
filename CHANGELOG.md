@@ -2,6 +2,17 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-11-19 - Housekeeping: project moved, favicons added
+
+### Changed
+- Project folder moved out of the bake-off workspace to `Documents\Projects\Cozywinters.com\AIS - Automated Inventory System\` (repo is the `app` subfolder; `Vendors` and `docs` sit beside it). Bake-off material is archived in `_archive-bakeoff`.
+- `runFullSize.ts` now looks for the seed package in `_archive-bakeoff/Claude-package`.
+- `CLAUDE.md` describes the SessionStart hook that shows the handoff file at session start.
+
+### Added
+- Delutti favicon set (`Delutti-favicons/`) and the session-start handoff hook (`.claude/hooks/`).
+- `.gitignore` now skips `.claude/settings.local.json`, `handoff-archive/` and the favicon zip.
+
 ## 2026-11-18 - Email autopilot, Stage 1 (review only, behind a feature flag, off by default)
 
 ### Added

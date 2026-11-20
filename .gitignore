@@ -5,3 +5,6 @@ dist/
 *.log
 data/
 SESSION_HANDOFF.md
+.claude/settings.local.json
+handoff-archive/
+Delutti-favicons.zip

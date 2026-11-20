@@ -15,7 +15,7 @@ import { rowsToCsv } from "../csv/writeCsv";
 import { UPDATE_ROLLBACK_HEADERS } from "@cozywinters/shared";
 import { initRepository } from "../db";
 
-const SEED_DIR = path.resolve(__dirname, "../../../../../package/CozyWinters_Olliix_MVP_Bakeoff_Seed");
+const SEED_DIR = path.resolve(__dirname, "../../../../../_archive-bakeoff/Claude-package/CozyWinters_Olliix_MVP_Bakeoff_Seed");
 
 async function main() {
   // This script now needs the vendor_configs table (runPipeline.ts reads the
