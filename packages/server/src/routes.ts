@@ -27,6 +27,7 @@ import {
   listUntrackedBrandRows,
 } from "./domain/runService";
 import { generateBatch } from "./domain/batchService";
+import { generateSkuChangeReview } from "./domain/skuChangeReviewService";
 import { runLegacyComparison } from "./domain/legacyService";
 import { generateVendorExceptionReport } from "./domain/vendorExceptionReportService";
 import { VENDOR_EXCEPTION_CATEGORIES, type VendorExceptionCategory, RELEASE_NOTES, type WarningCode } from "@cozywinters/shared";
@@ -624,6 +625,47 @@ router.post(
     }
     const file = await generateVendorExceptionReport(req.params.id!, req.session.userId!, selected, format);
     res.status(201).json(file);
+  }),
+);
+
+// ---------- Olliix SKU change review (read-only export) ----------
+
+router.post(
+  "/olliix/sku-change-review",
+  requireAdmin,
+  upload.fields([
+    { name: "runningChange", maxCount: 1 },
+    { name: "dealerInventory", maxCount: 1 },
+    { name: "discontinued", maxCount: 1 },
+  ]),
+  asyncHandler(async (req, res) => {
+    const f = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const runningChange = f?.runningChange?.[0];
+    const dealerInventory = f?.dealerInventory?.[0];
+    const discontinued = f?.discontinued?.[0];
+    if (!runningChange || !dealerInventory || !discontinued) {
+      res.status(400).json({
+        error: "FILE_REQUIRED",
+        message: "Upload all three files: runningChange, dealerInventory and discontinued.",
+      });
+      return;
+    }
+    const result = await generateSkuChangeReview({
+      runningChange: runningChange.buffer,
+      dealerInventory: dealerInventory.buffer,
+      discontinued: discontinued.buffer,
+    });
+    await getRepository().insertAuditLog({
+      actorId: req.session.userId!,
+      action: "SKU_CHANGE_REVIEW_GENERATED",
+      entityType: "file",
+      entityId: result.mivaSnapshotFileId,
+      details: result.counts,
+    });
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Disposition", `attachment; filename="olliix-sku-change-review-${stamp}.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.send(result.xlsx);
   }),
 );
 
