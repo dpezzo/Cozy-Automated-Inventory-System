@@ -130,9 +130,9 @@ export default function RunHistoryPage() {
                 <th>Run ID</th>
                 <th>Status</th>
                 <th>Vendor</th>
-                <th title="Which version of the vendor's file parser read this run's file. Blank for vendors that only have one parser.">Parser</th>
-                <th title="Internal identifiers for the exact rule/config version used -- only relevant for debugging, safe to ignore day to day.">
-                  Rule / hash
+                <th title="Which version of the vendor's file parser read this run's file. Blank for files uploaded before parser versions were recorded.">File parser</th>
+                <th title="Internal identifiers for the reconciliation rule and settings used (the rule's v1 is a fixed label, not the file parser version) -- only relevant for debugging, safe to ignore day to day.">
+                  Rule ID / hash
                 </th>
                 <th>Batch</th>
                 <th>Batch status</th>
