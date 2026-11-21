@@ -306,7 +306,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .warning-pills { display: flex; flex-wrap: wrap; gap: 4px; }
 
 /* One look for every text-style control and dropdown: same white panel background (selects used to fall back to the browser's gray), same border, and the same 34px height so a row of mixed inputs and dropdowns lines up. */
-input[type="text"], input[type="password"], input[type="email"], input[type="number"], select {
+input:not([type]), input[type="text"], input[type="password"], input[type="email"], input[type="number"], select {
   font: inherit;
   color: var(--text);
   background-color: var(--panel);

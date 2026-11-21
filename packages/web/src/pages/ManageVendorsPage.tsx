@@ -94,11 +94,24 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
   return (
     <form onSubmit={submit} style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
       {error && <ErrorBanner message={error} />}
-      <div className="grid cols-2" style={{ minWidth: 0 }}>
+      <div className="grid cols-2" style={{ minWidth: 0, alignItems: "start" }}>
         <label>
           Vendor label
           <br />
-          <input value={vendorLabel} onChange={(e) => setVendorLabel(e.target.value)} style={{ width: "100%" }} required />
+          <input type="text" value={vendorLabel} onChange={(e) => setVendorLabel(e.target.value)} style={{ width: "100%" }} required />
+        </label>
+        <label>
+          Timezone (IANA)
+          <br />
+          <input
+            type="text"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            placeholder="America/New_York"
+            style={{ width: "100%" }}
+            required
+          />
+          <FieldHint>{TIMEZONE_HINT}</FieldHint>
         </label>
         <label>
           In-stock threshold
@@ -127,34 +140,6 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
           />
           <FieldHint>{DISCONTINUED_THRESHOLD_HINT}</FieldHint>
         </label>
-        {hasParserChoice && (
-          <label>
-            Active file parser
-            <br />
-            <select value={activeParserVersion} onChange={(e) => setActiveParserVersion(e.target.value)} style={{ width: "100%" }}>
-              {vendor.parserVersions.map((p) => (
-                <option key={p.version} value={p.version}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <FieldHint>
-              {vendor.parserVersions.find((p) => p.version === activeParserVersion)?.notes} {PARSER_VERSION_HINT}
-            </FieldHint>
-          </label>
-        )}
-        <label>
-          Timezone (IANA)
-          <br />
-          <input
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            placeholder="America/New_York"
-            style={{ width: "100%" }}
-            required
-          />
-          <FieldHint>{TIMEZONE_HINT}</FieldHint>
-        </label>
         <label>
           Match strategy
           <br />
@@ -169,10 +154,36 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
           </select>
           <FieldHint>{MATCH_STRATEGY_HINT}</FieldHint>
         </label>
+        <label>
+          Active file parser
+          <br />
+          {hasParserChoice ? (
+            <>
+              <select value={activeParserVersion} onChange={(e) => setActiveParserVersion(e.target.value)} style={{ width: "100%" }}>
+                {vendor.parserVersions.map((p) => (
+                  <option key={p.version} value={p.version}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              <FieldHint>
+                {vendor.parserVersions.find((p) => p.version === activeParserVersion)?.notes} {PARSER_VERSION_HINT}
+              </FieldHint>
+            </>
+          ) : (
+            <>
+              <select value="v1" disabled style={{ width: "100%" }}>
+                <option value="v1">v1</option>
+              </select>
+              <FieldHint>This vendor has one file parser (v1), so there is nothing to switch. A second version appears here when one is added.</FieldHint>
+            </>
+          )}
+        </label>
         <label style={{ gridColumn: "1 / -1" }}>
           Brand allowlist (comma-separated, e.g. "Beautyrest, Serta, Woolrich" for Olliix)
           <br />
           <input
+            type="text"
             value={brandAllowlist}
             onChange={(e) => setBrandAllowlist(e.target.value)}
             style={{ width: "100%" }}
@@ -583,7 +594,7 @@ export default function ManageVendorsPage() {
               <th title="A discontinued product with fewer units than this is proposed as No Longer Available. Off = not used for this vendor.">Discontinued threshold</th>
               <th>Brands</th>
               <th>File shape</th>
-              <th title="Which file parser version is tried first. Only shown for vendors that have more than one.">Active parser</th>
+              <th title="Which file parser version is tried first. Vendors with a single parser show v1.">Active parser</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -613,7 +624,7 @@ export default function ManageVendorsPage() {
                   </td>
                   <td>{FILE_SHAPE_LABELS[v.fileShape] ?? v.fileShape}</td>
                   <td title={v.parserVersions.find((p) => p.version === (v.activeParserVersion ?? v.parserVersions[0]?.version))?.label}>
-                    {v.parserVersions.length > 0 ? (v.activeParserVersion ?? v.parserVersions[0]!.version) : "-"}
+                    {v.parserVersions.length > 0 ? (v.activeParserVersion ?? v.parserVersions[0]!.version) : "v1"}
                   </td>
                   <td>
                     <span

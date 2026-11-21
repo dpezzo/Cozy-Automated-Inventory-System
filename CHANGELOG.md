@@ -17,6 +17,7 @@ Gobi switched its export on 2026-11-06 to `Inventory_Report_YYYYMMDD.xlsx` (Prod
 
 ### Manage Vendors polish (same day)
 - The vendors table now has separate "In-stock threshold" and "Discontinued threshold" columns (Off when unset) and an "Active parser" column (a dash for single-parser vendors).
+- Follow-up: the edit form is now laid out in fixed pairs (Vendor label / Timezone, In-stock / Discontinued threshold, Match strategy / Active file parser, then Brand allowlist full width) so the fields no longer jumble. Every vendor shows an Active file parser field: a dropdown when there is more than one version, otherwise a disabled "v1"; the table shows "v1" for single-parser vendors. Text boxes without an explicit `type` (Vendor label, Timezone, Brand allowlist) were missing the shared style, so the rule now also matches `input:not([type])`.
 - Form controls share one look in `styles.css`: dropdowns no longer fall back to the browser's gray, and text, password, email, number and select controls are all white with the same 34px height. This is global, so number inputs on the Autopilot, Clear Data and Session Timeout pages pick it up too.
 
 ### Not changed
