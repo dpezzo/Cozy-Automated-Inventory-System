@@ -15,6 +15,10 @@ Gobi switched its export on 2026-11-06 to `Inventory_Report_YYYYMMDD.xlsx` (Prod
 - The parser version shows in the upload message (including when it fell back), a new Parser column on Run History, the Run Review header, run records (`RunRecord.parserVersion`, joined from the vendor file), the FILE_UPLOADED audit entry and the autopilot report email and saved details.
 - Tests: `vendor/parserVersions.test.ts` and `domain/parserVersions.integration.test.ts` (15 new; 118 shared and 209 server pass).
 
+### Manage Vendors polish (same day)
+- The vendors table now has separate "In-stock threshold" and "Discontinued threshold" columns (Off when unset) and an "Active parser" column (a dash for single-parser vendors).
+- Form controls share one look in `styles.css`: dropdowns no longer fall back to the browser's gray, and text, password, email, number and select controls are all white with the same 34px height. This is global, so number inputs on the Autopilot, Clear Data and Session Timeout pages pick it up too.
+
 ### Not changed
 - The vendor exception report and batch exception files do not yet carry the parser version.
 - The "v1" in Rule / hash on the Runs page (`gobi-inventory-v1`) is the reconciliation rule id, a fixed label, not a parser version.

@@ -17,6 +17,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
       "Gobi's new file layout (the Inventory_Report file with Product ID and UPC columns, no Ordering SKU) now uploads and runs again. It is read by a new Gobi parser, version 2. The original parser stays as version 1.",
       "In Manage Vendors, a vendor that has more than one file parser (Gobi for now) has an \"Active file parser\" setting. That version is tried first, and if a file does not fit it the other version is tried automatically, so you can switch back if Gobi ever returns to its old layout.",
       "The upload message, the Run History list (new Parser column), the run page and the autopilot report email now say which parser version read the file, and whether it had to fall back. A stored file is always re-read with the version that first read it.",
+      "The Manage Vendors table now shows the In-stock threshold, Discontinued threshold and Active parser as separate columns, and all form fields and dropdowns now share the same white background and height.",
     ],
   },
   {

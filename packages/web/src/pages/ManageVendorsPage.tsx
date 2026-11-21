@@ -579,9 +579,11 @@ export default function ManageVendorsPage() {
             <tr>
               <th>Label</th>
               <th>Match strategy</th>
-              <th>Threshold</th>
+              <th title="Minimum vendor quantity treated as in stock.">In-stock threshold</th>
+              <th title="A discontinued product with fewer units than this is proposed as No Longer Available. Off = not used for this vendor.">Discontinued threshold</th>
               <th>Brands</th>
               <th>File shape</th>
+              <th title="Which file parser version is tried first. Only shown for vendors that have more than one.">Active parser</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -589,12 +591,12 @@ export default function ManageVendorsPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7}>Loading...</td>
+                <td colSpan={9}>Loading...</td>
               </tr>
             )}
             {!loading && vendors.length === 0 && (
               <tr>
-                <td colSpan={7}>No vendors yet.</td>
+                <td colSpan={9}>No vendors yet.</td>
               </tr>
             )}
             {vendors.map((v) => (
@@ -603,12 +605,16 @@ export default function ManageVendorsPage() {
                   <td>{v.vendorLabel}</td>
                   <td title={MATCH_STRATEGY_HINT}>{MATCH_STRATEGY_LABELS[v.matchStrategy] ?? v.matchStrategy}</td>
                   <td>{v.inStockThreshold}</td>
+                  <td>{v.discontinuedThreshold === null ? "Off" : v.discontinuedThreshold}</td>
                   <td title={v.brandAllowlist.join(", ") || undefined}>
                     {v.brandAllowlist.length <= 2
                       ? v.brandAllowlist.join(", ") || "-"
                       : `${v.brandAllowlist.slice(0, 2).join(", ")} +${v.brandAllowlist.length - 2} more`}
                   </td>
                   <td>{FILE_SHAPE_LABELS[v.fileShape] ?? v.fileShape}</td>
+                  <td title={v.parserVersions.find((p) => p.version === (v.activeParserVersion ?? v.parserVersions[0]?.version))?.label}>
+                    {v.parserVersions.length > 0 ? (v.activeParserVersion ?? v.parserVersions[0]!.version) : "-"}
+                  </td>
                   <td>
                     <span
                       style={{
@@ -641,7 +647,7 @@ export default function ManageVendorsPage() {
                 {editingKey === v.vendorKey && (
                   <tr>
                     {/* The table auto-sizes to its widest unwrapped content, and the form's long hint text would stretch the whole table past the screen. A zero-width wrapper with min-width: 100% contributes nothing to that sizing, so the form simply fills the row. */}
-                    <td colSpan={7}>
+                    <td colSpan={9}>
                       {/* Table cells are white-space: nowrap (styles.css), which the form would inherit and never wrap its hints. */}
                       <div style={{ width: 0, minWidth: "100%", whiteSpace: "normal" }}>
                         <EditVendorForm

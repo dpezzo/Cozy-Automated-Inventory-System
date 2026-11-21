@@ -305,9 +305,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Wraps multiple warning/blocker code pills in a single Warnings/Blockers table cell -- a bare comma-joined string was unreadable once a row carried 2+ codes. */
 .warning-pills { display: flex; flex-wrap: wrap; gap: 4px; }
 
-input[type="text"], input[type="password"], input[type="email"], select {
+/* One look for every text-style control and dropdown: same white panel background (selects used to fall back to the browser's gray), same border, and the same 34px height so a row of mixed inputs and dropdowns lines up. */
+input[type="text"], input[type="password"], input[type="email"], input[type="number"], select {
   font: inherit;
+  color: var(--text);
+  background-color: var(--panel);
   padding: 6px 8px;
+  height: 34px;
+  box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 6px;
 }
