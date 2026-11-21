@@ -72,7 +72,8 @@ export async function createRun(input: CreateRunInput): Promise<RunRecord> {
       );
     }
     const vendorBuffer = readStoredFile(vendorFile.storagePath);
-    const { rows: vendorRows } = await vendorAdapter.parse(vendorBuffer);
+    // A file already read at upload is re-read with the same parser version it was stored with, so changing the vendor's active version later never changes how an existing file is interpreted.
+    const { rows: vendorRows } = await vendorAdapter.parse(vendorBuffer, { forceVersion: vendorFile.parserVersion });
 
     const mivaText = readStoredFileText(mivaFile.storagePath);
     // The full catalog (8,000+ SKUs) is passed through unfiltered -- DS_INV_MGT

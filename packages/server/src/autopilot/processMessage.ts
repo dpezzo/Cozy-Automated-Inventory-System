@@ -304,6 +304,15 @@ async function decide(message: InboundMessage, deps: ProcessDeps): Promise<Final
   const run = await createRun({ vendorFileId: target.result.file.id, mivaFileId: snapshot.file.id, runDate: todayInNewYork(), createdBy: user.id });
   const brake = await brakeForRun(run.id, target.result.file);
 
+  const parserVersion = target.result.parserVersion ?? null;
+  const parserFellBackFrom = target.result.parserFellBackFrom ?? null;
+  if (parserVersion) {
+    notes.push(
+      parserFellBackFrom
+        ? `The file was read with parser ${parserVersion}. The active parser (${parserFellBackFrom}) did not fit it, so another version was used automatically. Check Manage Vendors if the vendor changed its file layout.`
+        : `The file was read with parser ${parserVersion}.`,
+    );
+  }
   const extra = inventory.length - 1;
   if (extra > 0) notes.push(`${extra} more inventory file${extra === 1 ? "" : "s"} came in the same email and were stored but not run; send them one per email.`);
   notes.push(
@@ -317,7 +326,13 @@ async function decide(message: InboundMessage, deps: ProcessDeps): Promise<Final
     vendorKey: target.planned.vendorKey,
     fileId: target.result.file.id,
     runId: run.id,
-    details: { brake, mivaSite, snapshotFileId: snapshot.file.id, attachments: usable.map((a) => a.filename) },
+    details: {
+      brake,
+      mivaSite,
+      snapshotFileId: snapshot.file.id,
+      attachments: usable.map((a) => a.filename),
+      ...(parserVersion ? { parserVersion, parserFellBackFrom } : {}),
+    },
     report: {
       outcome,
       vendorLabel: target.result.detectedVendorLabel,

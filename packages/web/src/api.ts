@@ -146,6 +146,10 @@ export const api = {
       detectedVendorLabel: string;
       /** Set only when the upload was a "Discontinued Items Notification", which is merged into the vendor's discontinued list instead of becoming a run input. Null if it was an unconfirmed duplicate. */
       discontinuedImport: { added: number; updated: number; skipped: number } | null;
+      /** Parser version that read the file (vendors with versioned parsers only). */
+      parserVersion?: string | null;
+      /** Set when the active parser version rejected the file and a different version read it: the version that was tried first. */
+      parserFellBackFrom?: string | null;
       duplicateWarning: string | null;
     };
   },
@@ -385,6 +389,8 @@ export interface FileRecord {
   uploadedAt: string;
   vendorKey: string | null;
   sourceSite: "development" | "live" | null;
+  /** Parser version that read this vendor file at upload (e.g. "v2"); null for vendors with a single parser and for older files. */
+  parserVersion: string | null;
 }
 
 export interface GenericCsvColumnMapping {
@@ -409,6 +415,10 @@ export interface VendorConfig {
   fileShape: "custom" | "simple_csv" | "plugin";
   columnMapping: GenericCsvColumnMapping | null;
   pluginFilename: string | null;
+  /** The parser version tried first for this vendor; null = the vendor default. Only vendors with more than one parser (parserVersions non-empty) can change it. */
+  activeParserVersion: string | null;
+  /** The parser versions an admin can choose between; empty when the vendor has a single parser. */
+  parserVersions: { version: string; label: string; notes: string }[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -444,6 +454,8 @@ export interface UpdateVendorInput {
   brandAllowlist?: string[];
   matchStrategy?: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";
   columnMapping?: GenericCsvColumnMapping;
+  /** Which registered parser version to try first (vendors with more than one only). */
+  activeParserVersion?: string | null;
 }
 
 export interface RunRecord {
@@ -457,6 +469,8 @@ export interface RunRecord {
   failureReason: string | null;
   createdAt: string;
   closedAt: string | null;
+  /** Parser version that read this run's vendor file; null when the vendor has a single parser or the file predates versioning. */
+  parserVersion: string | null;
 }
 
 export interface RunSummary {

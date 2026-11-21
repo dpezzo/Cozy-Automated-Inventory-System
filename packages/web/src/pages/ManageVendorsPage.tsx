@@ -29,6 +29,8 @@ const MATCH_STRATEGY_HINT =
   "Which vendor-file identifier is matched against which Miva catalog field. Use UPC to GTIN unless the vendor only provides SKUs, not UPCs -- then use SKU to MPN instead. \"Both\" checks UPC and SKU independently on every row (using whichever one resolves, and blocking for review if they disagree) -- use it when the vendor's file reliably provides both and you want the extra cross-check.";
 const DISCONTINUED_THRESHOLD_HINT =
   "Optional. A discontinued product with fewer units than this is proposed as No Longer Available; at or above it, the normal in-stock threshold applies so it stays live while real inventory remains. Leave blank to turn this off.";
+const PARSER_VERSION_HINT =
+  "This version is tried first. If a file does not fit it, the other versions are tried automatically and the upload and run show which one was used. Switch back here if the vendor changes its file layout again.";
 const IN_STOCK_THRESHOLD_HINT =
   "Minimum vendor quantity to be treated as in-stock. E.g. 6 means any vendor quantity below 6 is treated as out of stock in the proposed Miva update.";
 const TIMEZONE_HINT = "Used to determine this vendor's \"business day\" cutoff when comparing file dates. Format: America/New_York, America/Chicago, etc.";
@@ -45,6 +47,8 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
   const [timezone, setTimezone] = useState(vendor.timezone);
   const [brandAllowlist, setBrandAllowlist] = useState(vendor.brandAllowlist.join(", "));
   const [matchStrategy, setMatchStrategy] = useState(vendor.matchStrategy);
+  const hasParserChoice = vendor.parserVersions.length > 0;
+  const [activeParserVersion, setActiveParserVersion] = useState(vendor.activeParserVersion ?? vendor.parserVersions[0]?.version ?? "");
   const [identifierColumn, setIdentifierColumn] = useState(vendor.columnMapping?.identifierColumn ?? "");
   const [identifierType, setIdentifierType] = useState<"upc" | "sku">(vendor.columnMapping?.identifierType ?? "upc");
   const [secondaryIdentifierColumn, setSecondaryIdentifierColumn] = useState(vendor.columnMapping?.secondaryIdentifierColumn ?? "");
@@ -65,6 +69,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
         timezone,
         brandAllowlist: parseAllowlist(brandAllowlist),
         matchStrategy,
+        ...(hasParserChoice ? { activeParserVersion } : {}),
         ...(vendor.fileShape === "simple_csv"
           ? {
               columnMapping: {
@@ -122,6 +127,22 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
           />
           <FieldHint>{DISCONTINUED_THRESHOLD_HINT}</FieldHint>
         </label>
+        {hasParserChoice && (
+          <label>
+            Active file parser
+            <br />
+            <select value={activeParserVersion} onChange={(e) => setActiveParserVersion(e.target.value)} style={{ width: "100%" }}>
+              {vendor.parserVersions.map((p) => (
+                <option key={p.version} value={p.version}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <FieldHint>
+              {vendor.parserVersions.find((p) => p.version === activeParserVersion)?.notes} {PARSER_VERSION_HINT}
+            </FieldHint>
+          </label>
+        )}
         <label>
           Timezone (IANA)
           <br />

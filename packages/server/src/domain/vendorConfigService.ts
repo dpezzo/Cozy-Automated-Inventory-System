@@ -1,3 +1,4 @@
+import { isKnownParserVersion, listParserVersions, type ParserVersionOption } from "../vendor/parserVersions";
 import { getRepository, type VendorConfigRecord, type VendorFileShape, type VendorMatchStrategy } from "../db";
 import type { GenericCsvColumnMapping } from "../vendor/genericCsvParser";
 import { listAvailablePluginFiles as listPluginFilesOnDisk, reloadPlugins as reloadPluginsOnDisk } from "../vendor/pluginLoader";
@@ -66,8 +67,12 @@ function assertValidColumnMapping(
   }
 }
 
-export async function listVendorConfigs(): Promise<VendorConfigRecord[]> {
-  return getRepository().listVendorConfigs();
+/** A vendor config plus the parser versions an admin can choose between (empty for vendors with a single parser, which get no selector). */
+export type VendorConfigWithParserVersions = VendorConfigRecord & { parserVersions: ParserVersionOption[] };
+
+export async function listVendorConfigs(): Promise<VendorConfigWithParserVersions[]> {
+  const records = await getRepository().listVendorConfigs();
+  return records.map((r) => ({ ...r, parserVersions: listParserVersions(r.vendorKey) }));
 }
 
 export interface VendorConfigSummary {
@@ -225,6 +230,8 @@ export interface UpdateVendorConfigRequest {
   columnMapping?: GenericCsvColumnMapping;
   /** Positive whole number to enable lifecycle-aware NLA handling; null to turn it off. */
   discontinuedThreshold?: number | null;
+  /** Which registered parser version to try first (only for vendors with more than one); null resets to the vendor default. */
+  activeParserVersion?: string | null;
 }
 
 /** vendor_key is immutable and never accepted in a patch -- it's the primary key and ruleId-derivation source. */
@@ -249,6 +256,14 @@ export async function updateVendorConfig(
   if (patch.discontinuedThreshold !== undefined && patch.discontinuedThreshold !== null) {
     if (!Number.isInteger(patch.discontinuedThreshold) || patch.discontinuedThreshold <= 0) {
       throw new ValidationError("INVALID_THRESHOLD", "discontinuedThreshold must be a positive whole number, or blank to turn it off.");
+    }
+  }
+  if (patch.activeParserVersion !== undefined && patch.activeParserVersion !== null) {
+    if (listParserVersions(vendorKey).length === 0) {
+      throw new ValidationError("PARSER_VERSION_NOT_APPLICABLE", "This vendor has only one parser, so there is no version to choose.");
+    }
+    if (!isKnownParserVersion(vendorKey, patch.activeParserVersion)) {
+      throw new ValidationError("PARSER_VERSION_UNKNOWN", `"${patch.activeParserVersion}" is not a registered parser version for this vendor.`);
     }
   }
   if (patch.columnMapping !== undefined) {

@@ -229,8 +229,8 @@ export class SqliteRepository implements Repository {
     const uploadedAt = nowIso();
     this.conn()
       .prepare(
-        `INSERT INTO files (id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, uploaded_at, vendor_key, source_site)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO files (id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, uploaded_at, vendor_key, source_site, parser_version)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -244,6 +244,7 @@ export class SqliteRepository implements Repository {
         uploadedAt,
         input.vendorKey ?? null,
         input.sourceSite ?? null,
+        input.parserVersion ?? null,
       );
     return {
       id,
@@ -256,6 +257,7 @@ export class SqliteRepository implements Repository {
       uploadedAt,
       vendorKey: input.vendorKey ?? null,
       sourceSite: input.sourceSite ?? null,
+      parserVersion: input.parserVersion ?? null,
     };
   }
 
@@ -313,6 +315,7 @@ export class SqliteRepository implements Repository {
       failureReason: null,
       createdAt,
       closedAt: null,
+      parserVersion: null,
     };
   }
 
@@ -327,15 +330,18 @@ export class SqliteRepository implements Repository {
   }
 
   async findRunById(id: string): Promise<RunRecord | null> {
-    const row = this.conn().prepare("SELECT * FROM runs WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    const row = this.conn()
+      .prepare("SELECT r.*, f.parser_version AS parser_version FROM runs r LEFT JOIN files f ON f.id = r.vendor_file_id WHERE r.id = ?")
+      .get(id) as Record<string, unknown> | undefined;
     return row ? mapRunRow(row) : null;
   }
 
   async listRuns(): Promise<RunRecord[]> {
-    const rows = this.conn().prepare("SELECT * FROM runs ORDER BY created_at DESC LIMIT 50").all() as Record<
-      string,
-      unknown
-    >[];
+    const rows = this.conn()
+      .prepare(
+        "SELECT r.*, f.parser_version AS parser_version FROM runs r LEFT JOIN files f ON f.id = r.vendor_file_id ORDER BY r.created_at DESC LIMIT 50",
+      )
+      .all() as Record<string, unknown>[];
     return rows.map(mapRunRow);
   }
 
@@ -1085,6 +1091,10 @@ export class SqliteRepository implements Repository {
       sets.push("discontinued_threshold = ?");
       params.push(patch.discontinuedThreshold);
     }
+    if (patch.activeParserVersion !== undefined) {
+      sets.push("active_parser_version = ?");
+      params.push(patch.activeParserVersion);
+    }
     if (patch.isActive !== undefined) {
       sets.push("is_active = ?");
       params.push(toIntBool(patch.isActive));
@@ -1313,6 +1323,7 @@ function mapFileRow(row: Record<string, unknown>): FileRecord {
     uploadedAt: row.uploaded_at as string,
     vendorKey: (row.vendor_key as string | null) ?? null,
     sourceSite: (row.source_site as "development" | "live" | null) ?? null,
+    parserVersion: (row.parser_version as string | null) ?? null,
   };
 }
 
@@ -1329,6 +1340,7 @@ function mapVendorConfigRow(row: Record<string, unknown>): VendorConfigRecord {
     fileShape: row.file_shape as VendorConfigRecord["fileShape"],
     columnMapping: row.column_mapping ? JSON.parse(row.column_mapping as string) : null,
     pluginFilename: (row.plugin_filename as string | null) ?? null,
+    activeParserVersion: (row.active_parser_version as string | null) ?? null,
     isActive: fromIntBool(row.is_active),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -1360,6 +1372,7 @@ function mapRunRow(row: Record<string, unknown>): RunRecord {
     failureReason: (row.failure_reason as string | null) ?? null,
     createdAt: row.created_at as string,
     closedAt: (row.closed_at as string | null) ?? null,
+    parserVersion: (row.parser_version as string | null) ?? null,
   };
 }
 

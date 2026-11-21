@@ -576,6 +576,11 @@ export default function RunReviewPage() {
           <div>
             <strong>Run date:</strong> {run.runDate}
           </div>
+          {run.parserVersion && (
+            <div title="Which version of the vendor's file parser read this run's file.">
+              <strong>Parser:</strong> {run.parserVersion}
+            </div>
+          )}
         </div>
         {run.status === "failed" && <ErrorBanner message={`Run failed: ${run.failureReason}`} />}
       </div>

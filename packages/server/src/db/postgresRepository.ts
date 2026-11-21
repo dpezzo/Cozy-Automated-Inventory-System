@@ -169,9 +169,9 @@ export class PostgresRepository implements Repository {
 
   async insertFile(input: InsertFileInput): Promise<FileRecord> {
     const { rows } = await this.getPool().query(
-      `INSERT INTO files (kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, vendor_key, source_site)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_at, vendor_key, source_site`,
+      `INSERT INTO files (kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_by, vendor_key, source_site, parser_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, kind, original_filename, storage_path, checksum_sha256, size_bytes, row_count, uploaded_at, vendor_key, source_site, parser_version`,
       [
         input.kind,
         input.originalFilename,
@@ -182,6 +182,7 @@ export class PostgresRepository implements Repository {
         input.uploadedBy,
         input.vendorKey ?? null,
         input.sourceSite ?? null,
+        input.parserVersion ?? null,
       ],
     );
     return mapFileRow(rows[0]);
@@ -236,13 +237,18 @@ export class PostgresRepository implements Repository {
   }
 
   async findRunById(id: string): Promise<RunRecord | null> {
-    const { rows } = await this.getPool().query("SELECT * FROM runs WHERE id = $1", [id]);
+    const { rows } = await this.getPool().query(
+      "SELECT r.*, f.parser_version AS parser_version FROM runs r LEFT JOIN files f ON f.id = r.vendor_file_id WHERE r.id = $1",
+      [id],
+    );
     if (rows.length === 0) return null;
     return mapRunRow(rows[0]);
   }
 
   async listRuns(): Promise<RunRecord[]> {
-    const { rows } = await this.getPool().query("SELECT * FROM runs ORDER BY created_at DESC LIMIT 50");
+    const { rows } = await this.getPool().query(
+      "SELECT r.*, f.parser_version AS parser_version FROM runs r LEFT JOIN files f ON f.id = r.vendor_file_id ORDER BY r.created_at DESC LIMIT 50",
+    );
     return rows.map(mapRunRow);
   }
 
@@ -923,6 +929,10 @@ export class PostgresRepository implements Repository {
       params.push(patch.discontinuedThreshold);
       sets.push(`discontinued_threshold = $${params.length}`);
     }
+    if (patch.activeParserVersion !== undefined) {
+      params.push(patch.activeParserVersion);
+      sets.push(`active_parser_version = $${params.length}`);
+    }
     if (patch.isActive !== undefined) {
       params.push(patch.isActive);
       sets.push(`is_active = $${params.length}`);
@@ -1187,6 +1197,7 @@ function mapFileRow(row: Record<string, unknown>): FileRecord {
     uploadedAt: (row.uploaded_at as Date).toISOString(),
     vendorKey: (row.vendor_key as string | null) ?? null,
     sourceSite: (row.source_site as "development" | "live" | null) ?? null,
+    parserVersion: (row.parser_version as string | null) ?? null,
   };
 }
 
@@ -1203,6 +1214,7 @@ function mapVendorConfigRow(row: Record<string, unknown>): VendorConfigRecord {
     fileShape: row.file_shape as VendorConfigRecord["fileShape"],
     columnMapping: (row.column_mapping as VendorConfigRecord["columnMapping"]) ?? null,
     pluginFilename: (row.plugin_filename as string | null) ?? null,
+    activeParserVersion: (row.active_parser_version as string | null) ?? null,
     isActive: row.is_active as boolean,
     createdAt: (row.created_at as Date).toISOString(),
     updatedAt: (row.updated_at as Date).toISOString(),
@@ -1221,6 +1233,7 @@ function mapRunRow(row: Record<string, unknown>): RunRecord {
     failureReason: (row.failure_reason as string | null) ?? null,
     createdAt: (row.created_at as Date).toISOString(),
     closedAt: row.closed_at ? (row.closed_at as Date).toISOString() : null,
+    parserVersion: (row.parser_version as string | null) ?? null,
   };
 }
 

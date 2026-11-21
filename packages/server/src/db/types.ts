@@ -69,6 +69,8 @@ export interface FileRecord {
   vendorKey: string | null;
   /** Which Miva site this file was pulled from via the API, at the moment of the pull (see getMivaActiveSite()). Null for a manually-uploaded file, or for any file not pulled from Miva. */
   sourceSite: "development" | "live" | null;
+  /** Which parser version read this vendor file at upload (e.g. "v2"), for vendors with versioned parsers (see vendor/parserVersions.ts). Null for every other file and for files uploaded before versioning existed. */
+  parserVersion: string | null;
 }
 
 export interface InsertFileInput {
@@ -81,6 +83,7 @@ export interface InsertFileInput {
   uploadedBy: string;
   vendorKey?: string | null;
   sourceSite?: "development" | "live" | null;
+  parserVersion?: string | null;
 }
 
 // ---------- Vendor configs ----------
@@ -101,6 +104,8 @@ export interface VendorConfigRecord {
   fileShape: VendorFileShape;
   columnMapping: GenericCsvColumnMapping | null;
   pluginFilename: string | null;
+  /** The parser version tried first for this vendor (see vendor/parserVersions.ts). null = the vendor default; only meaningful for vendors with more than one parser. */
+  activeParserVersion: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -128,6 +133,8 @@ export interface UpdateVendorConfigPatch {
   columnMapping?: GenericCsvColumnMapping | null;
   /** null clears it (vendor opts out of lifecycle-aware NLA handling). */
   discontinuedThreshold?: number | null;
+  /** Which registered parser version to try first; null resets to the vendor default. */
+  activeParserVersion?: string | null;
   isActive?: boolean;
 }
 
@@ -193,6 +200,8 @@ export interface RunRecord {
   failureReason: string | null;
   createdAt: string;
   closedAt: string | null;
+  /** Parser version that read the run's vendor file (from the file record); null for vendors without versioned parsers and for files stored before versioning existed. Filled by listRuns/findRunById only. */
+  parserVersion: string | null;
 }
 
 export interface InsertRunInput {

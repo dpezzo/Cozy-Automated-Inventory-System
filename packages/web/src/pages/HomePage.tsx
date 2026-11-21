@@ -43,7 +43,11 @@ function useVendorAutoUploadControl(onUploaded: (file: FileRecord) => void) {
         return;
       } else {
         setMessage(
-          `Detected: ${result.detectedVendorLabel}. Uploaded: ${result.file.originalFilename} (${result.file.rowCount ?? "?"} rows)`,
+          `Detected: ${result.detectedVendorLabel}. Uploaded: ${result.file.originalFilename} (${result.file.rowCount ?? "?"} rows)${
+            result.parserVersion
+              ? ` Read with parser ${result.parserVersion}${result.parserFellBackFrom ? ` (the active version ${result.parserFellBackFrom} did not fit this file, so another version was used automatically)` : ""}.`
+              : ""
+          }`,
         );
         setPendingDuplicateFile(null);
       }

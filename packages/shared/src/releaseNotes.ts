@@ -12,6 +12,14 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-11-21",
+    items: [
+      "Gobi's new file layout (the Inventory_Report file with Product ID and UPC columns, no Ordering SKU) now uploads and runs again. It is read by a new Gobi parser, version 2. The original parser stays as version 1.",
+      "In Manage Vendors, a vendor that has more than one file parser (Gobi for now) has an \"Active file parser\" setting. That version is tried first, and if a file does not fit it the other version is tried automatically, so you can switch back if Gobi ever returns to its old layout.",
+      "The upload message, the Run History list (new Parser column), the run page and the autopilot report email now say which parser version read the file, and whether it had to fall back. A stored file is always re-read with the version that first read it.",
+    ],
+  },
+  {
     date: "2026-11-18",
     items: [
       "Added an optional Autopilot (Settings > Autopilot, admins only, off until turned on in Settings > Features). Approved people can email a vendor file to the inventory mailbox, and the hub reads it, compares it to Miva, and emails the admins what it would have done. For now it only reviews and reports; it never sends anything to Miva.",

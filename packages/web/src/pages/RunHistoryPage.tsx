@@ -19,6 +19,7 @@ const COL_ID = 100;
 /** Wide enough for the longest value from either status domain -- run status ("validating") and importStatus ("API_PUSH_PARTIAL_FAILURE") share this width so the Status/Import status/Batch status/Run status columns all align. */
 const COL_STATUS = 200;
 const COL_VENDOR = 180;
+const COL_PARSER = 80;
 
 export default function RunHistoryPage() {
   const [runs, setRuns] = useState<RunRecord[]>([]);
@@ -118,6 +119,7 @@ export default function RunHistoryPage() {
               <col style={{ width: COL_ID }} />
               <col style={{ width: COL_STATUS }} />
               <col style={{ width: COL_VENDOR }} />
+              <col style={{ width: COL_PARSER }} />
               <col />
               <col style={{ width: COL_ID }} />
               <col style={{ width: COL_STATUS }} />
@@ -128,6 +130,7 @@ export default function RunHistoryPage() {
                 <th>Run ID</th>
                 <th>Status</th>
                 <th>Vendor</th>
+                <th title="Which version of the vendor's file parser read this run's file. Blank for vendors that only have one parser.">Parser</th>
                 <th title="Internal identifiers for the exact rule/config version used -- only relevant for debugging, safe to ignore day to day.">
                   Rule / hash
                 </th>
@@ -138,7 +141,7 @@ export default function RunHistoryPage() {
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ color: "var(--muted)" }}>
+                  <td colSpan={8} style={{ color: "var(--muted)" }}>
                     {runs.length === 0 ? "No runs yet -- start one from the Home page." : "No runs match your search."}
                   </td>
                 </tr>
@@ -162,6 +165,7 @@ export default function RunHistoryPage() {
                       </span>
                     </td>
                     <td title={vendorLabelForRuleId(r.ruleId)}>{vendorLabelForRuleId(r.ruleId)}</td>
+                    <td>{r.parserVersion ?? ""}</td>
                     <td title={r.ruleConfigHash}>
                       {r.ruleId} / {r.ruleConfigHash.slice(0, 10)}
                     </td>

@@ -12,19 +12,19 @@ export interface UploadResult {
   duplicateOf: FileRecord | null;
 }
 
-async function validateAndCountRows(buffer: Buffer, kind: FileKind): Promise<number> {
+async function validateAndCountRows(buffer: Buffer, kind: FileKind): Promise<{ rowCount: number; parserVersion: string | null }> {
   const vendorAdapter = getVendorFileAdapter(kind);
   if (vendorAdapter) {
-    const { rows } = await vendorAdapter.parse(buffer);
-    return rows.length;
+    const { rows, parserVersion } = await vendorAdapter.parse(buffer);
+    return { rowCount: rows.length, parserVersion: parserVersion ?? null };
   }
   if (kind === "miva_snapshot" || kind === "post_import_snapshot" || kind === "dev_reset_reference") {
     const { rows } = parseMivaSnapshotCsv(buffer.toString("utf8"));
-    return rows.length;
+    return { rowCount: rows.length, parserVersion: null };
   }
   if (kind === "legacy_audit") {
     const rows = parseLegacyAuditCsv(buffer.toString("utf8"));
-    return rows.length;
+    return { rowCount: rows.length, parserVersion: null };
   }
   throw new ValidationError("UNSUPPORTED_KIND", `File kind ${kind} cannot be uploaded directly.`);
 }
@@ -51,6 +51,7 @@ async function finishUpload(
   confirmDuplicate: boolean,
   vendorKey: string | null = null,
   sourceSite: "development" | "live" | null = null,
+  parserVersion: string | null = null,
 ): Promise<UploadResult> {
   const repo = getRepository();
 
@@ -77,6 +78,7 @@ async function finishUpload(
     uploadedBy: userId,
     vendorKey,
     sourceSite,
+    parserVersion,
   });
 
   await repo.insertAuditLog({
@@ -84,7 +86,7 @@ async function finishUpload(
     action: "FILE_UPLOADED",
     entityType: "file",
     entityId: file.id,
-    details: { kind, rowCount, checksum },
+    details: { kind, rowCount, checksum, ...(parserVersion ? { parserVersion } : {}) },
   });
 
   return { file, duplicateOf: existing ?? null };
@@ -100,8 +102,8 @@ export async function uploadFile(
 ): Promise<UploadResult> {
   // Validate before persisting: block processing per
   // CozyWinters_Vendor_Inventory_Automation_Plan.md section 4.
-  const rowCount = await validateAndCountRows(buffer, kind);
-  return finishUpload(buffer, originalFilename, kind, rowCount, userId, confirmDuplicate, null, sourceSite);
+  const { rowCount, parserVersion } = await validateAndCountRows(buffer, kind);
+  return finishUpload(buffer, originalFilename, kind, rowCount, userId, confirmDuplicate, null, sourceSite, parserVersion);
 }
 
 /**
@@ -115,7 +117,15 @@ export async function uploadVendorFileAutoDetect(
   originalFilename: string,
   userId: string,
   confirmDuplicate: boolean,
-): Promise<UploadResult & { detectedVendorLabel: string; discontinuedImport?: DiscontinuedImportResult }> {
+): Promise<
+  UploadResult & {
+    detectedVendorLabel: string;
+    discontinuedImport?: DiscontinuedImportResult;
+    /** Parser version that read the file (vendors with versioned parsers only) and, when the active version rejected it, the version that was tried first. */
+    parserVersion?: string | null;
+    parserFellBackFrom?: string | null;
+  }
+> {
   // The emailed "Discontinued Items Notification" is checked first: it is recognized by its own worksheet name and
   // headers, so it can't be mistaken for a vendor inventory file, and (unlike one) it is merged into the cumulative
   // discontinued list instead of becoming a run input.
@@ -129,7 +139,7 @@ export async function uploadVendorFileAutoDetect(
     return { ...result, detectedVendorLabel: config?.vendorLabel ?? DISCONTINUED_LIST_VENDOR_KEY, discontinuedImport };
   }
 
-  const { vendorKey, fileKind, rows } = await detectVendorFile(buffer);
+  const { vendorKey, fileKind, rows, parserVersion, parserFellBackFrom } = await detectVendorFile(buffer);
   const isDynamic = fileKind === "vendor_dynamic";
   const result = await finishUpload(
     buffer,
@@ -139,9 +149,16 @@ export async function uploadVendorFileAutoDetect(
     userId,
     confirmDuplicate,
     isDynamic ? vendorKey : null,
+    null,
+    parserVersion ?? null,
   );
   const config = await getRepository().findVendorConfigByKey(vendorKey);
-  return { ...result, detectedVendorLabel: config?.vendorLabel ?? vendorKey };
+  return {
+    ...result,
+    detectedVendorLabel: config?.vendorLabel ?? vendorKey,
+    parserVersion: parserVersion ?? null,
+    parserFellBackFrom: parserFellBackFrom ?? null,
+  };
 }
 
 /** Null for anything that isn't the discontinued-items workbook (any other xlsx, a CSV, a corrupt file) -- the caller then falls through to normal vendor detection. */

@@ -4,14 +4,47 @@ import { getRepository, type VendorConfigRecord } from "../db";
 import { ValidationError } from "../errors";
 import { parseOlliixWorkbook } from "./olliixParser";
 import { parseKhWorkbook } from "./khParser";
-import { parseGobiWorkbook } from "./gobiParser";
+import { parseWithVersions } from "./parserVersions";
 import { parseFieldSheerWorkbook } from "./fieldSheerParser";
 import { parseGenericVendorFile } from "./genericCsvParser";
 import { getPluginParser } from "./pluginLoader";
 
+/** What an adapter returns. parserVersion is set only by vendors with versioned parsers (see parserVersions.ts); others leave it undefined. */
+export interface VendorParseResult {
+  rows: VendorRawRow[];
+  parserVersion?: string;
+  /** Set when the active parser version rejected the file and a different version read it. */
+  parserFellBackFrom?: string;
+}
+
+export interface VendorParseOptions {
+  /** Read with exactly this parser version and no fallback. Used when re-reading a file that was already parsed once, so the stored version wins over the current setting. */
+  forceVersion?: string | null;
+}
+
 export interface VendorFileAdapter {
   vendorKey: string;
-  parse: (buffer: Buffer) => Promise<{ rows: VendorRawRow[] }> | { rows: VendorRawRow[] };
+  parse: (buffer: Buffer, options?: VendorParseOptions) => Promise<VendorParseResult> | VendorParseResult;
+}
+
+/** The vendor's active parser version from Manage Vendors, or null when unset or when the database is not available (unit tests that call an adapter directly). */
+async function activeParserVersionFor(vendorKey: string): Promise<string | null> {
+  try {
+    return (await getRepository().findVendorConfigByKey(vendorKey))?.activeParserVersion ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function versionedAdapter(vendorKey: string): VendorFileAdapter {
+  return {
+    vendorKey,
+    parse: async (buffer, options) =>
+      parseWithVersions(vendorKey, buffer, {
+        active: options?.forceVersion ? null : await activeParserVersionFor(vendorKey),
+        forceVersion: options?.forceVersion ?? null,
+      }),
+  };
 }
 
 /**
@@ -23,7 +56,7 @@ export interface VendorFileAdapter {
 export const VENDOR_FILE_ADAPTERS: Partial<Record<FileKind, VendorFileAdapter>> = {
   olliix_workbook: { vendorKey: "olliix", parse: parseOlliixWorkbook },
   kh_workbook: { vendorKey: "kh", parse: parseKhWorkbook },
-  gobi_workbook: { vendorKey: "gobi", parse: parseGobiWorkbook },
+  gobi_workbook: versionedAdapter("gobi"),
   fieldsheer_workbook: { vendorKey: "fieldsheer", parse: parseFieldSheerWorkbook },
 };
 
@@ -71,6 +104,9 @@ export interface VendorFileDetectionResult {
   vendorKey: string;
   fileKind: FileKind;
   rows: VendorRawRow[];
+  /** Which parser version read the file, for vendors with versioned parsers; undefined otherwise. */
+  parserVersion?: string;
+  parserFellBackFrom?: string;
 }
 
 /**
@@ -87,8 +123,8 @@ export async function detectVendorFile(buffer: Buffer): Promise<VendorFileDetect
   const errors: string[] = [];
   for (const [fileKind, adapter] of Object.entries(VENDOR_FILE_ADAPTERS) as [FileKind, VendorFileAdapter][]) {
     try {
-      const { rows } = await adapter.parse(buffer);
-      return { vendorKey: adapter.vendorKey, fileKind, rows };
+      const { rows, parserVersion, parserFellBackFrom } = await adapter.parse(buffer);
+      return { vendorKey: adapter.vendorKey, fileKind, rows, parserVersion, parserFellBackFrom };
     } catch (err) {
       errors.push(`${fileKind}: ${err instanceof Error ? err.message : String(err)}`);
     }

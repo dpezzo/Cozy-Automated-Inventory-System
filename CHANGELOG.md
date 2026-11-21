@@ -2,6 +2,24 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-11-21 - Versioned vendor file parsers (Gobi v2) and an active-parser setting
+
+### Why
+Gobi switched its export on 2026-11-06 to `Inventory_Report_YYYYMMDD.xlsx` (Product ID, UPC, Style, Description, QTY Available, Wholesale Price, Product Phase; no Ordering SKU; about 800 rows instead of 1,100). `gobiParser.ts` required an Ordering SKU column, so every upload since then failed.
+
+### Added
+- `vendor/gobiParserV2.ts`: reads the new layout. Product ID is both the item number and the SKU (matches Miva MPN on 487 of 797 rows in the 11/21 file; UPC matches GTIN on only 131 and has duplicates, so Gobi stays on sku-to-mpn and UPC is not carried). `gobiParser.ts` is untouched and is now v1.
+- `vendor/parserVersions.ts`: registry of versioned parsers per vendor (Gobi v1 and v2) and `parseWithVersions`: the active version is tried first, then the others in order; a forced version (used when a stored file is re-read) never falls back. v1 requires Ordering SKU and v2 requires Product ID, so a file only ever fits one.
+- Migration 0016 (both dialects): `vendor_configs.active_parser_version` (Gobi set to v2) and `files.parser_version`. Run creation re-reads a vendor file with the version stored on it, so changing the setting never changes how an existing file is read. Files uploaded before this have no stored version and are read active-then-fallback.
+- Manage Vendors: "Active file parser" dropdown, shown only for vendors with more than one parser; validated server side and written to the audit log. `GET /api/vendors` now includes `parserVersions`.
+- The parser version shows in the upload message (including when it fell back), a new Parser column on Run History, the Run Review header, run records (`RunRecord.parserVersion`, joined from the vendor file), the FILE_UPLOADED audit entry and the autopilot report email and saved details.
+- Tests: `vendor/parserVersions.test.ts` and `domain/parserVersions.integration.test.ts` (15 new; 118 shared and 209 server pass).
+
+### Not changed
+- The vendor exception report and batch exception files do not yet carry the parser version.
+- The "v1" in Rule / hash on the Runs page (`gobi-inventory-v1`) is the reconciliation rule id, a fixed label, not a parser version.
+- Gobi has not confirmed Product ID equals the old Ordering SKU; the data strongly suggests it does.
+
 ## 2026-11-19 - Olliix SKU change review export (read-only, no Miva writes)
 
 ### Added
