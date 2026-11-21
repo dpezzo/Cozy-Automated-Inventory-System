@@ -557,7 +557,7 @@ export default function RunReviewPage() {
         ]}
       />
       <div className="card">
-        <div className="grid cols-6">
+        <div className="grid cols-5">
           <div>
             <strong>Status:</strong>{" "}
             <span className={`pill ${runStatusPillClass(run.status)}`} title={RUN_STATUS_TOOLTIPS[run.status]}>
@@ -570,11 +570,8 @@ export default function RunReviewPage() {
           <div title={run.parserVersion ? "Which version of the vendor's file parser read this run's file." : "This vendor has a single file parser, or the file was uploaded before parser versions were recorded."}>
             <strong>File parser:</strong> {run.parserVersion ?? "-"}
           </div>
-          <div title="Internal identifier for the reconciliation rule used to produce this run (a fixed label per vendor, not the file parser version) -- only relevant for debugging, safe to ignore day to day.">
-            <strong>Rule ID:</strong> {run.ruleId}
-          </div>
-          <div title={`Internal config version identifier -- only relevant for debugging, safe to ignore day to day. Full hash: ${run.ruleConfigHash}`}>
-            <strong>Config hash:</strong> {run.ruleConfigHash.slice(0, 12)}...
+          <div title={`A fingerprint of this vendor's settings (thresholds, matching strategy, brands) when the run was made. It changes whenever those settings change, so two runs with the same value used the same settings. Only relevant for debugging. Full value: ${run.ruleConfigHash}`}>
+            <strong>Settings ID:</strong> {run.ruleConfigHash.slice(0, 10)}
           </div>
           <div>
             <strong>Run date:</strong> {run.runDate}

@@ -93,7 +93,7 @@ export default function RunHistoryPage() {
         pageKey="run-history"
         description="A run compares one vendor inventory file against one Miva catalog snapshot and produces rows to review, approve, or reject. A batch is the set of approved, changed rows from a run turned into ready-to-import Miva CSV files -- a single run can produce more than one batch over time, since each time you approve more rows and generate a batch, that becomes a new one. The Runs table below is where reconciliation happens; the Batches table is where you track what's actually been generated and imported."
         steps={[
-          "Search by run ID, status, or rule to find a specific run.",
+          "Search by run ID, status, or vendor to find a specific run.",
           "Open a run to review its rows, approve or reject changes, and generate a batch.",
           "Open a batch, then push it to Miva via API (the default method) or download its CSVs as a backup -- and record the import outcome from there.",
         ]}
@@ -103,7 +103,7 @@ export default function RunHistoryPage() {
           <Search size={14} />
           <input
             type="text"
-            placeholder="Search by run ID, status, or rule"
+            placeholder="Search by run ID, status, or vendor"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ width: 320 }}
@@ -131,8 +131,8 @@ export default function RunHistoryPage() {
                 <th>Status</th>
                 <th>Vendor</th>
                 <th title="Which version of the vendor's file parser read this run's file. Blank for files uploaded before parser versions were recorded.">File parser</th>
-                <th title="Internal identifiers for the reconciliation rule and settings used (the rule's v1 is a fixed label, not the file parser version) -- only relevant for debugging, safe to ignore day to day.">
-                  Rule ID / hash
+                <th title="A fingerprint of the vendor's settings (thresholds, matching strategy, brands) when the run was made. It changes whenever those settings change. Only relevant for debugging, safe to ignore day to day.">
+                  Settings ID
                 </th>
                 <th>Batch</th>
                 <th>Batch status</th>
@@ -167,7 +167,7 @@ export default function RunHistoryPage() {
                     <td title={vendorLabelForRuleId(r.ruleId)}>{vendorLabelForRuleId(r.ruleId)}</td>
                     <td>{r.parserVersion ?? ""}</td>
                     <td title={r.ruleConfigHash}>
-                      {r.ruleId} / {r.ruleConfigHash.slice(0, 10)}
+                      {r.ruleConfigHash.slice(0, 10)}
                     </td>
                     <td title={moreBatchesTitle}>
                       {latestBatch ? (
