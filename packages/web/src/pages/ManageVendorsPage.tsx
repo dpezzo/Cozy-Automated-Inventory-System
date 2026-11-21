@@ -39,7 +39,49 @@ function FieldHint({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4, fontWeight: 400 }}>{children}</div>;
 }
 
-/** Inline edit form for any vendor, any file_shape. columnMapping fields only show for simple_csv vendors. */
+/**
+ * Pop-up window around the edit form so it is clear which vendor is being edited. Escape closes it; clicking the
+ * dimmed background deliberately does not, so a stray click never throws away unsaved changes.
+ */
+function VendorEditModal({ vendor, onClose, children }: { vendor: VendorConfig; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Edit ${vendor.vendorLabel}`}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0, 0, 0, 0.4)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 100,
+        padding: 16,
+      }}
+    >
+      <div className="card" style={{ width: "min(960px, 100%)", maxHeight: "92vh", overflow: "auto", margin: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <h3 style={{ margin: 0 }}>Edit vendor: {vendor.vendorLabel}</h3>
+          <button type="button" onClick={onClose} aria-label="Close" style={{ padding: "4px 8px" }}>
+            <X size={16} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Edit form for any vendor, any file_shape (shown inside VendorEditModal). columnMapping fields only show for simple_csv vendors. */
 function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; onDone: () => void; onCancel: () => void }) {
   const [vendorLabel, setVendorLabel] = useState(vendor.vendorLabel);
   const [inStockThreshold, setInStockThreshold] = useState(String(vendor.inStockThreshold));
@@ -92,7 +134,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
   }
 
   return (
-    <form onSubmit={submit} style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
+    <form onSubmit={submit} style={{ marginTop: 4 }}>
       {error && <ErrorBanner message={error} />}
       <div className="grid cols-2" style={{ minWidth: 0, alignItems: "start" }}>
         <label>
@@ -502,6 +544,7 @@ export default function ManageVendorsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  const editingVendor = vendors.find((v) => v.vendorKey === editingKey) ?? null;
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [showAddVendor, setShowAddVendor] = useState(false);
 
@@ -644,9 +687,8 @@ export default function ManageVendorsPage() {
                     </span>
                   </td>
                   <td>
-                    <button onClick={() => setEditingKey(editingKey === v.vendorKey ? null : v.vendorKey)}>
-                      {editingKey === v.vendorKey ? <X size={14} /> : <Pencil size={14} />}
-                      {editingKey === v.vendorKey ? "Close" : "Edit"}
+                    <button onClick={() => setEditingKey(v.vendorKey)}>
+                      <Pencil size={14} /> Edit
                     </button>
                     {v.isActive && (
                       <button className="danger" disabled={busyKey === v.vendorKey} onClick={() => deactivate(v)} style={{ marginLeft: 8 }}>
@@ -655,29 +697,24 @@ export default function ManageVendorsPage() {
                     )}
                   </td>
                 </tr>
-                {editingKey === v.vendorKey && (
-                  <tr>
-                    {/* The table auto-sizes to its widest unwrapped content, and the form's long hint text would stretch the whole table past the screen. A zero-width wrapper with min-width: 100% contributes nothing to that sizing, so the form simply fills the row. */}
-                    <td colSpan={9}>
-                      {/* Table cells are white-space: nowrap (styles.css), which the form would inherit and never wrap its hints. */}
-                      <div style={{ width: 0, minWidth: "100%", whiteSpace: "normal" }}>
-                        <EditVendorForm
-                          vendor={v}
-                          onDone={() => {
-                            setEditingKey(null);
-                            refresh();
-                          }}
-                          onCancel={() => setEditingKey(null)}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                )}
               </Fragment>
             ))}
           </tbody>
         </table>
       </div>
+
+      {editingVendor && (
+        <VendorEditModal vendor={editingVendor} onClose={() => setEditingKey(null)}>
+          <EditVendorForm
+            vendor={editingVendor}
+            onDone={() => {
+              setEditingKey(null);
+              refresh();
+            }}
+            onCancel={() => setEditingKey(null)}
+          />
+        </VendorEditModal>
+      )}
 
       {showAddVendor && (
         <div className="card">
