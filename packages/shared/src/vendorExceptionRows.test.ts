@@ -82,3 +82,17 @@ describe("toVendorExceptionRows: warnings are exported", () => {
     );
   });
 });
+
+describe("toVendorExceptionRows: export all records", () => {
+  const { rows } = reconcile(
+    [gobiRow("A", "50", "Active", 2), gobiRow("Z", "5", "Active", 3)],
+    [miva("A"), miva("B")],
+    { config: GOBI, runDate: RUN_DATE },
+  );
+
+  it("returns every row, including clean/unchanged and unmatched ones, when all is set (even with no categories)", () => {
+    const all = toVendorExceptionRows(rows, [], { all: true });
+    expect(all).toHaveLength(rows.length);
+    expect(toVendorExceptionRows(rows, [])).toHaveLength(0);
+  });
+});

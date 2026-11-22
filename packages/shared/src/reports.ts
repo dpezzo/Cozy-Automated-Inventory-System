@@ -129,16 +129,18 @@ const MANAGED_FIELD_LABELS: Record<string, string> = {
 export function toVendorExceptionRows(
   rows: (ReconciliationRow & { decisionStatus?: string })[],
   categories: VendorExceptionCategory[],
+  options: { all?: boolean } = {},
 ): VendorExceptionRowView[] {
   const allowedCodes = new Set<string>(categories.flatMap((c) => VENDOR_EXCEPTION_CATEGORIES[c]));
-  if (allowedCodes.size === 0) return [];
+  if (allowedCodes.size === 0 && !options.all) return [];
 
   const sorted = sortForReview(rows);
   // A row's reasons are its warnings AND blockers together (never one or the other by class):
   // previously a WARNING row was only matched on its warning codes against a category list that
   // held almost no warning codes, so ticking any box exported no warnings at all.
   const codesOf = (r: ReconciliationRow): string[] => [...r.warningCodes, ...r.blockerCodes];
-  const matching = sorted.filter((r) => codesOf(r).some((c) => allowedCodes.has(c)));
+  // options.all: every row regardless of match outcome, class or reason codes (full comparison export).
+  const matching = options.all ? sorted : sorted.filter((r) => codesOf(r).some((c) => allowedCodes.has(c)));
 
   // Groups rows sharing a raw vendor identifier so a DUPLICATE_VENDOR_UPC/SKU
   // row's detail can name its sibling(s) directly -- the same real-world

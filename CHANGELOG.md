@@ -2,6 +2,12 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-11-21 - Export all records on the vendor exception report
+
+### Added
+- Run Review > Export vendor exception report now has an "Export all records" checkbox. When ticked it ignores the category boxes and exports every row from the vendor file plus every Miva product for the brand that the file never mentions (the same rows as "Show all Miva products"), regardless of match outcome, review class or warnings. The all-records file adds a MIVA_ACTIVE column (Yes/No, from the run's Miva snapshot) and is named `<vendor>-all-records-<date>`. Reason: the normal report lists problem rows only, so matched/clean/unchanged rows were missing, and Cale needs a full Miva-versus-file comparison.
+- `toVendorExceptionRows(rows, categories, { all: true })`, `includeAll` on `POST /runs/:id/vendor-exception-report`, test in `vendorExceptionRows.test.ts`.
+
 ## 2026-11-21 - Versioned vendor file parsers (Gobi v2) and an active-parser setting
 
 ### Why

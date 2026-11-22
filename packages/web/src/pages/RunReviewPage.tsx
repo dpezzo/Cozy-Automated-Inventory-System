@@ -195,6 +195,7 @@ export default function RunReviewPage() {
   const [busy, setBusy] = useState(false);
   const [vendorReportMenuOpen, setVendorReportMenuOpen] = useState(false);
   const [vendorReportCategories, setVendorReportCategories] = useState<string[]>(VENDOR_EXCEPTION_DEFAULT_CATEGORIES);
+  const [vendorReportAll, setVendorReportAll] = useState(false);
   const [vendorReportFormat, setVendorReportFormat] = useState<"csv" | "xlsx">("xlsx");
 
   // Fills the rest of the viewport below the table instead of a fixed
@@ -527,7 +528,7 @@ export default function RunReviewPage() {
   async function exportVendorExceptionReport() {
     setVendorReportMenuOpen(false);
     await withBusy(async () => {
-      const file = await api.generateVendorExceptionReport(runId!, vendorReportCategories, vendorReportFormat);
+      const file = await api.generateVendorExceptionReport(runId!, vendorReportCategories, vendorReportFormat, vendorReportAll);
       window.location.href = api.downloadFileUrl(file.id);
     });
   }
@@ -727,10 +728,18 @@ export default function RunReviewPage() {
                   which categories to include -- unmatched-in-Miva is huge and usually not a vendor error, so it's
                   off by default.
                 </p>
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "3px 0 8px", fontWeight: 700 }}
+                  title="Ignores the categories below and exports every row from the vendor file plus every Miva product for this brand, with the Miva Active flag, whatever its match status or review class."
+                >
+                  <input type="checkbox" checked={vendorReportAll} onChange={(e) => setVendorReportAll(e.target.checked)} />
+                  Export all records (everything in the file and in Miva)
+                </label>
                 {Object.entries(VENDOR_EXCEPTION_CATEGORY_LABELS).map(([key, label]) => (
-                  <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "3px 0" }}>
+                  <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "3px 0", opacity: vendorReportAll ? 0.45 : 1 }}>
                     <input
                       type="checkbox"
+                      disabled={vendorReportAll}
                       checked={vendorReportCategories.includes(key)}
                       onChange={() => toggleVendorReportCategory(key)}
                     />
@@ -761,7 +770,7 @@ export default function RunReviewPage() {
                   className="primary"
                   style={{ marginTop: 8, width: "100%" }}
                   onClick={exportVendorExceptionReport}
-                  disabled={busy || vendorReportCategories.length === 0}
+                  disabled={busy || (!vendorReportAll && vendorReportCategories.length === 0)}
                 >
                   Export {vendorReportFormat === "xlsx" ? "Excel" : "CSV"}
                 </button>

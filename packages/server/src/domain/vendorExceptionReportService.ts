@@ -8,6 +8,9 @@ import { ValidationError } from "../errors";
 import { saveGeneratedFile } from "../storage/fileStorage";
 import { rowsToCsv } from "../csv/writeCsv";
 import { rowsToXlsx } from "../csv/writeXlsx";
+import { parseMivaSnapshotCsv } from "../vendor/mivaCsv";
+import { readStoredFileText, storedFileExists } from "../storage/fileStorage";
+import { listUntrackedBrandRows } from "./runService";
 import { formatRunDateMMDDYY, vendorSlugFromRuleId } from "./batchService";
 
 export type VendorExceptionReportFormat = "csv" | "xlsx";
@@ -25,16 +28,34 @@ export async function generateVendorExceptionReport(
   userId: string,
   categories: VendorExceptionCategory[],
   format: VendorExceptionReportFormat = "csv",
+  includeAll = false,
 ): Promise<FileRecord> {
   const repo = getRepository();
   const run = await repo.findRunById(runId);
   if (!run) throw new ValidationError("RUN_NOT_FOUND", "Run not found.");
 
   const allRows = await repo.listRunRows(runId);
+  // "Export everything": every vendor-file row plus every Miva product for the brand that the file never
+  // mentions (the same synthetic "Not tracked" rows as Run Review's "Show all Miva products"), with Miva's
+  // Active flag looked up from the run's Miva snapshot so the report can be used as a full comparison.
+  const sourceRows = includeAll ? [...allRows, ...(await listUntrackedBrandRows(runId))] : allRows;
+  const mivaActiveByCode = new Map<string, string>();
+  if (includeAll) {
+    const mivaFile = await repo.findFileById(run.mivaFileId);
+    if (mivaFile && storedFileExists(mivaFile.storagePath)) {
+      for (const m of parseMivaSnapshotCsv(readStoredFileText(mivaFile.storagePath)).rows) {
+        mivaActiveByCode.set(m.productCode, m.active === undefined ? "" : m.active === "1" ? "Yes" : m.active === "0" ? "No" : m.active);
+      }
+    }
+  }
+  const activeFor = (code: string | null): string =>
+    code ? code.split("|").map((c) => mivaActiveByCode.get(c) ?? "").join("|") : "";
   const vendorRows = toVendorExceptionRows(
-    allRows.map((v) => ({ ...v.row, decisionStatus: v.decision.status })),
+    sourceRows.map((v) => ({ ...v.row, decisionStatus: v.decision.status })),
     categories,
+    { all: includeAll },
   ).map((r) => ({
+    ...(includeAll ? { MIVA_ACTIVE: activeFor(r.productCode) } : {}),
     MIVA_PRODUCT_CODE: r.productCode ?? "",
     ITEM_NO: r.itemNo ?? "",
     VENDOR_UPC: r.vendorUpc ?? "",
@@ -54,10 +75,11 @@ export async function generateVendorExceptionReport(
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const extension = format === "xlsx" ? "xlsx" : "csv";
+  const headers = includeAll ? ["MIVA_ACTIVE", ...VENDOR_EXCEPTION_HEADERS] : [...VENDOR_EXCEPTION_HEADERS];
   const content =
     format === "xlsx"
-      ? await rowsToXlsx(vendorRows, [...VENDOR_EXCEPTION_HEADERS], { sanitizeFormulas: true, sheetName: "Exceptions", numericColumns: ["TOTAL_QTY"] })
-      : rowsToCsv(vendorRows, [...VENDOR_EXCEPTION_HEADERS], { sanitizeFormulas: true });
+      ? await rowsToXlsx(vendorRows, headers, { sanitizeFormulas: true, sheetName: includeAll ? "All records" : "Exceptions", numericColumns: ["TOTAL_QTY"] })
+      : rowsToCsv(vendorRows, headers, { sanitizeFormulas: true });
   const savedFile = saveGeneratedFile(
     content,
     "vendor_exception_report",
@@ -68,7 +90,7 @@ export async function generateVendorExceptionReport(
   const vendorSlug = vendorSlugFromRuleId(run.ruleId);
   const fileRecord = await repo.insertFile({
     kind: "vendor_exception_report",
-    originalFilename: `${vendorSlug}-vendor-exceptions-${dateSuffix}.${extension}`,
+    originalFilename: `${vendorSlug}-${includeAll ? "all-records" : "vendor-exceptions"}-${dateSuffix}.${extension}`,
     storagePath: savedFile.storagePath,
     checksumSha256: savedFile.checksum,
     sizeBytes: savedFile.sizeBytes,
@@ -81,7 +103,7 @@ export async function generateVendorExceptionReport(
     action: "VENDOR_EXCEPTION_REPORT_GENERATED",
     entityType: "run",
     entityId: runId,
-    details: { categories, format, rowCount: vendorRows.length },
+    details: { categories, format, includeAll, rowCount: vendorRows.length },
   });
 
   return fileRecord;

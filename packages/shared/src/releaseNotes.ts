@@ -14,6 +14,7 @@ export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
     date: "2026-11-21",
     items: [
+      "The vendor exception report menu on Run Review has a new \"Export all records\" option. It exports every row from the vendor file and every Miva product for the brand, whatever its match status or warnings, with a Miva Active column, so you can see the full comparison in one Excel file.",
       "Gobi's new file layout (the Inventory_Report file with Product ID and UPC columns, no Ordering SKU) now uploads and runs again. It is read by a new Gobi parser, version 2. The original parser stays as version 1.",
       "In Manage Vendors, a vendor that has more than one file parser (Gobi for now) has an \"Active file parser\" setting. That version is tried first, and if a file does not fit it the other version is tried automatically, so you can switch back if Gobi ever returns to its old layout.",
       "The upload message, the Run History list (new Parser column), the run page and the autopilot report email now say which parser version read the file, and whether it had to fall back. A stored file is always re-read with the version that first read it.",

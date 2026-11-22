@@ -238,10 +238,10 @@ export const api = {
       body: JSON.stringify({ legacyFileId }),
     }),
   listLegacyComparisons: (runId: string) => request<{ id: string; created_at: string }[]>(`/runs/${runId}/legacy-comparisons`),
-  generateVendorExceptionReport: (runId: string, categories: string[], format: "csv" | "xlsx") =>
+  generateVendorExceptionReport: (runId: string, categories: string[], format: "csv" | "xlsx", includeAll = false) =>
     request<FileRecord>(`/runs/${runId}/vendor-exception-report`, {
       method: "POST",
-      body: JSON.stringify({ categories, format }),
+      body: JSON.stringify({ categories, format, includeAll }),
     }),
 
   listBatches: () => request<BatchRecord[]>("/batches"),

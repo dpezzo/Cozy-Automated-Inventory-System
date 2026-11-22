@@ -612,7 +612,7 @@ router.get(
 router.post(
   "/runs/:id/vendor-exception-report",
   asyncHandler(async (req, res) => {
-    const { categories, format } = req.body as { categories?: string[]; format?: string };
+    const { categories, format, includeAll } = req.body as { categories?: string[]; format?: string; includeAll?: boolean };
     const validKeys = new Set(Object.keys(VENDOR_EXCEPTION_CATEGORIES));
     const selected = (categories ?? []).filter((c): c is VendorExceptionCategory => validKeys.has(c));
     if ((categories ?? []).some((c) => !validKeys.has(c))) {
@@ -623,7 +623,7 @@ router.post(
       res.status(400).json({ error: "INVALID_REQUEST", message: "format must be 'csv' or 'xlsx'." });
       return;
     }
-    const file = await generateVendorExceptionReport(req.params.id!, req.session.userId!, selected, format);
+    const file = await generateVendorExceptionReport(req.params.id!, req.session.userId!, selected, format, includeAll === true);
     res.status(201).json(file);
   }),
 );
