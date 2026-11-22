@@ -724,9 +724,9 @@ export default function RunReviewPage() {
                 }}
               >
                 <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 8px" }}>
-                  A report for the vendor, listing problems in their file so they can fix it for next time. Choose
-                  which categories to include -- unmatched-in-Miva is huge and usually not a vendor error, so it's
-                  off by default.
+                  {vendorReportAll
+                    ? "Every row from the vendor file and every Miva product for this brand will be exported, whatever its match status or warnings. All categories are included."
+                    : "A report for the vendor, listing problems in their file so they can fix it for next time. Choose which categories to include -- unmatched-in-Miva is huge and usually not a vendor error, so it's off by default."}
                 </p>
                 <label
                   style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "3px 0 8px", fontWeight: 700 }}
@@ -740,7 +740,7 @@ export default function RunReviewPage() {
                     <input
                       type="checkbox"
                       disabled={vendorReportAll}
-                      checked={vendorReportCategories.includes(key)}
+                      checked={vendorReportAll || vendorReportCategories.includes(key)}
                       onChange={() => toggleVendorReportCategory(key)}
                     />
                     {label}
