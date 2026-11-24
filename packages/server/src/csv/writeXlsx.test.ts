@@ -6,6 +6,14 @@ import { XlsxDocument } from "../vendor/xlsxReader";
 const HEADERS = ["PRODUCT_CODE", "UPC", "QTY", "NOTE"];
 
 describe("rowsToXlsx", () => {
+  it("reads back a large sheet with thousands of escaped characters (no entity-expansion limit)", async () => {
+    const rows = Array.from({ length: 3000 }, (_, i) => ({ PRODUCT_CODE: `p${i}`, UPC: "", QTY: "1", NOTE: "Men's & Women's \"gloves\" <heated>" }));
+    const doc = await XlsxDocument.load(await rowsToXlsx(rows, HEADERS, { sheetName: "Big" }));
+    const read = await doc.getRows("Big");
+    expect(read).toHaveLength(3001);
+    expect(read[3000]![3]).toBe("Men's & Women's \"gloves\" <heated>");
+  });
+
   it("round-trips through the app's own xlsx reader", async () => {
     const buffer = await rowsToXlsx(
       [

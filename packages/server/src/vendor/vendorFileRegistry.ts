@@ -121,12 +121,19 @@ export interface VendorFileDetectionResult {
  */
 export async function detectVendorFile(buffer: Buffer): Promise<VendorFileDetectionResult> {
   const errors: string[] = [];
+  // A parser failing with something other than a ValidationError means the file itself could not be read
+  // (broken XML, a library limit), not that it is the wrong vendor's layout; report that instead.
+  let unreadable: string | null = null;
+  const noteFailure = (label: string, err: unknown) => {
+    errors.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
+    if (!(err instanceof ValidationError) && err instanceof Error && unreadable === null) unreadable = err.message;
+  };
   for (const [fileKind, adapter] of Object.entries(VENDOR_FILE_ADAPTERS) as [FileKind, VendorFileAdapter][]) {
     try {
       const { rows, parserVersion, parserFellBackFrom } = await adapter.parse(buffer);
       return { vendorKey: adapter.vendorKey, fileKind, rows, parserVersion, parserFellBackFrom };
     } catch (err) {
-      errors.push(`${fileKind}: ${err instanceof Error ? err.message : String(err)}`);
+      noteFailure(fileKind, err);
     }
   }
 
@@ -140,8 +147,16 @@ export async function detectVendorFile(buffer: Buffer): Promise<VendorFileDetect
       const { rows } = await adapter.parse(buffer);
       return { vendorKey: record.vendorKey, fileKind: "vendor_dynamic", rows };
     } catch (err) {
-      errors.push(`${record.vendorKey}: ${err instanceof Error ? err.message : String(err)}`);
+      noteFailure(record.vendorKey, err);
     }
+  }
+
+  if (unreadable !== null) {
+    throw new ValidationError(
+      "FILE_UNREADABLE",
+      `The file could not be read as a spreadsheet or CSV (${unreadable}). This is a problem with reading the file itself, not a sign that it is the wrong vendor's layout.`,
+      { attempts: errors },
+    );
   }
 
   throw new ValidationError(

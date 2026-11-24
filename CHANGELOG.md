@@ -2,6 +2,12 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-11-23 - Large Excel files no longer fail to read; clearer unreadable-file message
+
+### Fixed
+- The app's .xlsx reader gave up with "Entity expansion limit exceeded" on sheets with more than about 1,000 escaped characters (apostrophes, ampersands, quotes), for example the 3,000-row FieldSheer exception export. It now allows far more (decompressed size is still capped), and a test reads back a 3,000-row sheet full of such characters.
+- When a file cannot be read at all (broken spreadsheet XML, a reader limit), the upload now says "The file could not be read as a spreadsheet or CSV (<reason>)" instead of "Could not identify which vendor this file belongs to", which wrongly pointed at the vendor's layout. Applies to manual uploads and autopilot.
+
 ## 2026-11-21 - Export all records on the vendor exception report
 
 ### Added

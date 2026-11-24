@@ -15,6 +15,11 @@ const parser = new XMLParser({
   removeNSPrefix: true,
   parseTagValue: false,
   trimValues: false,
+  // Real spreadsheets escape every & ' " < > in text as an entity, so a big file easily has far more than
+  // the library's default 1,000 expansions (which made a 3,000-row export unreadable). Excel never declares
+  // custom entities (maxEntityCount stays at the library default of 1000), so the high expansion limits only
+  // lift the ceiling on the five built-in ones; decompressed size is already capped separately below.
+  processEntities: { enabled: true, maxTotalExpansions: 50_000_000, maxExpandedLength: 500 * 1024 * 1024 },
 });
 
 /** Total decompressed bytes an uploaded .xlsx is allowed to expand to, guarding against a zip-bomb-style crafted file exhausting the server's memory. */
