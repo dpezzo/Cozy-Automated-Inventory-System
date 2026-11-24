@@ -1006,8 +1006,9 @@ router.patch(
   "/vendors/:key",
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping, discontinuedThreshold, activeParserVersion } = req.body as {
+    const { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping, discontinuedThreshold, activeParserVersion, updateAllOnSharedKey } = req.body as {
       vendorLabel?: string;
+      updateAllOnSharedKey?: boolean;
       activeParserVersion?: string | null;
       inStockThreshold?: number;
       discontinuedThreshold?: number | null;
@@ -1018,7 +1019,7 @@ router.patch(
     };
     const vendor = await updateVendorConfig(
       req.params.key!,
-      { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping, discontinuedThreshold, activeParserVersion },
+      { vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, columnMapping, discontinuedThreshold, activeParserVersion, updateAllOnSharedKey },
       req.session.userId!,
     );
     res.json(vendor);

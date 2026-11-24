@@ -929,6 +929,10 @@ export class PostgresRepository implements Repository {
       params.push(patch.discontinuedThreshold);
       sets.push(`discontinued_threshold = $${params.length}`);
     }
+    if (patch.updateAllOnSharedKey !== undefined) {
+      params.push(patch.updateAllOnSharedKey);
+      sets.push(`update_all_on_shared_key = $${params.length}`);
+    }
     if (patch.activeParserVersion !== undefined) {
       params.push(patch.activeParserVersion);
       sets.push(`active_parser_version = $${params.length}`);
@@ -1211,6 +1215,7 @@ function mapVendorConfigRow(row: Record<string, unknown>): VendorConfigRecord {
     matchStrategy: row.match_strategy as VendorConfigRecord["matchStrategy"],
     missingBlockerCode: (row.missing_blocker_code as VendorConfigRecord["missingBlockerCode"]) ?? null,
     discontinuedThreshold: row.discontinued_threshold === null || row.discontinued_threshold === undefined ? null : Number(row.discontinued_threshold),
+    updateAllOnSharedKey: row.update_all_on_shared_key === true,
     fileShape: row.file_shape as VendorConfigRecord["fileShape"],
     columnMapping: (row.column_mapping as VendorConfigRecord["columnMapping"]) ?? null,
     pluginFilename: (row.plugin_filename as string | null) ?? null,

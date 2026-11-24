@@ -100,6 +100,8 @@ export type WarningCode =
   | "MIVA_MARKED_DISCONTINUED"
   /** This row's matched Miva product is a Variant whose PARENT product is inactive. Informational, not a data error: a parent can go inactive because every other variant in the family is NLA/discontinued, even while this specific variant still shows stock -- Cale's call (2026-10) is to stop selling the whole family once the parent is inactive, so this flags that decision for review rather than silently approving a restock on a product line the business has chosen to retire. */
   | "MIVA_PARENT_INACTIVE"
+  /** This vendor row matched several Miva products sharing the same identifier and the vendor opted into updating all of them (VendorRuleConfig.updateAllOnSharedKey). Informational: the same quantity is applied to every product that carries the identifier, so confirm they really are the same physical item. */
+  | "SHARED_MIVA_KEY"
   /** The vendor file's lifecycle/phase text was non-blank but not recognizable as Active, End of Life, or Discontinued -- the row is treated as Active (normal stock rules) and flagged so a new/misspelled phase value never silently changes behavior. */
   | "UNRECOGNIZED_PRODUCT_PHASE"
   /** A live (not already NO LONGER AVAILABLE) Miva product for a phase-aware vendor that no longer appears in the vendor's file at all. Approving it sets NLA. */
@@ -190,4 +192,12 @@ export interface VendorRuleConfig {
    * Unset (the default) leaves every existing vendor's behavior untouched.
    */
   discontinuedThreshold?: number;
+  /**
+   * When one vendor row matches SEVERAL Miva products sharing the same identifier (e.g. a heated
+   * cat bowl and a heated dog bowl listed as two product codes with one MPN), update every one of
+   * them instead of blocking the row as BLOCKED AMBIGUOUS MIVA KEY. Each product gets its own row
+   * carrying a SHARED_MIVA_KEY warning. Only applies to single-identifier strategies (upc-to-gtin
+   * / sku-to-mpn); unset/false keeps every existing vendor's behavior and hash untouched.
+   */
+  updateAllOnSharedKey?: boolean;
 }

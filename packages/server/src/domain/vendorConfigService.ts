@@ -230,6 +230,8 @@ export interface UpdateVendorConfigRequest {
   columnMapping?: GenericCsvColumnMapping;
   /** Positive whole number to enable lifecycle-aware NLA handling; null to turn it off. */
   discontinuedThreshold?: number | null;
+  /** When one vendor row matches several Miva products with the same identifier, update all of them instead of blocking the row. */
+  updateAllOnSharedKey?: boolean;
   /** Which registered parser version to try first (only for vendors with more than one); null resets to the vendor default. */
   activeParserVersion?: string | null;
 }

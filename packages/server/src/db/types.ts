@@ -101,6 +101,8 @@ export interface VendorConfigRecord {
   missingBlockerCode: BlockerCode | null;
   /** Units below which an End of Life / Discontinued row becomes NLA. null = vendor not opted in (see VendorRuleConfig.discontinuedThreshold). */
   discontinuedThreshold: number | null;
+  /** One vendor row matching several Miva products with the same identifier updates all of them instead of being blocked (see VendorRuleConfig.updateAllOnSharedKey). */
+  updateAllOnSharedKey: boolean;
   fileShape: VendorFileShape;
   columnMapping: GenericCsvColumnMapping | null;
   pluginFilename: string | null;
@@ -133,6 +135,7 @@ export interface UpdateVendorConfigPatch {
   columnMapping?: GenericCsvColumnMapping | null;
   /** null clears it (vendor opts out of lifecycle-aware NLA handling). */
   discontinuedThreshold?: number | null;
+  updateAllOnSharedKey?: boolean;
   /** Which registered parser version to try first; null resets to the vendor default. */
   activeParserVersion?: string | null;
   isActive?: boolean;

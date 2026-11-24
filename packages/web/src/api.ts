@@ -408,6 +408,8 @@ export interface VendorConfig {
   inStockThreshold: number;
   /** Units below which a discontinued product becomes NLA; null = lifecycle-aware NLA handling is off for this vendor. */
   discontinuedThreshold: number | null;
+  /** One vendor row matching several Miva products with the same identifier updates all of them instead of being blocked. */
+  updateAllOnSharedKey: boolean;
   timezone: string;
   brandAllowlist: string[];
   matchStrategy: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";
@@ -450,6 +452,7 @@ export interface UpdateVendorInput {
   inStockThreshold?: number;
   /** null turns lifecycle-aware NLA handling off. */
   discontinuedThreshold?: number | null;
+  updateAllOnSharedKey?: boolean;
   timezone?: string;
   brandAllowlist?: string[];
   matchStrategy?: "upc-to-gtin" | "sku-to-mpn" | "upc-or-sku";

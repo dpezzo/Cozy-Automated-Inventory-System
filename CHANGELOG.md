@@ -2,6 +2,17 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-11-23 - Option to update every Miva product that shares one SKU
+
+### Why
+Cale sometimes lists one physical item under two Miva product codes with the same MPN (for example a heated cat bowl and a heated dog bowl). A vendor row matching both used to be blocked as "BLOCKED AMBIGUOUS MIVA KEY" / DUPLICATE_MIVA_MPN, so neither product was ever updated (and neither appeared under Miva only).
+
+### Added
+- New per-vendor setting "Shared SKU / UPC across products" in Manage Vendors (Block, or Update all products), stored as `vendor_configs.update_all_on_shared_key` (migration 0017, both dialects). Default is Block; it is turned on for FieldSheer/MobileWarming.
+- When on, the vendor row is split into one row per Miva product. Each is compared against its own current Miva values, gets the same file quantity, and carries a SHARED_MIVA_KEY warning, so it lands in WARNING (approved individually, not by Approve all clean). A vendor row that is itself duplicated in the vendor file stays blocked.
+- Applies to the UPC to GTIN and SKU to MPN strategies only; the "Both (UPC + SKU)" strategy still blocks ambiguous rows. The setting only changes the rule config hash (Settings ID) when it is on, so other vendors' hashes are unchanged.
+- Tests in `sharedMivaKey.test.ts`.
+
 ## 2026-11-23 - Large Excel files no longer fail to read; clearer unreadable-file message
 
 ### Fixed

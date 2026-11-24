@@ -1091,6 +1091,10 @@ export class SqliteRepository implements Repository {
       sets.push("discontinued_threshold = ?");
       params.push(patch.discontinuedThreshold);
     }
+    if (patch.updateAllOnSharedKey !== undefined) {
+      sets.push("update_all_on_shared_key = ?");
+      params.push(toIntBool(patch.updateAllOnSharedKey));
+    }
     if (patch.activeParserVersion !== undefined) {
       sets.push("active_parser_version = ?");
       params.push(patch.activeParserVersion);
@@ -1337,6 +1341,7 @@ function mapVendorConfigRow(row: Record<string, unknown>): VendorConfigRecord {
     matchStrategy: row.match_strategy as VendorConfigRecord["matchStrategy"],
     missingBlockerCode: (row.missing_blocker_code as VendorConfigRecord["missingBlockerCode"]) ?? null,
     discontinuedThreshold: row.discontinued_threshold === null || row.discontinued_threshold === undefined ? null : Number(row.discontinued_threshold),
+    updateAllOnSharedKey: fromIntBool(row.update_all_on_shared_key),
     fileShape: row.file_shape as VendorConfigRecord["fileShape"],
     columnMapping: row.column_mapping ? JSON.parse(row.column_mapping as string) : null,
     pluginFilename: (row.plugin_filename as string | null) ?? null,

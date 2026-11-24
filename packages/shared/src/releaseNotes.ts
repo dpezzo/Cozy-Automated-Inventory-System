@@ -12,6 +12,12 @@ export interface ReleaseNoteEntry {
  */
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    date: "2026-11-23",
+    items: [
+      "New Manage Vendors setting, \"Shared SKU / UPC across products\". When one supplier SKU matches several Miva products (for example a cat bowl and a dog bowl with the same MPN), the old behavior blocked all of them. With \"Update all products\" every one of them gets its own row with the same quantity and a SHARED_MIVA_KEY warning for review. It is on for FieldSheer and off for every other supplier.",
+    ],
+  },
+  {
     date: "2026-11-21",
     items: [
       "The vendor exception report menu on Run Review has a new \"Export all records\" option. It exports every row from the vendor file and every Miva product for the brand, whatever its match status or warnings, with a Miva Active column, so you can see the full comparison in one Excel file.",

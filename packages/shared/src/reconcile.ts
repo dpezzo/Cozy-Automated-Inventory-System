@@ -289,7 +289,24 @@ function reconcileCore(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], optio
 
   const results: ReconciliationRow[] = [];
 
+  // Opt-in (config.updateAllOnSharedKey): a vendor row whose identifier matches SEVERAL Miva
+  // products is fanned out into one entry per product, each treated as a unique match and
+  // flagged SHARED_MIVA_KEY, instead of being blocked as ambiguous. A row that is itself a
+  // duplicate within the vendor file stays blocked (that is a vendor data problem).
+  type WorkEntry = (typeof normalized)[number] & { forced?: MivaRawRow; shared?: boolean };
+  const work: WorkEntry[] = [];
   for (const entry of normalized) {
+    if (config.updateAllOnSharedKey && entry.key.valid && entry.key.normalized !== null && (groups.get(entry.key.normalized)?.length ?? 0) === 1) {
+      const shared = resolveMiva(index, entry.key.normalized);
+      if (shared.status === "ambiguous") {
+        for (const m of shared.matches) work.push({ ...entry, forced: m, shared: true });
+        continue;
+      }
+    }
+    work.push(entry);
+  }
+
+  for (const entry of work) {
     const { row, key } = entry;
     const totalQtyRaw = formatTotalQtyDisplay(row.totalQtyRaw);
 
@@ -317,7 +334,7 @@ function reconcileCore(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], optio
     }
 
     const isDuplicateVendorKey = (groups.get(key.normalized)?.length ?? 0) > 1;
-    const lookup = resolveMiva(index, key.normalized);
+    const lookup: MivaLookup = entry.forced ? { status: "unique", match: entry.forced } : resolveMiva(index, key.normalized);
 
     let productCode: string | null = null;
     let current: Partial<ManagedValues> = {};
@@ -465,6 +482,7 @@ function reconcileCore(vendorRows: VendorRawRow[], mivaRows: MivaRawRow[], optio
     const { status, unrecognizedPhase } = resolveStockStatus(row, totalQty.value, config);
 
     const warnings: WarningCode[] = [];
+    if (entry.shared) warnings.push("SHARED_MIVA_KEY");
     if (unrecognizedPhase) warnings.push("UNRECOGNIZED_PRODUCT_PHASE");
 
     // Matching no longer requires a non-blank DS_INV_MGT upstream (see

@@ -29,6 +29,8 @@ const MATCH_STRATEGY_HINT =
   "Which vendor-file identifier is matched against which Miva catalog field. Use UPC to GTIN unless the vendor only provides SKUs, not UPCs -- then use SKU to MPN instead. \"Both\" checks UPC and SKU independently on every row (using whichever one resolves, and blocking for review if they disagree) -- use it when the vendor's file reliably provides both and you want the extra cross-check.";
 const DISCONTINUED_THRESHOLD_HINT =
   "Optional. A discontinued product with fewer units than this is proposed as No Longer Available; at or above it, the normal in-stock threshold applies so it stays live while real inventory remains. Leave blank to turn this off.";
+const SHARED_KEY_HINT =
+  "Some products share one SKU/UPC on purpose (e.g. a heated cat bowl and a heated dog bowl listed as two product codes of the same item). Block: such a row is blocked and none of them update. Update all: every product with that identifier is updated with the same quantity, each flagged SHARED_MIVA_KEY for review. Only applies to the UPC to GTIN and SKU to MPN strategies.";
 const PARSER_VERSION_HINT =
   "This version is tried first. If a file does not fit it, the other versions are tried automatically and the upload and run show which one was used. Switch back here if the vendor changes its file layout again.";
 const IN_STOCK_THRESHOLD_HINT =
@@ -86,6 +88,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
   const [vendorLabel, setVendorLabel] = useState(vendor.vendorLabel);
   const [inStockThreshold, setInStockThreshold] = useState(String(vendor.inStockThreshold));
   const [discontinuedThreshold, setDiscontinuedThreshold] = useState(vendor.discontinuedThreshold === null ? "" : String(vendor.discontinuedThreshold));
+  const [updateAllOnSharedKey, setUpdateAllOnSharedKey] = useState(vendor.updateAllOnSharedKey);
   const [timezone, setTimezone] = useState(vendor.timezone);
   const [brandAllowlist, setBrandAllowlist] = useState(vendor.brandAllowlist.join(", "));
   const [matchStrategy, setMatchStrategy] = useState(vendor.matchStrategy);
@@ -108,6 +111,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
         vendorLabel,
         inStockThreshold: Number(inStockThreshold),
         discontinuedThreshold: discontinuedThreshold.trim() === "" ? null : Number(discontinuedThreshold),
+        updateAllOnSharedKey,
         timezone,
         brandAllowlist: parseAllowlist(brandAllowlist),
         matchStrategy,
@@ -195,6 +199,19 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
             <option value="upc-or-sku">Both (UPC + SKU)</option>
           </select>
           <FieldHint>{MATCH_STRATEGY_HINT}</FieldHint>
+        </label>
+        <label>
+          Shared SKU / UPC across products
+          <br />
+          <select
+            value={updateAllOnSharedKey ? "all" : "block"}
+            onChange={(e) => setUpdateAllOnSharedKey(e.target.value === "all")}
+            style={{ width: "100%" }}
+          >
+            <option value="block">Block (update none)</option>
+            <option value="all">Update all products</option>
+          </select>
+          <FieldHint>{SHARED_KEY_HINT}</FieldHint>
         </label>
         <label>
           Active file parser

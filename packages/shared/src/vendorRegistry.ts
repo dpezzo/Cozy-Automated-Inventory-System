@@ -68,6 +68,7 @@ export function computeRuleConfigHash(config: VendorRuleConfig): string {
     matchStrategy: config.matchStrategy,
     // Spread only when set so every vendor without NLA handling keeps a byte-identical hash.
     ...(config.discontinuedThreshold !== undefined ? { discontinuedThreshold: config.discontinuedThreshold } : {}),
+    ...(config.updateAllOnSharedKey ? { updateAllOnSharedKey: true } : {}),
   });
   return createHash("sha256").update(canonical, "utf8").digest("hex");
 }

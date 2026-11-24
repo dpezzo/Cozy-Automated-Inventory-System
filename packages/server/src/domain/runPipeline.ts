@@ -39,6 +39,7 @@ function toVendorRuleConfig(record: VendorConfigRecord): VendorRuleConfig {
     matchStrategy: record.matchStrategy,
     missingBlockerCode: record.missingBlockerCode ?? undefined,
     discontinuedThreshold: record.discontinuedThreshold ?? undefined,
+    ...(record.updateAllOnSharedKey ? { updateAllOnSharedKey: true } : {}),
   };
 }
 
