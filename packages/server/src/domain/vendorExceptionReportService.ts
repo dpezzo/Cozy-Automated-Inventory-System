@@ -55,7 +55,15 @@ export async function generateVendorExceptionReport(
     categories,
     { all: includeAll },
   ).map((r) => ({
-    ...(includeAll ? { MIVA_ACTIVE: activeFor(r.productCode) } : {}),
+    ...(includeAll
+      ? {
+          // IN_FILE: the row came from the vendor file (Miva-only / not-tracked rows did not).
+          // IN_MIVA: the row resolved to a Miva product (unmatched file rows did not).
+          IN_FILE: r.outcome === "Miva only" || r.outcome === "Not tracked" ? "No" : "Yes",
+          IN_MIVA: r.productCode ? "Yes" : "No",
+          MIVA_ACTIVE: activeFor(r.productCode),
+        }
+      : {}),
     MIVA_PRODUCT_CODE: r.productCode ?? "",
     ITEM_NO: r.itemNo ?? "",
     VENDOR_UPC: r.vendorUpc ?? "",
@@ -75,7 +83,7 @@ export async function generateVendorExceptionReport(
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const extension = format === "xlsx" ? "xlsx" : "csv";
-  const headers = includeAll ? ["MIVA_ACTIVE", ...VENDOR_EXCEPTION_HEADERS] : [...VENDOR_EXCEPTION_HEADERS];
+  const headers = includeAll ? ["IN_FILE", "IN_MIVA", "MIVA_ACTIVE", ...VENDOR_EXCEPTION_HEADERS] : [...VENDOR_EXCEPTION_HEADERS];
   const content =
     format === "xlsx"
       ? await rowsToXlsx(vendorRows, headers, { sanitizeFormulas: true, sheetName: includeAll ? "All records" : "Exceptions", numericColumns: ["TOTAL_QTY"] })
