@@ -568,8 +568,8 @@ export default function RunReviewPage() {
           <div>
             <strong>Vendor:</strong> {vendorLabelForRuleId(run.ruleId)}
           </div>
-          <div title={run.parserVersion ? "Which version of the vendor's file parser read this run's file." : "This vendor has a single file parser, or the file was uploaded before parser versions were recorded."}>
-            <strong>File parser:</strong> {run.parserVersion ?? "-"}
+          <div title="Which version of the vendor's file parser read this run's file. v1 for vendors with a single parser and for files uploaded before versions were recorded.">
+            <strong>File parser:</strong> {run.parserVersion ?? "v1"}
           </div>
           <div title={`A fingerprint of this vendor's settings (thresholds, matching strategy, brands) when the run was made. It changes whenever those settings change, so two runs with the same value used the same settings. Only relevant for debugging. Full value: ${run.ruleConfigHash}`}>
             <strong>Settings ID:</strong> {run.ruleConfigHash.slice(0, 10)}

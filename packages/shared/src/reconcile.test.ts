@@ -255,6 +255,12 @@ describe("reconcile: matchStrategy upc-or-sku", () => {
     };
   }
 
+  it("shows the SKU in the UPC / SKU column when the file's UPC cell is empty", () => {
+    const vendor = [dualVendorRow({ upcRaw: "", skuRaw: "NOPE-1" })];
+    const { rows } = reconcile(vendor, [mivaRow({})], { config: DUAL_CONFIG, runDate: RUN_DATE });
+    expect(rows[0]!.rawUpc).toBe("NOPE-1");
+  });
+
   it("matches normally when UPC and SKU agree on the same product", () => {
     const vendor = [dualVendorRow({ upcRaw: "000000000999", skuRaw: "MPN-999" })];
     const miva = [mivaRow({})];

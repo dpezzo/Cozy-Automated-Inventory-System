@@ -130,7 +130,7 @@ export default function RunHistoryPage() {
                 <th>Run ID</th>
                 <th>Status</th>
                 <th>Vendor</th>
-                <th title="Which version of the vendor's file parser read this run's file. Blank for files uploaded before parser versions were recorded.">File parser</th>
+                <th title="Which version of the vendor's file parser read this run's file. v1 for vendors with a single parser and for files uploaded before versions were recorded.">File parser</th>
                 <th title="A fingerprint of the vendor's settings (thresholds, matching strategy, brands) when the run was made. It changes whenever those settings change. Only relevant for debugging, safe to ignore day to day.">
                   Settings ID
                 </th>
@@ -165,7 +165,7 @@ export default function RunHistoryPage() {
                       </span>
                     </td>
                     <td title={vendorLabelForRuleId(r.ruleId)}>{vendorLabelForRuleId(r.ruleId)}</td>
-                    <td>{r.parserVersion ?? ""}</td>
+                    <td>{r.parserVersion ?? "v1"}</td>
                     <td title={r.ruleConfigHash}>
                       {r.ruleConfigHash.slice(0, 10)}
                     </td>

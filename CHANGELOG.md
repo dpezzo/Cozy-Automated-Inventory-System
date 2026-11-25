@@ -2,6 +2,14 @@
 
 All notable changes to the CozyWinters Olliix inventory reconciliation app are documented here, newest first. This is a living document — updated as part of each significant change going forward, not just at release time.
 
+## 2026-11-25 - SKU shown and searchable for rows without a UPC; File parser always shows a version
+
+### Fixed
+- With "Both (UPC + SKU)" matching, a file row whose UPC cell was empty showed a blank UPC / SKU column on Run Review, and searching its SKU found nothing. It now falls back to the SKU. Found with the Volt Heat file (173 of 390 rows have no UPC).
+
+### Changed
+- "File parser" on Run Review and Run History shows "v1" instead of a dash or blank for vendors with a single parser and for older runs.
+
 ## 2026-11-25 - Vendors whose file only says In Stock / Out of Stock
 
 ### Why

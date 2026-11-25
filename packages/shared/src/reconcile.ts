@@ -707,7 +707,7 @@ function dualBlockedRow(
   return {
     sourceRowNumber: row.sourceRowNumber,
     itemNo: row.itemNoRaw,
-    rawUpc: rawUpc ?? rawSku,
+    rawUpc: rawUpc && rawUpc.trim() !== "" ? rawUpc : rawSku,
     normalizedUpc: normalizedKey,
     description: row.descriptionRaw,
     productCode,
@@ -789,7 +789,7 @@ function buildDualMatchedRow(
   return {
     sourceRowNumber: row.sourceRowNumber,
     itemNo: row.itemNoRaw,
-    rawUpc: rawUpc ?? rawSku,
+    rawUpc: rawUpc && rawUpc.trim() !== "" ? rawUpc : rawSku,
     normalizedUpc: normalizedKey,
     description: row.descriptionRaw,
     productCode,
