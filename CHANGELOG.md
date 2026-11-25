@@ -11,6 +11,7 @@ Volt Heat's inventory file has no quantities, only a "Stock Status" column ("In 
 - Optional "In-stock words" / "Out-of-stock words" boxes on simple CSV vendors in Manage Vendors (stored inside the vendor's column mapping, so no migration). When filled in, the quantity column is read as words: an in-stock word becomes the vendor's in-stock threshold, an out-of-stock word becomes 0, and the normal rules take over. Matching ignores case and spaces.
 - Any word in neither list (or a blank) is left as-is and shows as an invalid quantity blocker on Run Review, instead of being guessed.
 - Left empty, vendors behave exactly as before. Tests in `genericCsvParser.test.ts`.
+- The vendors list shows N/A for the in-stock threshold on these vendors.
 - Note: the Qty column on Run Review shows the threshold (not a real count) for in-stock rows of these vendors.
 
 ## 2026-11-23 - Option to update every Miva product that shares one SKU

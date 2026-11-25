@@ -218,6 +218,9 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
             required
           />
           <FieldHint>{IN_STOCK_THRESHOLD_HINT}</FieldHint>
+          {buildStockText(inStockWords, outOfStockWords) && (
+            <FieldHint>This vendor's file has no counts, so the threshold is not used for real quantities (the vendors list shows N/A). Leave it as is.</FieldHint>
+          )}
         </label>
         <label>
           Discontinued threshold
@@ -737,7 +740,7 @@ export default function ManageVendorsPage() {
                 <tr>
                   <td>{v.vendorLabel}</td>
                   <td title={MATCH_STRATEGY_HINT}>{MATCH_STRATEGY_LABELS[v.matchStrategy] ?? v.matchStrategy}</td>
-                  <td>{v.inStockThreshold}</td>
+                  <td>{v.columnMapping?.stockTextValues ? "N/A" : v.inStockThreshold}</td>
                   <td>{v.discontinuedThreshold === null ? "Off" : v.discontinuedThreshold}</td>
                   <td title={v.brandAllowlist.join(", ") || undefined}>
                     {v.brandAllowlist.length <= 2
