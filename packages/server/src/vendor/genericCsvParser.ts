@@ -18,6 +18,25 @@ export interface GenericCsvColumnMapping {
   secondaryIdentifierColumn?: string;
   descriptionColumn?: string;
   quantityColumn: string;
+  /**
+   * For vendors whose "quantity" column is a status word (e.g. "In Stock" /
+   * "Out of Stock") instead of a number. Each in-stock value is converted to
+   * the vendor's in-stock threshold and each out-of-stock value to 0, so the
+   * normal reconcile rules apply unchanged. Matching is case-insensitive and
+   * trimmed. A value in neither list (including blank) is passed through
+   * as-is, so it is blocked as an invalid quantity rather than guessed at.
+   */
+  stockTextValues?: { inStock: string[]; outOfStock: string[] };
+}
+
+/** Translates a status-word cell to a synthetic quantity, or returns it unchanged when stockTextValues is off or the word is unrecognized. */
+export function translateStockText(raw: string | null, mapping: GenericCsvColumnMapping, inStockQty: number): string | null {
+  const values = mapping.stockTextValues;
+  if (!values || raw === null) return raw;
+  const key = raw.trim().toLowerCase();
+  if (values.inStock.some((v) => v.trim().toLowerCase() === key)) return String(inStockQty);
+  if (values.outOfStock.some((v) => v.trim().toLowerCase() === key)) return "0";
+  return raw;
 }
 
 export interface ParsedGenericCsv {
@@ -31,7 +50,7 @@ export interface ParsedGenericCsv {
  * quirks (no BOM handling, no brand pre-filtering, no multi-row headers) --
  * that's exactly the class of vendor this path is meant for.
  */
-export function parseGenericCsv(buffer: Buffer, mapping: GenericCsvColumnMapping): ParsedGenericCsv {
+export function parseGenericCsv(buffer: Buffer, mapping: GenericCsvColumnMapping, inStockQty = 1): ParsedGenericCsv {
   let records: Record<string, string>[];
   try {
     records = parse(buffer.toString("utf8"), {
@@ -67,7 +86,7 @@ export function parseGenericCsv(buffer: Buffer, mapping: GenericCsvColumnMapping
     upcRaw: identifierValue(record, mapping, "upc"),
     skuRaw: identifierValue(record, mapping, "sku"),
     descriptionRaw: mapping.descriptionColumn ? (record[mapping.descriptionColumn] ?? null) : null,
-    totalQtyRaw: record[mapping.quantityColumn] ?? null,
+    totalQtyRaw: translateStockText(record[mapping.quantityColumn] ?? null, mapping, inStockQty),
   }));
 
   return { rows };
@@ -91,7 +110,7 @@ function isXlsxSignature(buffer: Buffer): boolean {
  * "simple CSV" vendor shape now accepts either format, since both are just a
  * flat header row over named columns.
  */
-async function parseGenericXlsx(buffer: Buffer, mapping: GenericCsvColumnMapping): Promise<ParsedGenericCsv> {
+async function parseGenericXlsx(buffer: Buffer, mapping: GenericCsvColumnMapping, inStockQty = 1): Promise<ParsedGenericCsv> {
   const doc = await XlsxDocument.load(buffer);
   const sheetName = doc.getSheetNames()[0];
   if (!sheetName) {
@@ -127,7 +146,7 @@ async function parseGenericXlsx(buffer: Buffer, mapping: GenericCsvColumnMapping
     const identifierRaw = cellText(identifierIndex);
     const secondaryIdentifierRaw = cellText(secondaryIdentifierIndex);
     const descriptionRaw = cellText(descriptionIndex);
-    const totalQtyRaw = cellText(quantityIndex);
+    const totalQtyRaw = translateStockText(cellText(quantityIndex), mapping, inStockQty);
 
     const isBlankRow = [identifierRaw, descriptionRaw, totalQtyRaw].every((v) => v === null || v.trim() === "");
     if (isBlankRow) continue;
@@ -158,6 +177,7 @@ async function parseGenericXlsx(buffer: Buffer, mapping: GenericCsvColumnMapping
 export function parseGenericVendorFile(
   buffer: Buffer,
   mapping: GenericCsvColumnMapping,
+  inStockQty = 1,
 ): Promise<ParsedGenericCsv> | ParsedGenericCsv {
-  return isXlsxSignature(buffer) ? parseGenericXlsx(buffer, mapping) : parseGenericCsv(buffer, mapping);
+  return isXlsxSignature(buffer) ? parseGenericXlsx(buffer, mapping, inStockQty) : parseGenericCsv(buffer, mapping, inStockQty);
 }

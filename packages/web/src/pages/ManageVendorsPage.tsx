@@ -83,6 +83,50 @@ function VendorEditModal({ vendor, onClose, children }: { vendor: VendorConfig; 
   );
 }
 
+function splitWords(text: string): string[] {
+  return text.split(",").map((w) => w.trim()).filter((w) => w !== "");
+}
+
+/** Builds the columnMapping.stockTextValues payload; undefined (numeric quantity column) when both boxes are empty. */
+function buildStockText(inStockWords: string, outOfStockWords: string) {
+  const inStock = splitWords(inStockWords);
+  const outOfStock = splitWords(outOfStockWords);
+  return inStock.length === 0 && outOfStock.length === 0 ? undefined : { inStock, outOfStock };
+}
+
+/** Optional pair of boxes for vendors whose quantity column holds words ("In Stock") instead of numbers. */
+function StockWordsFields({
+  inStockWords,
+  outOfStockWords,
+  setInStockWords,
+  setOutOfStockWords,
+}: {
+  inStockWords: string;
+  outOfStockWords: string;
+  setInStockWords: (v: string) => void;
+  setOutOfStockWords: (v: string) => void;
+}) {
+  return (
+    <>
+      <label>
+        In-stock words (optional)
+        <br />
+        <input value={inStockWords} onChange={(e) => setInStockWords(e.target.value)} placeholder="In Stock" style={{ width: "100%" }} />
+        <FieldHint>
+          Only for files with no numeric quantity. Comma-separated words in the quantity column that mean in stock; each is treated
+          as the in-stock threshold. Leave both boxes empty for a normal numeric quantity.
+        </FieldHint>
+      </label>
+      <label>
+        Out-of-stock words (optional)
+        <br />
+        <input value={outOfStockWords} onChange={(e) => setOutOfStockWords(e.target.value)} placeholder="Out of Stock" style={{ width: "100%" }} />
+        <FieldHint>Words that mean out of stock (treated as 0). Any other word, or a blank, is blocked on the review screen instead of guessed.</FieldHint>
+      </label>
+    </>
+  );
+}
+
 /** Edit form for any vendor, any file_shape (shown inside VendorEditModal). columnMapping fields only show for simple_csv vendors. */
 function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; onDone: () => void; onCancel: () => void }) {
   const [vendorLabel, setVendorLabel] = useState(vendor.vendorLabel);
@@ -99,6 +143,8 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
   const [secondaryIdentifierColumn, setSecondaryIdentifierColumn] = useState(vendor.columnMapping?.secondaryIdentifierColumn ?? "");
   const [descriptionColumn, setDescriptionColumn] = useState(vendor.columnMapping?.descriptionColumn ?? "");
   const [quantityColumn, setQuantityColumn] = useState(vendor.columnMapping?.quantityColumn ?? "");
+  const [inStockWords, setInStockWords] = useState((vendor.columnMapping?.stockTextValues?.inStock ?? []).join(", "));
+  const [outOfStockWords, setOutOfStockWords] = useState((vendor.columnMapping?.stockTextValues?.outOfStock ?? []).join(", "));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,6 +170,7 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
                 secondaryIdentifierColumn: matchStrategy === "upc-or-sku" ? secondaryIdentifierColumn : undefined,
                 descriptionColumn: descriptionColumn || undefined,
                 quantityColumn,
+                stockTextValues: buildStockText(inStockWords, outOfStockWords),
               },
             }
           : {}),
@@ -289,6 +336,12 @@ function EditVendorForm({ vendor, onDone, onCancel }: { vendor: VendorConfig; on
             <br />
             <input value={quantityColumn} onChange={(e) => setQuantityColumn(e.target.value)} style={{ width: "100%" }} required />
           </label>
+          <StockWordsFields
+            inStockWords={inStockWords}
+            outOfStockWords={outOfStockWords}
+            setInStockWords={setInStockWords}
+            setOutOfStockWords={setOutOfStockWords}
+          />
         </div>
       )}
 
@@ -327,6 +380,8 @@ function AddVendorForm({
   const [secondaryIdentifierColumn, setSecondaryIdentifierColumn] = useState("");
   const [descriptionColumn, setDescriptionColumn] = useState("");
   const [quantityColumn, setQuantityColumn] = useState("");
+  const [inStockWords, setInStockWords] = useState("");
+  const [outOfStockWords, setOutOfStockWords] = useState("");
   const [pluginFilename, setPluginFilename] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -355,6 +410,7 @@ function AddVendorForm({
                 secondaryIdentifierColumn: matchStrategy === "upc-or-sku" ? secondaryIdentifierColumn : undefined,
                 descriptionColumn: descriptionColumn || undefined,
                 quantityColumn,
+                stockTextValues: buildStockText(inStockWords, outOfStockWords),
               },
             }
           : { ...common, fileShape: "plugin", pluginFilename };
@@ -490,6 +546,12 @@ function AddVendorForm({
               <br />
               <input value={quantityColumn} onChange={(e) => setQuantityColumn(e.target.value)} style={{ width: "100%" }} required />
             </label>
+            <StockWordsFields
+              inStockWords={inStockWords}
+              outOfStockWords={outOfStockWords}
+              setInStockWords={setInStockWords}
+              setOutOfStockWords={setOutOfStockWords}
+            />
           </div>
         )}
       </div>

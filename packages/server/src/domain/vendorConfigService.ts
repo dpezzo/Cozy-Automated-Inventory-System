@@ -52,6 +52,22 @@ function assertValidColumnMapping(
       "columnMapping requires identifierColumn, quantityColumn, and identifierType ('upc' or 'sku').",
     );
   }
+  const stockText = mapping.stockTextValues;
+  if (stockText) {
+    const clean = (list: unknown): string[] =>
+      Array.isArray(list) ? list.map((v) => String(v).trim().toLowerCase()).filter((v) => v !== "") : [];
+    const inStock = clean(stockText.inStock);
+    const outOfStock = clean(stockText.outOfStock);
+    if (inStock.length === 0 || outOfStock.length === 0) {
+      throw new ValidationError(
+        "INVALID_COLUMN_MAPPING",
+        "stockTextValues needs at least one in-stock word and one out-of-stock word.",
+      );
+    }
+    if (inStock.some((v) => outOfStock.includes(v))) {
+      throw new ValidationError("INVALID_COLUMN_MAPPING", "A stock word cannot be both in stock and out of stock.");
+    }
+  }
   const hasSecondary = Boolean(mapping.secondaryIdentifierColumn?.trim());
   if (matchStrategy === "upc-or-sku" && !hasSecondary) {
     throw new ValidationError(

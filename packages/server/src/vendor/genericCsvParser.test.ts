@@ -139,3 +139,33 @@ describe("parseGenericVendorFile", () => {
     ).rejects.toThrowError(/missing required columns/i);
   });
 });
+
+describe("stockTextValues (status-word quantity column)", () => {
+  const mapping = {
+    identifierColumn: "UPC",
+    identifierType: "upc" as const,
+    secondaryIdentifierColumn: "SKU",
+    descriptionColumn: "Product Name",
+    quantityColumn: "Stock Status",
+    stockTextValues: { inStock: ["In Stock"], outOfStock: ["Out of Stock"] },
+  };
+  const csv = [
+    "SKU,UPC,Product Name,Stock Status",
+    "A1,,Thing,In Stock",
+    '"12v-Ext 24""",810783023697,"Cable (24"")",  out of stock ',
+    "C3,,Other,Backordered",
+    "D4,,Blank,",
+  ].join("\n");
+
+  it("maps in stock to the threshold, out of stock to 0, and leaves unknown words for the blocker", () => {
+    const { rows } = parseGenericCsv(Buffer.from(csv), mapping, 6);
+    expect(rows.map((r) => r.totalQtyRaw)).toEqual(["6", "0", "Backordered", ""]);
+    expect(rows[1]!.skuRaw).toBe('12v-Ext 24"');
+    expect(rows[1]!.upcRaw).toBe("810783023697");
+  });
+
+  it("leaves numeric quantities untouched when stockTextValues is not set", () => {
+    const { rows } = parseGenericCsv(Buffer.from(CSV), { identifierColumn: "UPC", identifierType: "upc", quantityColumn: "Qty" }, 6);
+    expect(rows.map((r) => r.totalQtyRaw)).toEqual(["10", "0"]);
+  });
+});

@@ -16,6 +16,7 @@ import { uploadFile, uploadVendorFileAutoDetect } from "./domain/uploadService";
 import { pullMivaSnapshotFromApi } from "./miva/mivaProducts";
 import { isMivaApiConfigured } from "./miva/mivaApiClient";
 import { parseMivaSnapshotCsv } from "./vendor/mivaCsv";
+import type { GenericCsvColumnMapping } from "./vendor/genericCsvParser";
 import {
   createRun,
   getRunSummary,
@@ -974,8 +975,8 @@ router.post(
       brandAllowlist?: string[];
       matchStrategy?: "upc-to-gtin" | "sku-to-mpn";
       fileShape?: "simple_csv" | "plugin";
-      columnMapping?: { identifierColumn: string; identifierType: "upc" | "sku"; descriptionColumn?: string; quantityColumn: string };
-      pluginFilename?: string;
+      columnMapping?: GenericCsvColumnMapping;
+pluginFilename?: string;
     };
     const { vendorKey, vendorLabel, inStockThreshold, timezone, brandAllowlist, matchStrategy, fileShape } = body;
     if (!vendorKey || !vendorLabel || !inStockThreshold || !timezone || !brandAllowlist || !matchStrategy || !fileShape) {
@@ -1015,7 +1016,7 @@ router.patch(
       timezone?: string;
       brandAllowlist?: string[];
       matchStrategy?: "upc-to-gtin" | "sku-to-mpn";
-      columnMapping?: { identifierColumn: string; identifierType: "upc" | "sku"; descriptionColumn?: string; quantityColumn: string };
+      columnMapping?: GenericCsvColumnMapping;
     };
     const vendor = await updateVendorConfig(
       req.params.key!,

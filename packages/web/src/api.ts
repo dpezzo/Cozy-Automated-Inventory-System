@@ -400,6 +400,8 @@ export interface GenericCsvColumnMapping {
   secondaryIdentifierColumn?: string;
   descriptionColumn?: string;
   quantityColumn: string;
+  /** Set when the quantity column holds status words instead of numbers. */
+  stockTextValues?: { inStock: string[]; outOfStock: string[] };
 }
 
 export interface VendorConfig {

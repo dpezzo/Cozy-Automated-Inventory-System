@@ -63,7 +63,7 @@ export const VENDOR_FILE_ADAPTERS: Partial<Record<FileKind, VendorFileAdapter>> 
 function adapterForDynamicConfig(record: VendorConfigRecord): VendorFileAdapter | undefined {
   if (record.fileShape === "simple_csv" && record.columnMapping) {
     const mapping = record.columnMapping;
-    return { vendorKey: record.vendorKey, parse: (buffer) => parseGenericVendorFile(buffer, mapping) };
+    return { vendorKey: record.vendorKey, parse: (buffer) => parseGenericVendorFile(buffer, mapping, record.inStockThreshold) };
   }
   if (record.fileShape === "plugin" && record.pluginFilename) {
     const pluginFilename = record.pluginFilename;
